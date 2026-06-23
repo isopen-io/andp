@@ -1,0 +1,106 @@
+name: Meeshy
+options:
+  bundleIdPrefix: me.meeshy
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: en
+
+settings:
+  SWIFT_VERSION: "6.0"
+  IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+  TARGETED_DEVICE_FAMILY: "1,2"
+  SWIFT_APPROACHABLE_CONCURRENCY: "YES"
+  SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+  SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT: "YES"
+
+packages:
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk.git
+    from: 12.12.1
+  MeeshySDK:
+    path: packages/MeeshySDK
+
+targets:
+  Meeshy:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Apps/Meeshy
+        excludes:
+          - "**/*.md"
+    settings:
+      INFOPLIST_FILE: Apps/Meeshy/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+      ENABLE_PREVIEWS: YES
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_ENTITLEMENTS: Apps/Meeshy/Meeshy.entitlements
+    dependencies:
+      - target: MeeshyWidgets
+      - target: MeeshyNotificationExtension
+      - package: MeeshySDK
+        product: MeeshySDK
+      - package: MeeshySDK
+        product: MeeshyUI
+      - package: Firebase
+        product: FirebaseCore
+      - package: Firebase
+        product: FirebaseAnalytics
+      - package: Firebase
+        product: FirebaseCrashlytics
+      - package: Firebase
+        product: FirebaseMessaging
+      - package: Firebase
+        product: FirebasePerformance
+    scheme:
+      testTargets:
+        - MeeshyTests
+
+  MeeshyWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Apps/MeeshyWidgets
+    settings:
+      INFOPLIST_FILE: Apps/MeeshyWidgets/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.widgets
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_ENTITLEMENTS: Apps/MeeshyWidgets/MeeshyWidgets.entitlements
+
+  MeeshyNotificationExtension:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Apps/MeeshyNotificationExtension
+    settings:
+      INFOPLIST_FILE: Apps/MeeshyNotificationExtension/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.notification-service
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_ENTITLEMENTS: Apps/MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements
+    dependencies:
+      - package: MeeshySDK
+        product: MeeshySDK
+
+  MeeshyTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Apps/MeeshyTests
+        excludes:
+          - "**/*.md"
+          - "UI/BubbleExpandableTextUITests.swift"
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.tests
+      CODE_SIGN_STYLE: Automatic
+      GENERATE_INFOPLIST_FILE: YES
+      SWIFT_VERSION: "6.0"
+      SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+      BUNDLE_LOADER: "$(TEST_HOST)"
+      TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Meeshy.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Meeshy"
+    dependencies:
+      - target: Meeshy

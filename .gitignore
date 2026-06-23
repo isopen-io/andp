@@ -1,0 +1,26 @@
+# Xcode
+build/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+!project.yml
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# ANDP Secrets
+secrets.yml
+*.ipa
+*.xcarchive
+*.pkg
+*.dmg
+
+# GitHub
+.github/local_config.yml

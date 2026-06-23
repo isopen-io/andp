@@ -1,0 +1,39 @@
+name: ANDP Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-publish:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Bootstrap ANDP
+      run: ./infrastructure/bootstrap.sh
+
+    - name: Validate Project
+      run: ./infrastructure/validate-project.sh
+
+    - name: Generate Xcode Project
+      run: ./generate.sh
+
+    - name: Build App
+      run: ./build.sh Meeshy Release iphoneos
+
+    - name: Archive App
+      run: ./archive.sh Meeshy
+
+    - name: Sign and Export
+      run: ./sign.sh build/Meeshy.xcarchive
+      env:
+        # Secrets would be injected here in a real production repo
+        ASC_API_KEY: ${{ secrets.ASC_API_KEY }}
+
+    - name: Upload to App Store Connect
+      if: github.ref == 'refs/heads/main'
+      run: ./asc-manager.sh upload build/exported/Meeshy.ipa
