@@ -57,6 +57,7 @@ targets:
     scheme:
       testTargets:
         - MeeshyTests
+        - MeeshyUITests
 
   MeeshyWidgets:
     type: app-extension
@@ -102,5 +103,19 @@ targets:
       SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
       BUNDLE_LOADER: "$(TEST_HOST)"
       TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Meeshy.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Meeshy"
+    dependencies:
+      - target: Meeshy
+
+  MeeshyUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Apps/MeeshyUITests
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.uitests
+      CODE_SIGN_STYLE: Automatic
+      GENERATE_INFOPLIST_FILE: YES
+      TEST_TARGET_NAME: Meeshy
     dependencies:
       - target: Meeshy

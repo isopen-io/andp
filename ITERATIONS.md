@@ -13,14 +13,14 @@ This document tracks the evolution of the Apple Native Delivery Platform.
 - [x] Sample App with extensions and assets.
 - [x] Comprehensive `.gitignore`.
 
-## Iteration 2: Testing & Quality Platform (Next)
+## Iteration 2: Testing & Quality Platform (Completed)
 **Goal:** Implement automated testing and basic validation.
-- [ ] Unit and UI test orchestration (`test.sh`).
-- [ ] Simulator management (`simulator-manager.sh`).
-- [ ] Visual regression testing integration.
-- [ ] Test report generation (`test-report.sh`).
+- [x] Unit and UI test orchestration (`test.sh`).
+- [x] Simulator management (`simulator-manager.sh`).
+- [x] Visual regression testing integration (`visual-compare.sh`).
+- [x] Test report generation (`test-report.sh`).
 
-## Iteration 3: Governance & Security
+## Iteration 3: Governance & Security (Next)
 **Goal:** Advanced validation and compliance.
 - [ ] Accessibility governance scripts.
 - [ ] Localization validation.

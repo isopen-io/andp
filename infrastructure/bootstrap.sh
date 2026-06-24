@@ -23,7 +23,13 @@ fi
 # Install python dependencies for ASC manager
 if command -v pip3 >/dev/null 2>&1; then
     echo "Installing Python dependencies..."
-    pip3 install PyYAML requests pyjwt --user
+    # On modern macOS (PEP 668), pip may refuse to install outside a venv.
+    # We use --break-system-packages for CI/CD simplicity.
+    PIP_FLAGS="--user"
+    if pip3 install --help | grep -q "break-system-packages"; then
+        PIP_FLAGS="$PIP_FLAGS --break-system-packages"
+    fi
+    pip3 install PyYAML requests pyjwt $PIP_FLAGS
 fi
 
 echo "Bootstrap complete."
