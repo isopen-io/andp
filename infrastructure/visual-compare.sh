@@ -16,6 +16,13 @@ fi
 
 echo "Comparing $IMAGE1 and $IMAGE2..."
 
+# Fast-path: If files are bitwise identical, they are visually identical.
+# This avoids the overhead of booting the Swift interpreter/compiler and pixel comparison.
+if cmp -s "$IMAGE1" "$IMAGE2"; then
+    echo "✅ Images are identical (fast-path)."
+    exit 0
+fi
+
 if [[ "$OSTYPE" == "darwin"* ]]; then
     # Compile and run the Swift comparer
     swift infrastructure/visual-comparer.swift "$IMAGE1" "$IMAGE2"
