@@ -70,6 +70,7 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.widgets
       CODE_SIGN_STYLE: Automatic
       CODE_SIGN_ENTITLEMENTS: Apps/MeeshyWidgets/MeeshyWidgets.entitlements
+      SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
 
   MeeshyNotificationExtension:
     type: app-extension
@@ -82,6 +83,7 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.notification-service
       CODE_SIGN_STYLE: Automatic
       CODE_SIGN_ENTITLEMENTS: Apps/MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements
+      SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
     dependencies:
       - package: MeeshySDK
         product: MeeshySDK
