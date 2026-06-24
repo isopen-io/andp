@@ -37,7 +37,6 @@ targets:
       ENABLE_PREVIEWS: YES
       CODE_SIGN_STYLE: Automatic
       CODE_SIGN_ENTITLEMENTS: Apps/Meeshy/Meeshy.entitlements
-      SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
     dependencies:
       - target: MeeshyWidgets
       - target: MeeshyNotificationExtension
