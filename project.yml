@@ -29,6 +29,7 @@ targets:
       - path: Apps/Meeshy
         excludes:
           - "**/*.md"
+      - path: Apps/Meeshy/Resources
     settings:
       INFOPLIST_FILE: Apps/Meeshy/Info.plist
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app
