@@ -4,6 +4,7 @@ DerivedData/
 *.xcodeproj
 *.xcworkspace
 !project.yml
+*.xcresult/
 
 # macOS
 .DS_Store
