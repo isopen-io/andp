@@ -5,7 +5,7 @@
 
 set -e
 
-RESOURCES_PATH="Apps/Meeshy/Resources"
+RESOURCES_PATH="Apps/Meeshy"
 
 echo "Running localization validation..."
 

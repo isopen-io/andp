@@ -1,8 +1,23 @@
-import Foundation
+import SwiftUI
 
 @main
-struct MeeshyApp {
-    static func main() {
-        print("Hello, Meeshy!")
+struct MeeshyApp: App {
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+        }
+    }
+}
+
+struct ContentView: View {
+    var body: some View {
+        VStack {
+            Image(systemName: "globe")
+                .imageScale(.large)
+                .foregroundStyle(.tint)
+            Text("welcome_message")
+                .padding()
+        }
+        .padding()
     }
 }
