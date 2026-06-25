@@ -1,5 +1,6 @@
 import WidgetKit
 import SwiftUI
+import Foundation
 
 struct Provider: TimelineProvider {
     func placeholder(in context: Context) -> SimpleEntry {
@@ -38,7 +39,7 @@ struct MeeshyWidgetsEntryView : View {
         }
         .containerBackground(.background, for: .widget)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Meeshy Platform Status. Current time is \(entry.date.formatted(date: .omitted, time: .shortened))")
+        .accessibilityLabel(Text("Meeshy Platform Status. Current time is ") + Text(entry.date, style: .time))
     }
 }
 
