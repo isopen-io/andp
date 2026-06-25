@@ -1,3 +1,8 @@
 import Foundation
 
-print("Hello, Meeshy!")
+@main
+struct MeeshyApp {
+    static func main() {
+        print("Hello, Meeshy!")
+    }
+}
