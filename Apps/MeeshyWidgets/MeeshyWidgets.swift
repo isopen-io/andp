@@ -26,7 +26,19 @@ struct MeeshyWidgetsEntryView : View {
     var entry: Provider.Entry
 
     var body: some View {
-        Text(entry.date, style: .time)
+        VStack(spacing: 8) {
+            Image(systemName: "shippingbox.fill")
+                .font(.title2)
+                .foregroundStyle(.tint)
+
+            Text(entry.date, style: .time)
+                .font(.system(.title, design: .rounded).bold())
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+        }
+        .containerBackground(.background, for: .widget)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Meeshy Platform Status. Current time is \(entry.date.formatted(date: .omitted, time: .shortened))")
     }
 }
 
@@ -38,7 +50,7 @@ struct MeeshyWidgets: Widget {
         StaticConfiguration(kind: kind, provider: Provider()) { entry in
             MeeshyWidgetsEntryView(entry: entry)
         }
-        .configurationDisplayName("Meeshy Widget")
-        .description("This is an example widget.")
+        .configurationDisplayName("Meeshy Status")
+        .description("Stay updated with your Meeshy delivery platform status.")
     }
 }
