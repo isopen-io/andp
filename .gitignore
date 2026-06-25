@@ -25,3 +25,4 @@ secrets.yml
 
 # GitHub
 .github/local_config.yml
+metrics/
