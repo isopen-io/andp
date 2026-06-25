@@ -5,3 +5,7 @@
 ## 2025-05-15 - [Swift 6 Actor Isolation Fix]
 **Learning:** Swift 6 defaults (`SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor`) can cause build failures in app extensions (like Notification Service) where system overrides are `nonisolated`. Setting `nonisolated` explicitly for these targets resolves the conflict.
 **Action:** Ensure app extension targets in `project.yml` have appropriate isolation settings to match system framework expectations in Swift 6.
+
+## 2026-06-25 - [Single-Pass Secret Scanning]
+**Learning:** Combining multiple `grep` calls into a single call with an Extended Regular Expression (`grep -E "A|B|C"`) significantly reduces execution time (observed ~75% reduction) by avoiding multiple full-tree traversals and process spawning overhead. Additionally, case-insensitive directory names (e.g., `packages/` vs `Packages/`) can cause silent scanning failures on Linux CI runners; always verify target directory existence and casing.
+**Action:** Prefer single-pass scans for multiple patterns and always validate target directory paths for cross-platform compatibility.
