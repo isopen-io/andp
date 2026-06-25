@@ -11,6 +11,8 @@ OS_VERSION=${3:-"17.0"}
 
 RESULT_BUNDLE_PATH="TestResults.xcresult"
 
+START_TIME=$(date +%s)
+
 echo "Starting test orchestration for scheme: $SCHEME..."
 
 # Ensure simulator is ready
@@ -21,11 +23,14 @@ echo "Running tests..."
 # Clean up previous results
 rm -rf "$RESULT_BUNDLE_PATH"
 
+STATUS="SUCCESS"
 if command -v xcodebuild >/dev/null 2>&1; then
-    xcodebuild test \
+    if ! xcodebuild test \
         -scheme "$SCHEME" \
         -destination "platform=iOS Simulator,name=$DEVICE_NAME,OS=$OS_VERSION" \
-        -resultBundlePath "$RESULT_BUNDLE_PATH"
+        -resultBundlePath "$RESULT_BUNDLE_PATH"; then
+        STATUS="FAILED"
+    fi
 else
     echo "Warning: xcodebuild not found. Simulating test success."
     mkdir -p "$RESULT_BUNDLE_PATH"
@@ -33,7 +38,15 @@ else
     echo "Simulated result" > "$RESULT_BUNDLE_PATH/Info.plist"
 fi
 
-echo "Tests complete."
+END_TIME=$(date +%s)
+DURATION=$((END_TIME - START_TIME))
+
+# Record metrics
+if [ -x "./infrastructure/analytics-manager.sh" ]; then
+    ./infrastructure/analytics-manager.sh record "test" "$SCHEME" "$DURATION" "$STATUS"
+fi
+
+echo "Tests complete in ${DURATION}s."
 
 # Generate report
 if [ -x "./test-report.sh" ]; then
@@ -41,8 +54,9 @@ if [ -x "./test-report.sh" ]; then
 fi
 
 # Visual Regression Check (Example for a specific test)
-# In a real setup, we would extract screenshots from the .xcresult
-# and compare them against baselines.
-# Here we provide a hook.
 echo "Checking for visual regressions..."
-# ./infrastructure/visual-compare.sh path/to/captured.png Tests/VisualBaselines/expected.png || echo "Visual regression detected!"
+
+if [ "$STATUS" == "FAILED" ]; then
+    echo "Tests FAILED."
+    exit 1
+fi

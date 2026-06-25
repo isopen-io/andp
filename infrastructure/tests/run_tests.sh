@@ -60,4 +60,49 @@ else
 fi
 rm -rf test_lproj
 
+# Test Analytics Manager
+echo "Testing analytics-manager.sh..."
+./infrastructure/analytics-manager.sh record test_type test_name 42 SUCCESS > /dev/null
+if ls metrics/test_type_*.json > /dev/null 2>&1; then
+    echo "✅ analytics-manager.sh PASSED"
+else
+    echo "❌ analytics-manager.sh FAILED"
+    exit 1
+fi
+
+# Test Performance Monitor
+echo "Testing performance-monitor.py..."
+mkdir -p mock.xcresult
+touch mock.xcresult/Info.plist
+if python3 infrastructure/performance-monitor.py mock.xcresult > /dev/null; then
+    echo "✅ performance-monitor.py PASSED"
+else
+    echo "❌ performance-monitor.py FAILED"
+    exit 1
+fi
+rm -rf mock.xcresult
+
+# Test AI Analyzer
+echo "Testing ai-analyzer.py..."
+if python3 infrastructure/ai-analyzer.py Apps > /dev/null; then
+    echo "✅ ai-analyzer.py PASSED"
+else
+    echo "❌ ai-analyzer.py FAILED"
+    exit 1
+fi
+
+# Test Dashboard Generator
+echo "Testing generate-dashboard.sh..."
+if ./infrastructure/generate-dashboard.sh > /dev/null; then
+    if [ -f "dashboard.html" ]; then
+        echo "✅ generate-dashboard.sh PASSED"
+    else
+        echo "❌ generate-dashboard.sh FAILED: dashboard.html missing"
+        exit 1
+    fi
+else
+    echo "❌ generate-dashboard.sh FAILED"
+    exit 1
+fi
+
 echo "All Infrastructure Tests PASSED."
