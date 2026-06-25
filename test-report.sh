@@ -60,3 +60,12 @@ else
     echo "Warnings: 0"
     echo "Status: SUCCESS"
 fi
+
+echo ""
+echo "Accessibility Audit:"
+echo "-------------------------"
+if [ -f "infrastructure/accessibility-validator.py" ]; then
+    python3 infrastructure/accessibility-validator.py "Apps/Meeshy"
+else
+    echo "Accessibility validator not found."
+fi

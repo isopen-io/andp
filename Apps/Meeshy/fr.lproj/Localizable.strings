@@ -1,0 +1,3 @@
+"welcome_message" = "Bienvenue sur Meeshy !";
+"login_button" = "Connexion";
+/* logout_button is intentionally missing to test validation */

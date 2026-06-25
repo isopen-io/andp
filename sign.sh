@@ -15,12 +15,19 @@ fi
 
 echo "Signing and exporting archive: $ARCHIVE_PATH..."
 
+# Discover identity
+if [ -x "./infrastructure/certificate-manager.sh" ]; then
+    IDENTITY=$(./infrastructure/certificate-manager.sh list | grep "Apple Distribution" | head -n 1 | sed 's/.*: //')
+    echo "Selected Identity: $IDENTITY"
+fi
+
 # Ensure export path exists
 mkdir -p "$EXPORT_PATH"
 
 # Create a default ExportOptions.plist if it doesn't exist
 if [ ! -f "$EXPORT_OPTIONS_PLIST" ]; then
     mkdir -p infrastructure/build
+    TEAM_ID=${TEAM_ID:-"REPLACE_WITH_TEAM_ID"}
     cat <<EOF > "$EXPORT_OPTIONS_PLIST"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -29,7 +36,7 @@ if [ ! -f "$EXPORT_OPTIONS_PLIST" ]; then
     <key>method</key>
     <string>app-store</string>
     <key>teamID</key>
-    <string>REPLACE_WITH_TEAM_ID</string>
+    <string>$TEAM_ID</string>
 </dict>
 </plist>
 EOF
@@ -42,9 +49,17 @@ if command -v xcodebuild >/dev/null 2>&1; then
                -exportPath "$EXPORT_PATH" \
                -exportOptionsPlist "$EXPORT_OPTIONS_PLIST"
 else
-    echo "Warning: xcodebuild not found. Simulating export success for development."
+    echo "Warning: xcodebuild not found. Simulating export success."
     # We must ensure the expected artifact exists for the next pipeline step
     touch "$EXPORT_PATH/Meeshy.ipa"
+fi
+
+# Validation / Auditing
+echo "Auditing signature..."
+if [ -f "$EXPORT_PATH/Meeshy.ipa" ]; then
+    if [ -x "./infrastructure/security-auditor.sh" ]; then
+         ./infrastructure/security-auditor.sh --verify "$EXPORT_PATH/Meeshy.ipa"
+    fi
 fi
 
 echo "Export complete. IPA available in $EXPORT_PATH"

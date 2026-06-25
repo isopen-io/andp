@@ -20,12 +20,12 @@ This document tracks the evolution of the Apple Native Delivery Platform.
 - [x] Visual regression testing integration (`visual-compare.sh`).
 - [x] Test report generation (`test-report.sh`).
 
-## Iteration 3: Governance & Security (Next)
+## Iteration 3: Governance & Security (Completed)
 **Goal:** Advanced validation and compliance.
-- [ ] Accessibility governance scripts.
-- [ ] Localization validation.
-- [ ] Security auditing and secret scanning.
-- [ ] Certificate/Profile management.
+- [x] Accessibility governance scripts.
+- [x] Localization validation.
+- [x] Security auditing and secret scanning.
+- [x] Certificate/Profile management.
 
 ## Iteration 4: Observability & AI
 **Goal:** Insights and automated analysis.
