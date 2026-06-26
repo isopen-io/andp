@@ -5,8 +5,25 @@
 set -e
 
 COMMAND=$1
-ARG=$2
+shift
 
-echo "Running ASC command: $COMMAND..."
+# Handle optional --account flag
+ACCOUNT="primary"
+PARAMS=()
 
-python3 infrastructure/asc/asc_manager.py "$COMMAND" "$ARG"
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --account)
+            ACCOUNT="$2"
+            shift 2
+            ;;
+        *)
+            PARAMS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+echo "Running ASC command: $COMMAND for account: $ACCOUNT..."
+
+python3 infrastructure/asc/asc_manager.py "$COMMAND" "${PARAMS[@]}" --account "$ACCOUNT"

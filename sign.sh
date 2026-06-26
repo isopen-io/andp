@@ -5,30 +5,26 @@
 set -e
 
 ARCHIVE_PATH=$1
+ACCOUNT=${2:-"primary"}
 EXPORT_PATH="build/exported"
-EXPORT_OPTIONS_PLIST="infrastructure/build/ExportOptions.plist"
+EXPORT_OPTIONS_PLIST="infrastructure/build/ExportOptions_$ACCOUNT.plist"
 
 if [ -z "$ARCHIVE_PATH" ]; then
-    echo "Usage: ./sign.sh <path_to_xcarchive>"
+    echo "Usage: ./sign.sh <path_to_xcarchive> [account_id]"
     exit 1
 fi
 
-echo "Signing and exporting archive: $ARCHIVE_PATH..."
-
-# Discover identity
-if [ -x "./infrastructure/certificate-manager.sh" ]; then
-    IDENTITY=$(./infrastructure/certificate-manager.sh list | grep "Apple Distribution" | head -n 1 | sed 's/.*: //')
-    echo "Selected Identity: $IDENTITY"
-fi
+echo "Signing and exporting archive: $ARCHIVE_PATH using account: $ACCOUNT..."
 
 # Ensure export path exists
 mkdir -p "$EXPORT_PATH"
 
-# Create a default ExportOptions.plist if it doesn't exist
-if [ ! -f "$EXPORT_OPTIONS_PLIST" ]; then
-    mkdir -p infrastructure/build
-    TEAM_ID=${TEAM_ID:-"REPLACE_WITH_TEAM_ID"}
-    cat <<EOF > "$EXPORT_OPTIONS_PLIST"
+# Extract Team ID from secrets if possible
+TEAM_ID=$(python3 -c "import yaml, sys; data = yaml.safe_load(open('secrets.yml' if sys.path[0]+'/secrets.yml' else 'secrets.example.yml')); print(data.get('accounts', {}).get('$ACCOUNT', {}).get('signing', {}).get('development_team', 'REPLACE_WITH_TEAM_ID'))" 2>/dev/null || echo "REPLACE_WITH_TEAM_ID")
+
+# Create a default ExportOptions.plist if it doesn't exist or for this account
+mkdir -p infrastructure/build
+cat <<EOF > "$EXPORT_OPTIONS_PLIST"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -40,17 +36,14 @@ if [ ! -f "$EXPORT_OPTIONS_PLIST" ]; then
 </dict>
 </plist>
 EOF
-fi
 
 if command -v xcodebuild >/dev/null 2>&1; then
     # In CI without real certificates, we must skip actual signing/exporting to avoid exit code 70
     if [ "$CI" == "true" ] || [ "$GITHUB_ACTIONS" == "true" ]; then
-        echo "CI environment detected without signing credentials. Bypassing exportArchive and mocking result."
-        # We simulate the result to allow the pipeline to pass validation stages
-        mkdir -p "$EXPORT_PATH"
+        echo "CI environment detected without signing certificates. Simulating export success."
         touch "$EXPORT_PATH/Meeshy.ipa"
     else
-        echo "Executing xcodebuild exportArchive..."
+        echo "Executing xcodebuild exportArchive for Team: $TEAM_ID..."
         xcodebuild -exportArchive \
                    -archivePath "$ARCHIVE_PATH" \
                    -exportPath "$EXPORT_PATH" \

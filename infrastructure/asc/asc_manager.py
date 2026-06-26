@@ -3,8 +3,7 @@ import sys
 import json
 import requests
 import time
-# Note: In a real implementation, we'd use PyJWT to generate tokens
-# import jwt
+import yaml
 
 class ASCManager:
     def __init__(self, key_id, issuer_id, key_content):
@@ -15,29 +14,69 @@ class ASCManager:
 
     def generate_token(self):
         # Placeholder for JWT token generation logic
+        # In real implementation:
+        # import jwt
+        # return jwt.encode({...}, self.key_content, algorithm='ES256', headers={'kid': self.key_id})
         return "MOCK_TOKEN"
 
     def upload_ipa(self, ipa_path):
         print(f"Uploading {ipa_path} to App Store Connect...")
-        # In reality, we'd use xcrun altool or iTMSTransporter for the actual upload
-        # or the newer ASC API if available for binary uploads.
-        time.sleep(2)
+        # In reality, we'd use xcrun altool or iTMSTransporter
+        time.sleep(1)
         print("Upload successful (Mocked).")
         return True
 
     def poll_build_status(self, bundle_id, version):
         print(f"Polling status for {bundle_id} ({version})...")
-        # GET /v1/builds
         return "PROCESSING"
+
+def load_secrets(account_id):
+    secrets_file = "secrets.yml"
+    if not os.path.exists(secrets_file):
+        # Fallback to example if real secrets missing (for CI/Testing)
+        secrets_file = "secrets.example.yml"
+
+    with open(secrets_file, 'r') as f:
+        data = yaml.safe_load(f)
+
+    accounts = data.get('accounts', {})
+    if account_id not in accounts:
+        print(f"Error: Account '{account_id}' not found in secrets.")
+        sys.exit(1)
+
+    return accounts[account_id]
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: asc-manager.py <command> [args]")
+        print("Usage: asc_manager.py <command> [args] [--account <account_id>]")
         sys.exit(1)
 
     cmd = sys.argv[1]
+
+    account_id = "primary"
+    args = sys.argv[2:]
+    if "--account" in args:
+        idx = args.index("--account")
+        account_id = args[idx+1]
+        args.pop(idx+1)
+        args.pop(idx)
+
+    account_data = load_secrets(account_id)
+    asc_api = account_data.get('asc_api', {})
+
+    mgr = ASCManager(
+        asc_api.get('key_id'),
+        asc_api.get('issuer_id'),
+        asc_api.get('key_content')
+    )
+
     if cmd == "upload":
-        ipa = sys.argv[2]
-        # Load from env or secrets.yml in a real scenario
-        mgr = ASCManager("MOCK", "MOCK", "MOCK")
-        mgr.upload_ipa(ipa)
+        if not args:
+            print("Error: IPA path required for upload.")
+            sys.exit(1)
+        mgr.upload_ipa(args[0])
+    elif cmd == "status":
+        if len(args) < 2:
+            print("Usage: status <bundle_id> <version>")
+            sys.exit(1)
+        mgr.poll_build_status(args[0], args[1])

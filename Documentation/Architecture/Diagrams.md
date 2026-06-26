@@ -70,3 +70,67 @@ graph TD
     Xcode --> Simulator
     ANDP_Scripts --> ASC_Cloud[App Store Connect Cloud]
 ```
+
+## Sequence Diagram - Full Release Pipeline
+```mermaid
+sequenceDiagram
+    participant Dev as Developer
+    participant CI as CI/CD Pipeline
+    participant ANDP as ANDP Scripts
+    participant Xcode as xcodebuild
+    participant ASC as App Store Connect
+
+    Dev->>CI: Push to main
+    CI->>ANDP: ./build-matrix.sh
+    ANDP->>Xcode: build
+    Xcode-->>ANDP: success
+    CI->>ANDP: ./test-matrix.sh
+    ANDP->>Xcode: test
+    Xcode-->>ANDP: success
+    CI->>ANDP: ./archive.sh
+    ANDP->>Xcode: archive
+    Xcode-->>ANDP: .xcarchive
+    CI->>ANDP: ./sign.sh
+    ANDP->>Xcode: exportArchive
+    Xcode-->>ANDP: .ipa
+    CI->>ANDP: ./asc-manager.sh upload
+    ANDP->>ASC: POST /v1/builds
+    ASC-->>ANDP: 201 Created
+```
+
+## Security Architecture Diagram
+```mermaid
+graph TD
+    subgraph Secret_Storage
+        SecretsFile[secrets.yml]
+        EnvVars[Environment Variables]
+    end
+
+    subgraph Validation
+        SecAudit[security-auditor.sh]
+        SignVerify[codesign --verify]
+    end
+
+    subgraph Identity_Management
+        CertMgr[certificate-manager.sh]
+        Keychain[macOS Keychain]
+    end
+
+    SecretsFile --> SecAudit
+    EnvVars --> SecAudit
+    Keychain --> CertMgr
+    CertMgr --> SignVerify
+    SignVerify --> Artifacts[.ipa / .pkg]
+```
+
+## Data Flow Diagram
+```mermaid
+graph LR
+    Code[Source Code] -->|Input| Build[Build System]
+    Config[project.yml] -->|Input| Build
+    Secrets[secrets.yml] -->|Credentials| Build
+    Build -->|Artifacts| Sign[Signing System]
+    Sign -->|Signed IPA| Dist[Distribution System]
+    Build -->|Metrics| Analytics[Analytics System]
+    Analytics -->|Report| Dash[HTML Dashboard]
+```
