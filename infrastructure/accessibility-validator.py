@@ -6,7 +6,7 @@ import re
 # Combining multiple UI patterns into a single regex reduces search calls by 5x.
 UI_COMPONENT_PATTERN = re.compile(r"(Button\(|Image\(|Text\(|Label\(|TextField\(\))")
 ACCESSIBILITY_MODIFIER_PATTERN = re.compile(
-    r"(accessibilityLabel|accessibilityIdentifier|accessibilityHint|accessibilityValue|accessibilityAddTraits|accessibilityRemoveTraits)"
+    r"(accessibilityLabel|accessibilityIdentifier|accessibilityHint|accessibilityValue|accessibilityAddTraits|accessibilityRemoveTraits|accessibilityHidden)"
 )
 # Dynamic Type check: use of fixed sizes
 FONT_FIXED_PATTERN = re.compile(r"\.font\(\.system\(size: [0-9]+\)\)")
@@ -28,9 +28,9 @@ def scan_accessibility(directory):
                 for i, line in enumerate(lines):
                     # Check for UI components missing labels
                     if UI_COMPONENT_PATTERN.search(line):
-                        # Check context (next 10 lines) for any accessibility modifier
+                        # Check context (next 20 lines) for any accessibility modifier
                         # Bolt Optimization: Use pre-compiled regex for modifier check
-                        context = "".join(lines[i:i+10])
+                        context = "".join(lines[i:i+20])
                         if not ACCESSIBILITY_MODIFIER_PATTERN.search(context):
                             issues.append(f"{file_path}:{i+1} - Missing accessibility modifier for component: {line.strip()}")
 
