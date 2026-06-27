@@ -10,8 +10,9 @@ DEVICE_NAME=${2:-"iPhone 15"}
 RUNTIME=${3:-"iOS 17.0"}
 
 function usage() {
-    echo "Usage: $0 [list|boot|shutdown|delete] [device_name] [runtime]"
+    echo "Usage: $0 [list|boot|shutdown|delete|mass-reset|pool-init] [device_name] [runtime]"
     echo "Example: $0 boot 'iPhone 15' 'iOS 17.0'"
+    echo "         $0 mass-reset 'iOS 17.0'"
 }
 
 if [ -z "$COMMAND" ]; then
@@ -71,6 +72,24 @@ case $COMMAND in
             echo "Deleting device $DEVICE_ID..."
             xcrun simctl delete "$DEVICE_ID"
         fi
+        ;;
+    mass-reset)
+        echo "Mass resetting simulators for runtime: $RUNTIME..."
+        # Shutdown all booted simulators for this runtime
+        xcrun simctl list devices | grep "$RUNTIME" | grep "Booted" | sed -E 's/.*\(([-A-Z0-9]+)\).*/\1/' | xargs -I {} xcrun simctl shutdown {} || true
+        # Erase all simulators for this runtime
+        xcrun simctl list devices | grep "$RUNTIME" | sed -E 's/.*\(([-A-Z0-9]+)\).*/\1/' | xargs -I {} xcrun simctl erase {}
+        echo "✅ Mass reset complete."
+        ;;
+    pool-init)
+        echo "Initializing simulator pool for $RUNTIME..."
+        DEVICES=("iPhone 15" "iPhone 15 Pro" "iPad (10th generation)")
+        for DEV in "${DEVICES[@]}"; do
+            echo "Preparing $DEV..."
+            $0 boot "$DEV" "$RUNTIME"
+            $0 shutdown "$DEV"
+        done
+        echo "✅ Pool initialization complete."
         ;;
     *)
         usage
