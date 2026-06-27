@@ -1,3 +1,8 @@
 "welcome_message" = "Welcome to Meeshy!";
 "login_button" = "Login";
+"login_hint" = "Securely access your account";
+"logged_in_message" = "You are now logged in!";
 "logout_button" = "Logout";
+"logout_confirm_title" = "Are you sure you want to log out?";
+"logout_button_confirm" = "Log Out";
+"cancel_button" = "Cancel";

@@ -1,3 +1,8 @@
 "welcome_message" = "Bienvenue sur Meeshy !";
 "login_button" = "Connexion";
+"login_hint" = "Accédez à votre compte en toute sécurité";
+"logged_in_message" = "Vous êtes maintenant connecté !";
 "logout_button" = "Déconnexion";
+"logout_confirm_title" = "Êtes-vous sûr de vouloir vous déconnecter ?";
+"logout_button_confirm" = "Se déconnecter";
+"cancel_button" = "Annuler";
