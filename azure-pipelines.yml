@@ -1,0 +1,27 @@
+trigger:
+- main
+
+pool:
+  vmImage: 'macOS-latest'
+
+stages:
+- stage: Build
+  jobs:
+  - job: BuildAndTest
+    steps:
+    - script: ./infrastructure/bootstrap.sh
+      displayName: 'Bootstrap'
+    - script: ./generate.sh
+      displayName: 'Generate Project'
+    - script: ./build.sh
+      displayName: 'Build'
+    - script: ./test.sh
+      displayName: 'Test'
+    - script: ./archive.sh
+      displayName: 'Archive'
+    - script: ./sign.sh build/*.xcarchive
+      displayName: 'Sign'
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: 'build/exported'
+        ArtifactName: 'ipa'

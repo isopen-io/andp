@@ -13,7 +13,7 @@ if [ ! -f "$PROJECT_FILE" ]; then
     exit 1
 fi
 
-# Check for required directories mentioned in project.yml
+# 1. Directory Checks
 REQUIRED_DIRS=("Apps/Meeshy" "packages/MeeshySDK" "Apps/MeeshyWidgets" "Apps/MeeshyNotificationExtension" "Apps/MeeshyTests")
 
 for dir in "${REQUIRED_DIRS[@]}"; do
@@ -21,5 +21,13 @@ for dir in "${REQUIRED_DIRS[@]}"; do
         echo "⚠️  Warning: Directory $dir not found (might be created in next step)."
     fi
 done
+
+# 2. Dependency Analysis (Modular Governance)
+echo "Running dependency analysis..."
+if [ -f "infrastructure/dependency-analyzer.py" ]; then
+    python3 infrastructure/dependency-analyzer.py
+else
+    echo "⚠️ Warning: dependency-analyzer.py not found."
+fi
 
 echo "✅ Project configuration validation passed."

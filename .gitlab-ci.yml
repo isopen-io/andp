@@ -1,0 +1,79 @@
+stages:
+  - bootstrap
+  - generate
+  - build
+  - test
+  - archive
+  - sign
+  - deploy
+
+variables:
+  LC_ALL: "en_US.UTF-8"
+  LANG: "en_US.UTF-8"
+
+bootstrap:
+  stage: bootstrap
+  script:
+    - ./infrastructure/bootstrap.sh
+  tags:
+    - macos
+
+generate:
+  stage: generate
+  script:
+    - ./generate.sh
+  tags:
+    - macos
+  artifacts:
+    paths:
+      - "*.xcodeproj"
+      - "*.xcworkspace"
+
+build:
+  stage: build
+  script:
+    - ./build.sh
+  tags:
+    - macos
+
+test:
+  stage: test
+  script:
+    - ./test.sh
+  tags:
+    - macos
+  artifacts:
+    when: always
+    paths:
+      - TestResults.xcresult
+      - metrics/
+
+archive:
+  stage: archive
+  script:
+    - ./archive.sh
+  tags:
+    - macos
+  artifacts:
+    paths:
+      - build/*.xcarchive
+
+sign:
+  stage: sign
+  script:
+    - ./sign.sh build/*.xcarchive
+  tags:
+    - macos
+  artifacts:
+    paths:
+      - build/exported/*.ipa
+
+deploy:
+  stage: deploy
+  script:
+    - ./asc-manager.sh upload build/exported/*.ipa
+  tags:
+    - macos
+  only:
+    - main
+    - tags
