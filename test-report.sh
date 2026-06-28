@@ -71,16 +71,7 @@ else
 fi
 
 echo ""
-echo "Accessibility Audit:"
-echo "-------------------------"
-if [ -f "infrastructure/accessibility-validator.py" ]; then
-    python3 infrastructure/accessibility-validator.py "Apps/Meeshy"
-else
-    echo "Accessibility validator not found."
-fi
-
-echo ""
-echo "AI Quality Analysis:"
+echo "AI Quality Analysis (including Accessibility):"
 echo "-------------------------"
 if [ -f "infrastructure/ai-analyzer.py" ]; then
     python3 infrastructure/ai-analyzer.py "Apps"
