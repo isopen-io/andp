@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     @State private var isLoggedIn = false
@@ -11,12 +12,7 @@ struct ContentView: View {
         VStack(spacing: 24) {
             Spacer()
 
-            Image(systemName: "shippingbox.fill")
-                .font(.system(size: 80, weight: .regular, design: .rounded))
-                .foregroundStyle(.tint)
-                .scaleEffect(iconScale)
-                .opacity(iconOpacity)
-                .accessibilityHidden(true)
+            logoView
                 .onAppear {
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
                         iconScale = 1.0
@@ -33,9 +29,13 @@ struct ContentView: View {
                 Button(role: .destructive, action: {
                     showLogoutConfirmation = true
                 }) {
-                    Text("logout_button")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
+                    HStack {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .accessibilityHidden(true)
+                        Text("logout_button")
+                            .fontWeight(.semibold)
+                    }
+                    .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
@@ -60,6 +60,10 @@ struct ContentView: View {
                         if isLoading {
                             ProgressView()
                                 .padding(.trailing, 8)
+                        } else {
+                            Image(systemName: "lock.fill")
+                                .padding(.trailing, 4)
+                                .accessibilityHidden(true)
                         }
                         Text("login_button")
                             .fontWeight(.semibold)
@@ -72,6 +76,7 @@ struct ContentView: View {
                 .disabled(isLoading)
                 .keyboardShortcut(.defaultAction)
                 .accessibilityIdentifier("loginButton")
+                .accessibilityLabel(isLoading ? Text("logging_in_status") : Text("login_button"))
                 .accessibilityHint(Text("login_hint"))
             }
 
@@ -80,10 +85,29 @@ struct ContentView: View {
         .padding()
     }
 
+    @ViewBuilder
+    private var logoView: some View {
+        let logo = Image(systemName: "shippingbox.fill")
+            .font(.system(size: 80, weight: .regular, design: .rounded))
+            .foregroundStyle(.tint)
+            .scaleEffect(iconScale)
+            .opacity(iconOpacity)
+            .accessibilityHidden(true)
+
+        if #available(iOS 17.0, *) {
+            logo.symbolEffect(.pulse, isActive: isLoading)
+        } else {
+            logo
+        }
+    }
+
     private func login() {
         isLoading = true
         // Simulate login
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.success)
+
             withAnimation {
                 isLoading = false
                 isLoggedIn = true
