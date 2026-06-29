@@ -50,4 +50,17 @@ if grep -q "UIRequiresFullScreen: YES" "$PROJECT_FILE"; then
     exit 1
 fi
 
+# 4. Platform Consistency Checks (Regression Fix for CI Failure)
+echo "Verifying platform consistency between app and dependencies..."
+
+# If main app supports visionOS, tests and extensions should too (except Widgets which are often platform-specific)
+if grep -q "Meeshy:" "$PROJECT_FILE" && grep -A 2 "Meeshy:" "$PROJECT_FILE" | grep -q "platform: \[iOS, visionOS\]"; then
+    for target in "MeeshyTests" "MeeshyUITests" "MeeshyNotificationExtension"; do
+        if ! grep -A 5 "$target:" "$PROJECT_FILE" | grep -q "platform: \[iOS, visionOS\]"; then
+            echo "❌ Error: Target $target does not match main app platform [iOS, visionOS]!"
+            exit 1
+        fi
+    done
+fi
+
 echo "✅ Project configuration validation passed."

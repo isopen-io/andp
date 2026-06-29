@@ -78,8 +78,10 @@ targets:
 
   MeeshyNotificationExtension:
     type: app-extension
-    platform: iOS
-    deploymentTarget: "16.0"
+    platform: [iOS, visionOS]
+    deploymentTarget:
+      iOS: "16.0"
+      visionOS: "1.0"
     sources:
       - path: Apps/MeeshyNotificationExtension
     settings:
@@ -94,8 +96,10 @@ targets:
 
   MeeshyTests:
     type: bundle.unit-test
-    platform: iOS
-    deploymentTarget: "16.0"
+    platform: [iOS, visionOS]
+    deploymentTarget:
+      iOS: "16.0"
+      visionOS: "1.0"
     sources:
       - path: Apps/MeeshyTests
         excludes:
@@ -114,8 +118,10 @@ targets:
 
   MeeshyUITests:
     type: bundle.ui-testing
-    platform: iOS
-    deploymentTarget: "16.0"
+    platform: [iOS, visionOS]
+    deploymentTarget:
+      iOS: "16.0"
+      visionOS: "1.0"
     sources:
       - path: Apps/MeeshyUITests
     settings:
