@@ -15,6 +15,13 @@ ACCESSIBILITY_MODIFIER_PATTERN = re.compile(
 # Dynamic Type check: use of fixed sizes
 FONT_FIXED_PATTERN = re.compile(r"\.font\(\.system\(size: [0-9]+\)\)")
 
+# visionOS Compatibility patterns
+# 1. Non-adaptive colors (e.g., .black, .white instead of .label, .secondary)
+NON_ADAPTIVE_COLOR_PATTERN = re.compile(r"\.foregroundColor\(\.(black|white|red|blue|green)\)")
+# 2. Potential missing hover effects on interactive elements
+HOVER_EFFECT_MISSING_PATTERN = re.compile(r"Button\(")
+HOVER_EFFECT_PATTERN = re.compile(r"\.hoverEffect\(")
+
 def analyze_path(path):
     """
     Bolt Optimization: Performs a high-performance single-pass analysis of the codebase.
@@ -27,7 +34,8 @@ def analyze_path(path):
         "architectural_smells": [],
         "dead_code": [],
         "accessibility_risks": [],
-        "localization_risks": []
+        "localization_risks": [],
+        "visionos_readiness": []
     }
 
     # Bolt Optimization: Exclude heavy/irrelevant directories
@@ -81,6 +89,21 @@ def analyze_path(path):
                                     results["localization_risks"].append(
                                         f"{filepath}:{line_num} - Risk: Possibly hardcoded string '{match}'"
                                     )
+
+                            # 5. visionOS Readiness
+                            if NON_ADAPTIVE_COLOR_PATTERN.search(line):
+                                results["visionos_readiness"].append(
+                                    f"{filepath}:{line_num} - Warning: Non-adaptive color used (use semantic colors for visionOS)"
+                                )
+
+                            if HOVER_EFFECT_MISSING_PATTERN.search(line):
+                                # Check context (next 10 lines) for hoverEffect
+                                context = "".join(lines[i:i+10])
+                                if not HOVER_EFFECT_PATTERN.search(context):
+                                    results["visionos_readiness"].append(
+                                        f"{filepath}:{line_num} - Warning: Interactive element may missing .hoverEffect() for visionOS"
+                                    )
+
                 except Exception as e:
                     print(f"Warning: Could not read {filepath}: {e}")
                 file_count += 1
@@ -104,7 +127,8 @@ def main():
         ("Architectural Smells", "architectural_smells"),
         ("Dead Code", "dead_code"),
         ("Accessibility Risks", "accessibility_risks"),
-        ("Localization Risks", "localization_risks")
+        ("Localization Risks", "localization_risks"),
+        ("visionOS Readiness", "visionos_readiness")
     ]
 
     found_any = False
