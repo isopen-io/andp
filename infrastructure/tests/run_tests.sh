@@ -84,10 +84,12 @@ rm -rf mock.xcresult
 
 # Test AI Analyzer
 echo "Testing ai-analyzer.py..."
-if python3 infrastructure/ai-analyzer.py Apps > /dev/null; then
+AI_OUTPUT=$(python3 infrastructure/ai-analyzer.py Apps)
+if [[ "$AI_OUTPUT" == *"Bolt Optimized"* ]] && [[ "$AI_OUTPUT" == *":28 - Risk:"* ]]; then
     echo "✅ ai-analyzer.py PASSED"
 else
-    echo "❌ ai-analyzer.py FAILED"
+    echo "❌ ai-analyzer.py FAILED or output format unexpected"
+    echo "$AI_OUTPUT"
     exit 1
 fi
 
