@@ -71,7 +71,7 @@ else
 fi
 
 echo ""
-echo "AI Quality Analysis (including Accessibility):"
+echo "Unified Quality Analysis (Quality, Accessibility, Localization):"
 echo "-------------------------"
 if [ -f "infrastructure/ai-analyzer.py" ]; then
     python3 infrastructure/ai-analyzer.py "Apps"
