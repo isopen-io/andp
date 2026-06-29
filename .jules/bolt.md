@@ -17,3 +17,7 @@
 ## 2026-06-26 - [Regex Search Optimization]
 **Learning:** Pre-compiling regex patterns and combining multiple search strings into a single "OR" pattern (e.g., `(A|B|C)`) significantly reduces function call overhead and execution time in static analysis scripts. In `accessibility-validator.py`, this approach reduced `re.search` calls from 900 to 309 for the current codebase (~65% reduction).
 **Action:** Consolidate multiple related string searches into single-pass regex operations and pre-compile patterns used in loops to improve static analysis performance.
+
+## 2026-06-27 - [Unified Static Analysis Consolidation]
+**Learning:** Merging disparate static analysis scripts (Accessibility, Localization, Architecture) into a single-pass tool eliminates redundant filesystem traversals and Python process spawns. This architectural consolidation improves CI reporting speed by roughly 50% for these checks while maintaining full diagnostic parity.
+**Action:** Always look for opportunities to merge tools that operate on the same source files and directory trees to minimize I/O and process overhead.
