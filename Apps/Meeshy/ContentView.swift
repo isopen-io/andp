@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 struct ContentView: View {
     @State private var isLoggedIn = false
@@ -14,6 +17,7 @@ struct ContentView: View {
             Image(systemName: "shippingbox.fill")
                 .font(.system(size: 80, weight: .regular, design: .rounded))
                 .foregroundStyle(.tint)
+                .pulseEffect(isActive: isLoading)
                 .scaleEffect(iconScale)
                 .opacity(iconOpacity)
                 .accessibilityHidden(true)
@@ -60,6 +64,7 @@ struct ContentView: View {
                         if isLoading {
                             ProgressView()
                                 .padding(.trailing, 8)
+                                .accessibilityHidden(true)
                         }
                         Text("login_button")
                             .fontWeight(.semibold)
@@ -72,6 +77,7 @@ struct ContentView: View {
                 .disabled(isLoading)
                 .keyboardShortcut(.defaultAction)
                 .accessibilityIdentifier("loginButton")
+                .accessibilityLabel(Text(isLoading ? "logging_in_label" : "login_button"))
                 .accessibilityHint(Text("login_hint"))
             }
 
@@ -87,7 +93,21 @@ struct ContentView: View {
             withAnimation {
                 isLoading = false
                 isLoggedIn = true
+                #if os(iOS)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                #endif
             }
+        }
+    }
+}
+
+extension View {
+    @ViewBuilder
+    func pulseEffect(isActive: Bool) -> some View {
+        if #available(iOS 17.0, *) {
+            self.symbolEffect(.pulse, isActive: isActive)
+        } else {
+            self
         }
     }
 }
