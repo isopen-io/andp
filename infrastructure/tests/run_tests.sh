@@ -84,8 +84,19 @@ rm -rf mock.xcresult
 
 # Test AI Analyzer
 echo "Testing ai-analyzer.py..."
+# Create a temporary file to ensure a predictable error at a specific line
+cat <<EOF > Apps/TestIssue.swift
+import SwiftUI
+struct TestIssue: View {
+    var body: some View {
+        // Line 5
+        Button("Test") { }
+    }
+}
+EOF
 AI_OUTPUT=$(python3 infrastructure/ai-analyzer.py Apps)
-if [[ "$AI_OUTPUT" == *"Bolt Optimized"* ]] && [[ "$AI_OUTPUT" == *":28 - Risk:"* ]]; then
+rm Apps/TestIssue.swift
+if [[ "$AI_OUTPUT" == *"Bolt Optimized"* ]] && [[ "$AI_OUTPUT" == *"TestIssue.swift:5 - Risk:"* ]]; then
     echo "✅ ai-analyzer.py PASSED"
 else
     echo "❌ ai-analyzer.py FAILED or output format unexpected"
