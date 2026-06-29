@@ -1,5 +1,7 @@
 import SwiftUI
+#if os(iOS)
 import UIKit
+#endif
 
 struct ContentView: View {
     @State private var isLoggedIn = false
@@ -12,7 +14,13 @@ struct ContentView: View {
         VStack(spacing: 24) {
             Spacer()
 
-            logoView
+            Image(systemName: "shippingbox.fill")
+                .font(.system(size: 80, weight: .regular, design: .rounded))
+                .foregroundStyle(.tint)
+                .pulseEffect(isActive: isLoading)
+                .scaleEffect(iconScale)
+                .opacity(iconOpacity)
+                .accessibilityHidden(true)
                 .onAppear {
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
                         iconScale = 1.0
@@ -60,9 +68,6 @@ struct ContentView: View {
                         if isLoading {
                             ProgressView()
                                 .padding(.trailing, 8)
-                        } else {
-                            Image(systemName: "lock.fill")
-                                .padding(.trailing, 4)
                                 .accessibilityHidden(true)
                         }
                         Text("login_button")
@@ -76,7 +81,7 @@ struct ContentView: View {
                 .disabled(isLoading)
                 .keyboardShortcut(.defaultAction)
                 .accessibilityIdentifier("loginButton")
-                .accessibilityLabel(isLoading ? Text("logging_in_status") : Text("login_button"))
+                .accessibilityLabel(Text(isLoading ? "logging_in_label" : "login_button"))
                 .accessibilityHint(Text("login_hint"))
             }
 
@@ -111,7 +116,21 @@ struct ContentView: View {
             withAnimation {
                 isLoading = false
                 isLoggedIn = true
+                #if os(iOS)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                #endif
             }
+        }
+    }
+}
+
+extension View {
+    @ViewBuilder
+    func pulseEffect(isActive: Bool) -> some View {
+        if #available(iOS 17.0, *) {
+            self.symbolEffect(.pulse, isActive: isActive)
+        } else {
+            self
         }
     }
 }
