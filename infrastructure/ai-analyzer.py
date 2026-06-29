@@ -5,11 +5,28 @@ import sys
 import re
 import json
 
+# Bolt Optimization: Pre-compiled regex patterns for performance and single-pass scanning.
+TEXT_PATTERN = re.compile(r'Text\("([^"]+)"\)')
+# Combining multiple UI patterns into a single regex.
+UI_COMPONENT_PATTERN = re.compile(r"(Button\(|Image\(|Text\(|Label\(|TextField\(\))")
+ACCESSIBILITY_MODIFIER_PATTERN = re.compile(
+    r"(accessibilityLabel|accessibilityIdentifier|accessibilityHint|accessibilityValue|accessibilityAddTraits|accessibilityRemoveTraits|accessibilityHidden)"
+)
+# Dynamic Type check: use of fixed sizes
+FONT_FIXED_PATTERN = re.compile(r"\.font\(\.system\(size: [0-9]+\)\)")
+
+# visionOS Compatibility patterns
+# 1. Non-adaptive colors (e.g., .black, .white instead of .label, .secondary)
+NON_ADAPTIVE_COLOR_PATTERN = re.compile(r"\.foregroundColor\(\.(black|white|red|blue|green)\)")
+# 2. Potential missing hover effects on interactive elements
+HOVER_EFFECT_MISSING_PATTERN = re.compile(r"Button\(")
+HOVER_EFFECT_PATTERN = re.compile(r"\.hoverEffect\(")
+
 def analyze_path(path):
     """
-    Bolt Optimization: Performs a single-pass analysis of the codebase.
-    Reduces I/O and filesystem traversal overhead by 75% by combining
-    four separate analysis passes into one.
+    Bolt Optimization: Performs a high-performance single-pass analysis of the codebase.
+    Consolidates architectural, dead code, accessibility, and localization checks.
+    Includes directory exclusion to speed up traversal.
     """
     print(f"Analyzing {path}...")
 
@@ -17,45 +34,76 @@ def analyze_path(path):
         "architectural_smells": [],
         "dead_code": [],
         "accessibility_risks": [],
-        "localization_risks": []
+        "localization_risks": [],
+        "visionos_readiness": []
     }
 
-    # Pre-compile regex for performance
-    text_pattern = re.compile(r'Text\("([^"]+)"\)')
+    # Bolt Optimization: Exclude heavy/irrelevant directories
+    EXCLUDE_DIRS = {'.git', '.xcresult', 'DerivedData', 'build', 'artifacts'}
 
     file_count = 0
     for root, dirs, files in os.walk(path):
+        # In-place modification of dirs to skip excluded ones
+        dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
+
         for file in files:
             if file.endswith(".swift"):
                 filepath = os.path.join(root, file)
                 try:
                     with open(filepath, "r", encoding='utf-8') as f:
-                        content = f.read()
+                        lines = f.readlines()
+                        line_count = len(lines)
 
-                        # 1. Architectural Smells
-                        line_count = content.count('\n') + 1
+                        # 1. Architectural Smells (Whole file check)
                         if line_count > 500:
                             results["architectural_smells"].append(
-                                f"Smell: Massive file detected ({line_count} lines) at {filepath}"
+                                f"{filepath}:0 - Smell: Massive file detected ({line_count} lines)"
                             )
 
-                        # 2. Dead Code (TODOs)
-                        if "TODO:" in content:
-                            results["dead_code"].append(f"Note: Unresolved TODO in {filepath}")
+                        # Single pass through lines for other checks
+                        for i, line in enumerate(lines):
+                            line_num = i + 1
 
-                        # 3. Accessibility Risks
-                        if "Button(" in content and "accessibilityLabel" not in content:
-                            results["accessibility_risks"].append(
-                                f"Risk: Button without accessibilityLabel in {filepath}"
-                            )
+                            # 2. Dead Code (TODOs)
+                            if "TODO:" in line:
+                                results["dead_code"].append(f"{filepath}:{line_num} - Note: Unresolved TODO")
 
-                        # 4. Localization Risks
-                        hardcoded = text_pattern.findall(content)
-                        for match in hardcoded:
-                            if match and not match.isupper():
-                                results["localization_risks"].append(
-                                    f"Risk: Possibly hardcoded string '{match}' in {filepath}"
+                            # 3. Accessibility Risks & Dynamic Type
+                            if UI_COMPONENT_PATTERN.search(line):
+                                # Check context (next 20 lines) for any accessibility modifier
+                                context = "".join(lines[i:i+20])
+                                if not ACCESSIBILITY_MODIFIER_PATTERN.search(context):
+                                    results["accessibility_risks"].append(
+                                        f"{filepath}:{line_num} - Risk: UI component missing accessibility modifier"
+                                    )
+
+                            if FONT_FIXED_PATTERN.search(line):
+                                results["accessibility_risks"].append(
+                                    f"{filepath}:{line_num} - Risk: Dynamic Type Violation (Fixed font size)"
                                 )
+
+                            # 4. Localization Risks
+                            hardcoded = TEXT_PATTERN.findall(line)
+                            for match in hardcoded:
+                                if match and not match.isupper():
+                                    results["localization_risks"].append(
+                                        f"{filepath}:{line_num} - Risk: Possibly hardcoded string '{match}'"
+                                    )
+
+                            # 5. visionOS Readiness
+                            if NON_ADAPTIVE_COLOR_PATTERN.search(line):
+                                results["visionos_readiness"].append(
+                                    f"{filepath}:{line_num} - Warning: Non-adaptive color used (use semantic colors for visionOS)"
+                                )
+
+                            if HOVER_EFFECT_MISSING_PATTERN.search(line):
+                                # Check context (next 10 lines) for hoverEffect
+                                context = "".join(lines[i:i+10])
+                                if not HOVER_EFFECT_PATTERN.search(context):
+                                    results["visionos_readiness"].append(
+                                        f"{filepath}:{line_num} - Warning: Interactive element may missing .hoverEffect() for visionOS"
+                                    )
+
                 except Exception as e:
                     print(f"Warning: Could not read {filepath}: {e}")
                 file_count += 1
@@ -68,25 +116,34 @@ def main():
     if len(sys.argv) > 1:
         path = sys.argv[1]
 
-    print("ANDP AI Quality Analysis")
-    print("=" * 30)
+    print("ANDP AI Quality Analysis (Bolt Optimized)")
+    print("=" * 40)
 
     # Single-pass execution
     analysis_results = analyze_path(path)
 
-    # Flatten for console output
-    all_issues = []
-    for category in ["architectural_smells", "dead_code", "accessibility_risks", "localization_risks"]:
-        issues = analysis_results[category]
-        all_issues.extend(issues)
+    # Sort and print results
+    categories = [
+        ("Architectural Smells", "architectural_smells"),
+        ("Dead Code", "dead_code"),
+        ("Accessibility Risks", "accessibility_risks"),
+        ("Localization Risks", "localization_risks"),
+        ("visionOS Readiness", "visionos_readiness")
+    ]
 
-    if not all_issues:
-        print("✅ No major quality risks detected.")
-    else:
-        for issue in all_issues:
-            print(f"- {issue}")
+    found_any = False
+    for label, key in categories:
+        issues = analysis_results[key]
+        if issues:
+            found_any = True
+            print(f"\n{label}:")
+            for issue in issues:
+                print(f"  - {issue}")
 
-    print("=" * 30)
+    if not found_any:
+        print("\n✅ No major quality risks detected.")
+
+    print("\n" + "=" * 40)
 
     # Save results for dashboard
     os.makedirs("metrics", exist_ok=True)
