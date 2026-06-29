@@ -3,12 +3,14 @@ options:
   bundleIdPrefix: me.meeshy
   deploymentTarget:
     iOS: "16.0"
+    visionOS: "1.0"
   developmentLanguage: en
 
 settings:
   SWIFT_VERSION: "6.0"
   IPHONEOS_DEPLOYMENT_TARGET: "16.0"
-  TARGETED_DEVICE_FAMILY: "1,2"
+  XROS_DEPLOYMENT_TARGET: "1.0"
+  TARGETED_DEVICE_FAMILY: "1,2,7"
   SWIFT_APPROACHABLE_CONCURRENCY: "YES"
   SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
   SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT: "YES"
@@ -24,7 +26,9 @@ targets:
   Meeshy:
     type: application
     platform: iOS
-    deploymentTarget: "16.0"
+    deploymentTarget:
+      iOS: "16.0"
+      visionOS: "1.0"
     sources:
       - path: Apps/Meeshy
         excludes:
@@ -75,7 +79,9 @@ targets:
   MeeshyNotificationExtension:
     type: app-extension
     platform: iOS
-    deploymentTarget: "16.0"
+    deploymentTarget:
+      iOS: "16.0"
+      visionOS: "1.0"
     sources:
       - path: Apps/MeeshyNotificationExtension
     settings:
@@ -91,7 +97,9 @@ targets:
   MeeshyTests:
     type: bundle.unit-test
     platform: iOS
-    deploymentTarget: "16.0"
+    deploymentTarget:
+      iOS: "16.0"
+      visionOS: "1.0"
     sources:
       - path: Apps/MeeshyTests
         excludes:
@@ -111,7 +119,9 @@ targets:
   MeeshyUITests:
     type: bundle.ui-testing
     platform: iOS
-    deploymentTarget: "16.0"
+    deploymentTarget:
+      iOS: "16.0"
+      visionOS: "1.0"
     sources:
       - path: Apps/MeeshyUITests
     settings:

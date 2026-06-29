@@ -7,3 +7,4 @@
 "logout_confirm_title" = "Are you sure you want to log out?";
 "logout_button_confirm" = "Log Out";
 "cancel_button" = "Cancel";
+"logging_in_status" = "Logging in...";
