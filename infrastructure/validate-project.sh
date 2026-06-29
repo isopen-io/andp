@@ -33,12 +33,8 @@ fi
 # 3. visionOS & iPad Responsiveness Checks (Iteration 7)
 echo "Validating visionOS and iPad responsiveness settings..."
 
-# Check if visionOS is in supported platforms for Meeshy target
-if ! grep -q "platform: \[iOS, visionOS\]" "$PROJECT_FILE"; then
-    echo "⚠️ Warning: Meeshy target does not explicitly support [iOS, visionOS] in project.yml"
-fi
-
 # Check for targeted device families (1=iPhone, 2=iPad, 7=visionOS)
+# We use a single-target multi-platform approach with platform: iOS
 if ! grep -q "TARGETED_DEVICE_FAMILY: \"1,2,7\"" "$PROJECT_FILE"; then
     echo "⚠️ Warning: TARGETED_DEVICE_FAMILY does not include visionOS (7) or iPad (2)"
 fi
@@ -50,17 +46,11 @@ if grep -q "UIRequiresFullScreen: YES" "$PROJECT_FILE"; then
     exit 1
 fi
 
-# 4. Platform Consistency Checks (Regression Fix for CI Failure)
-echo "Verifying platform consistency between app and dependencies..."
-
-# If main app supports visionOS, tests and extensions should too (except Widgets which are often platform-specific)
-if grep -q "Meeshy:" "$PROJECT_FILE" && grep -A 2 "Meeshy:" "$PROJECT_FILE" | grep -q "platform: \[iOS, visionOS\]"; then
-    for target in "MeeshyTests" "MeeshyUITests" "MeeshyNotificationExtension"; do
-        if ! grep -A 5 "$target:" "$PROJECT_FILE" | grep -q "platform: \[iOS, visionOS\]"; then
-            echo "❌ Error: Target $target does not match main app platform [iOS, visionOS]!"
-            exit 1
-        fi
-    done
+# 4. Platform Consistency Checks
+echo "Verifying platform consistency..."
+# Ensure visionOS deployment targets are present
+if ! grep -q "visionOS: \"1.0\"" "$PROJECT_FILE"; then
+    echo "⚠️ Warning: visionOS deployment target missing in project.yml"
 fi
 
 echo "✅ Project configuration validation passed."

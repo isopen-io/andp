@@ -25,7 +25,7 @@ packages:
 targets:
   Meeshy:
     type: application
-    platform: [iOS, visionOS]
+    platform: iOS
     deploymentTarget:
       iOS: "16.0"
       visionOS: "1.0"
@@ -78,7 +78,7 @@ targets:
 
   MeeshyNotificationExtension:
     type: app-extension
-    platform: [iOS, visionOS]
+    platform: iOS
     deploymentTarget:
       iOS: "16.0"
       visionOS: "1.0"
@@ -96,7 +96,7 @@ targets:
 
   MeeshyTests:
     type: bundle.unit-test
-    platform: [iOS, visionOS]
+    platform: iOS
     deploymentTarget:
       iOS: "16.0"
       visionOS: "1.0"
@@ -118,7 +118,7 @@ targets:
 
   MeeshyUITests:
     type: bundle.ui-testing
-    platform: [iOS, visionOS]
+    platform: iOS
     deploymentTarget:
       iOS: "16.0"
       visionOS: "1.0"
