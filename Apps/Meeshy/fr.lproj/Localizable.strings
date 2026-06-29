@@ -6,3 +6,4 @@
 "logout_confirm_title" = "Êtes-vous sûr de vouloir vous déconnecter ?";
 "logout_button_confirm" = "Se déconnecter";
 "cancel_button" = "Annuler";
+"logging_in_status" = "Connexion en cours...";
