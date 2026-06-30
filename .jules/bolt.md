@@ -29,3 +29,7 @@
 ## 2026-06-28 - [Inner-Loop Optimization via Pre-indexing]
 **Learning:** In static analysis tools that check multi-line context windows (e.g., verifying if a modifier exists within 20 lines of a component), repeated string concatenation and regex searching in the inner loop is extremely expensive. Pre-calculating a list of line indices matching the modifiers and using a membership check (e.g., `any(i <= idx < i + 20 for idx in modifier_indices)`) reduces complexity and avoids massive memory allocations.
 **Action:** When performing sliding-window context checks in large files, pre-index pattern matches to avoid redundant work in the inner loop.
+
+## 2025-06-29 - [Cross-line Optimization via Pointer Tracking]
+**Learning:** Even with pre-indexing, using `any()` with a generator in an inner loop for cross-line checks (e.g., "within next 20 lines") leads to quadratic-like (N \cdot M)$ complexity. Since line indices and pattern matches are both sorted, using monotonically increasing pointers reduces this to (N + M)$ amortized linear time.
+**Action:** Use pointer tracking for proximity-based static analysis checks to maintain high performance as file sizes grow.
