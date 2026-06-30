@@ -60,6 +60,11 @@ def analyze_path(path):
                                 f"{filepath}:0 - Smell: Massive file detected ({line_count} lines)"
                             )
 
+                        # Bolt Optimization: Pre-index modifier and hover effect locations to avoid
+                        # repeated string joining and regex searching in the loop.
+                        modifier_indices = [j for j, l in enumerate(lines) if ACCESSIBILITY_MODIFIER_PATTERN.search(l)]
+                        hover_indices = [j for j, l in enumerate(lines) if HOVER_EFFECT_PATTERN.search(l)]
+
                         # Single pass through lines for other checks
                         for i, line in enumerate(lines):
                             line_num = i + 1
@@ -70,9 +75,10 @@ def analyze_path(path):
 
                             # 3. Accessibility Risks & Dynamic Type
                             if UI_COMPONENT_PATTERN.search(line):
-                                # Check context (next 20 lines) for any accessibility modifier
-                                context = "".join(lines[i:i+20])
-                                if not ACCESSIBILITY_MODIFIER_PATTERN.search(context):
+                                # Bolt Optimization: Check pre-indexed indices instead of joining context
+                                # Check if any accessibility modifier exists within the next 20 lines.
+                                has_modifier = any(i <= idx < i + 20 for idx in modifier_indices)
+                                if not has_modifier:
                                     results["accessibility_risks"].append(
                                         f"{filepath}:{line_num} - Risk: UI component missing accessibility modifier"
                                     )
@@ -97,9 +103,10 @@ def analyze_path(path):
                                 )
 
                             if HOVER_EFFECT_MISSING_PATTERN.search(line):
-                                # Check context (next 10 lines) for hoverEffect
-                                context = "".join(lines[i:i+10])
-                                if not HOVER_EFFECT_PATTERN.search(context):
+                                # Bolt Optimization: Check pre-indexed hover indices
+                                # Check if any hover effect exists within the next 10 lines.
+                                has_hover = any(i <= idx < i + 10 for idx in hover_indices)
+                                if not has_hover:
                                     results["visionos_readiness"].append(
                                         f"{filepath}:{line_num} - Warning: Interactive element may missing .hoverEffect() for visionOS"
                                     )
