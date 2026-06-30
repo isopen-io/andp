@@ -47,3 +47,11 @@ This document tracks the evolution of the Apple Native Delivery Platform.
 - [x] Multi-provider CI/CD pipeline generation (GitLab, Azure, Jenkins).
 - [x] Enhanced simulator orchestration (pooling and mass-reset).
 - [x] Integration of dependency reports into project validation.
+
+## Iteration 7: Multi-Platform Expansion & Metadata Governance (Completed)
+**Goal:** Expand platform support and enhance App Store Connect integration.
+- [x] Support for macOS and visionOS targets in monorepo.
+- [x] Unified single-pass static analysis (Quality, Accessibility, Localization).
+- [x] App Store metadata management via `metadata-manager.sh`.
+- [x] Advanced TestFlight group and tester orchestration.
+- [x] Phased release support in `release-manager.sh`.

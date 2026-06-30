@@ -15,7 +15,7 @@ SECRET_PATTERN="KEY=|SECRET=|TOKEN=|PASSWORD=|AKIA|AIza|PRIVATE KEY"
 
 # Ensure we only scan existing directories and use correct casing for Linux compatibility.
 SCAN_TARGETS=""
-for dir in Apps packages Features Modules; do
+for dir in Apps packages Features Modules Apps/MeeshyMac Apps/MeeshyVision; do
     if [ -d "$dir" ]; then
         SCAN_TARGETS="$SCAN_TARGETS $dir"
     fi
