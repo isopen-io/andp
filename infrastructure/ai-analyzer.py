@@ -17,7 +17,9 @@ FONT_FIXED_PATTERN = re.compile(r"\.font\(\.system\(size: [0-9]+\)\)")
 
 # visionOS Compatibility patterns
 # 1. Non-adaptive colors (e.g., .black, .white instead of .label, .secondary)
-NON_ADAPTIVE_COLOR_PATTERN = re.compile(r"\.foregroundColor\(\.(black|white|red|blue|green)\)")
+# Updated to detect Color.black, Color.white, etc.
+NON_ADAPTIVE_COLOR_PATTERN = re.compile(r"(\.foregroundColor|\.foregroundStyle|\.background)\(\s*(\.|\bColor\.)(black|white|red|blue|green|yellow|orange|pink|purple)\b")
+
 # 2. Potential missing hover effects on interactive elements
 HOVER_EFFECT_MISSING_PATTERN = re.compile(r"Button\(")
 HOVER_EFFECT_PATTERN = re.compile(r"\.hoverEffect\(")
@@ -42,6 +44,9 @@ def analyze_path(path):
     EXCLUDE_DIRS = {'.git', '.xcresult', 'DerivedData', 'build', 'artifacts'}
 
     file_count = 0
+    total_ui_components = 0
+    accessible_ui_components = 0
+
     for root, dirs, files in os.walk(path):
         # In-place modification of dirs to skip excluded ones
         dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
@@ -60,6 +65,11 @@ def analyze_path(path):
                                 f"{filepath}:0 - Smell: Massive file detected ({line_count} lines)"
                             )
 
+                        # Bolt Optimization: Pre-index modifier and hover effect locations to avoid
+                        # repeated string joining and regex searching in the loop.
+                        modifier_indices = [j for j, l in enumerate(lines) if ACCESSIBILITY_MODIFIER_PATTERN.search(l)]
+                        hover_indices = [j for j, l in enumerate(lines) if HOVER_EFFECT_PATTERN.search(l)]
+
                         # Single pass through lines for other checks
                         for i, line in enumerate(lines):
                             line_num = i + 1
@@ -70,12 +80,16 @@ def analyze_path(path):
 
                             # 3. Accessibility Risks & Dynamic Type
                             if UI_COMPONENT_PATTERN.search(line):
-                                # Check context (next 20 lines) for any accessibility modifier
-                                context = "".join(lines[i:i+20])
-                                if not ACCESSIBILITY_MODIFIER_PATTERN.search(context):
+                                total_ui_components += 1
+                                # Bolt Optimization: Check pre-indexed indices instead of joining context
+                                # Check if any accessibility modifier exists within the next 20 lines.
+                                has_modifier = any(i <= idx < i + 20 for idx in modifier_indices)
+                                if not has_modifier:
                                     results["accessibility_risks"].append(
                                         f"{filepath}:{line_num} - Risk: UI component missing accessibility modifier"
                                     )
+                                else:
+                                    accessible_ui_components += 1
 
                             if FONT_FIXED_PATTERN.search(line):
                                 results["accessibility_risks"].append(
@@ -93,13 +107,14 @@ def analyze_path(path):
                             # 5. visionOS Readiness
                             if NON_ADAPTIVE_COLOR_PATTERN.search(line):
                                 results["visionos_readiness"].append(
-                                    f"{filepath}:{line_num} - Warning: Non-adaptive color used (use semantic colors for visionOS)"
+                                    f"{filepath}:{line_num} - Warning: Non-adaptive color used (use semantic colors for visionOS compatibility)"
                                 )
 
                             if HOVER_EFFECT_MISSING_PATTERN.search(line):
-                                # Check context (next 10 lines) for hoverEffect
-                                context = "".join(lines[i:i+10])
-                                if not HOVER_EFFECT_PATTERN.search(context):
+                                # Bolt Optimization: Check pre-indexed hover indices
+                                # Check if any hover effect exists within the next 10 lines.
+                                has_hover = any(i <= idx < i + 10 for idx in hover_indices)
+                                if not has_hover:
                                     results["visionos_readiness"].append(
                                         f"{filepath}:{line_num} - Warning: Interactive element may missing .hoverEffect() for visionOS"
                                     )
@@ -108,7 +123,21 @@ def analyze_path(path):
                     print(f"Warning: Could not read {filepath}: {e}")
                 file_count += 1
 
+    # Calculate Accessibility Score
+    accessibility_score = 100.0
+    if total_ui_components > 0:
+        accessibility_score = (accessible_ui_components / total_ui_components) * 100.0
+
+    results["metrics"] = {
+        "total_files": file_count,
+        "total_ui_components": total_ui_components,
+        "accessible_ui_components": accessible_ui_components,
+        "accessibility_score": round(accessibility_score, 2)
+    }
+
     print(f"Processed {file_count} files in a single pass.")
+    print(f"Accessibility Score: {results['metrics']['accessibility_score']}%")
+
     return results
 
 def main():

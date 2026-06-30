@@ -71,10 +71,36 @@ else
 fi
 
 echo ""
-echo "Unified Quality Analysis (Quality, Accessibility, Localization):"
+echo "Unified Quality Analysis (Quality, Accessibility, Localization, visionOS):"
 echo "-------------------------"
 if [ -f "infrastructure/ai-analyzer.py" ]; then
     python3 infrastructure/ai-analyzer.py "Apps"
 else
     echo "AI analyzer not found."
+fi
+
+echo ""
+echo "Localization Governance (Multi-locale & RTL Readiness):"
+echo "-------------------------"
+if [ -f "infrastructure/localization-validator.py" ]; then
+    python3 infrastructure/localization-validator.py "Apps/Meeshy"
+else
+    echo "Localization validator not found."
+fi
+
+echo ""
+echo "Visual Regression Status:"
+echo "-------------------------"
+if [ -d "Tests/VisualBaselines" ]; then
+    # In a real scenario, we would loop through snapshots and compare them.
+    # Here we provide a summary of the baseline coverage.
+    BASELINE_COUNT=$(find Tests/VisualBaselines -name "*.png" | wc -l)
+    echo "Baselines found: $BASELINE_COUNT"
+    if [ "$BASELINE_COUNT" -gt 0 ]; then
+        echo "✅ Visual regression baselines are being tracked."
+    else
+        echo "⚠️  No visual regression baselines found."
+    fi
+else
+    echo "⚠️  Visual baselines directory missing."
 fi

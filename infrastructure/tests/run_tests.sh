@@ -8,6 +8,7 @@ echo "Running Infrastructure Tests..."
 
 # Test Version Manager
 echo "Testing version-manager.sh..."
+OLD_VERSION=$(cat VERSION)
 ./version-manager.sh set-version 9.9.9
 ./version-manager.sh set-build 100
 VERSION_INFO=$(./version-manager.sh get)
@@ -26,6 +27,8 @@ else
     echo "❌ version-manager.sh bump FAILED: $VERSION_INFO"
     exit 1
 fi
+# Restore version
+./version-manager.sh set-version $OLD_VERSION
 
 # Test Artifact Manager
 echo "Testing artifact-manager.sh..."
@@ -84,14 +87,36 @@ rm -rf mock.xcresult
 
 # Test AI Analyzer
 echo "Testing ai-analyzer.py..."
+# Create a temporary file to ensure a predictable error at a specific line
+cat <<EOF > Apps/TestIssue.swift
+import SwiftUI
+struct TestIssue: View {
+    var body: some View {
+        // Line 5
+        Button("Test") { }
+    }
+}
+EOF
 AI_OUTPUT=$(python3 infrastructure/ai-analyzer.py Apps)
-if [[ "$AI_OUTPUT" == *"Bolt Optimized"* ]] && [[ "$AI_OUTPUT" == *":28 - Risk:"* ]]; then
+rm Apps/TestIssue.swift
+if [[ "$AI_OUTPUT" == *"Bolt Optimized"* ]] && [[ "$AI_OUTPUT" == *"TestIssue.swift:5 - Risk:"* ]]; then
     echo "✅ ai-analyzer.py PASSED"
 else
     echo "❌ ai-analyzer.py FAILED or output format unexpected"
     echo "$AI_OUTPUT"
     exit 1
 fi
+
+# Test Visual Compare (Basic check)
+echo "Testing visual-compare.sh..."
+touch img1.png img2.png
+if ./infrastructure/visual-compare.sh img1.png img1.png > /dev/null; then
+    echo "✅ visual-compare.sh identical case PASSED"
+else
+    echo "❌ visual-compare.sh identical case FAILED"
+    exit 1
+fi
+rm img1.png img2.png
 
 # Test Dashboard Generator
 echo "Testing generate-dashboard.sh..."

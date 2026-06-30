@@ -102,13 +102,19 @@ with open('$AI_METRIC') as f:
     data = json.load(f)
     print('<ul class="list">')
     for category, issues in data.items():
+        if category == "metrics":
+            print(f'<li><strong>Accessibility Score: {issues["accessibility_score"]}%</strong></li>')
+            continue
         if issues:
             print(f'<li><strong>{category.replace("_", " ").title()}</strong>')
             print('<ul>')
             for issue in issues[:3]: # Show top 3
                 print(f'<li>{issue}</li>')
             print('</ul></li>')
-    if not any(data.values()):
+
+    # Check if we have issues in any category except metrics
+    has_issues = any(issues for category, issues in data.items() if category != "metrics")
+    if not has_issues:
         print('<li>✅ No issues detected</li>')
     print('</ul>')
 EOF_PY

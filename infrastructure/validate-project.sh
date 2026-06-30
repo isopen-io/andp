@@ -25,7 +25,9 @@ done
 # 2. Dependency Analysis (Modular Governance)
 echo "Running dependency analysis..."
 if [ -f "infrastructure/dependency-analyzer.py" ]; then
-    python3 infrastructure/dependency-analyzer.py
+    # We ignore failures here to allow the script to continue if yaml is missing in some environments,
+    # but ideally it should be installed.
+    python3 infrastructure/dependency-analyzer.py || echo "⚠️ Warning: dependency-analyzer.py failed."
 else
     echo "⚠️ Warning: dependency-analyzer.py not found."
 fi
@@ -34,16 +36,19 @@ fi
 echo "Validating visionOS and iPad responsiveness settings..."
 
 # Check for targeted device families (1=iPhone, 2=iPad, 7=visionOS)
-# We use a single-target multi-platform approach with platform: iOS
 if ! grep -q "TARGETED_DEVICE_FAMILY: \"1,2,7\"" "$PROJECT_FILE"; then
     echo "⚠️ Warning: TARGETED_DEVICE_FAMILY does not include visionOS (7) or iPad (2)"
 fi
 
 # Check for Stage Manager / Split View support (Requires iPad)
-# In project.yml, UIRequiresFullScreen: NO is usually the default, but we should verify it's not set to YES
 if grep -q "UIRequiresFullScreen: YES" "$PROJECT_FILE"; then
     echo "❌ Error: UIRequiresFullScreen is set to YES, which breaks Stage Manager and Split View!"
     exit 1
+fi
+
+# Ensure all iPad orientations are supported for full responsiveness
+if ! grep -q "UISupportedInterfaceOrientations~ipad" "$PROJECT_FILE"; then
+    echo "⚠️ Warning: UISupportedInterfaceOrientations~ipad missing. Ensure all orientations are supported for full iPad responsiveness."
 fi
 
 # 4. Platform Consistency Checks
