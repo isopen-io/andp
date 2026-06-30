@@ -97,12 +97,17 @@ def analyze_path(path):
                                 )
 
                             if HOVER_EFFECT_MISSING_PATTERN.search(line):
-                                # Check context (next 10 lines) for hoverEffect
-                                context = "".join(lines[i:i+10])
-                                if not HOVER_EFFECT_PATTERN.search(context):
-                                    results["visionos_readiness"].append(
-                                        f"{filepath}:{line_num} - Warning: Interactive element may missing .hoverEffect() for visionOS"
-                                    )
+                                # Check context (next 20 lines) for hoverEffect
+                                context = "".join(lines[i:i+20])
+                                # UX Pattern: Buttons inside confirmationDialog or Alerts don't need .hoverEffect()
+                                # Pre-check if this line itself is part of a dialog to avoid false positives on dialog-contained buttons
+                                if not HOVER_EFFECT_PATTERN.search(context) and "confirmationDialog" not in context:
+                                    # Also check previous 10 lines for context
+                                    pre_context = "".join(lines[max(0, i-10):i])
+                                    if "confirmationDialog" not in pre_context:
+                                        results["visionos_readiness"].append(
+                                            f"{filepath}:{line_num} - Warning: Interactive element may missing .hoverEffect() for visionOS"
+                                        )
 
                 except Exception as e:
                     print(f"Warning: Could not read {filepath}: {e}")

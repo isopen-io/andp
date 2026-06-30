@@ -45,6 +45,7 @@ struct ContentView: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
+                .hoverEffect()
                 .buttonStyle(.bordered)
                 .controlSize(.large)
                 .padding(.horizontal)
@@ -75,6 +76,7 @@ struct ContentView: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
+                .hoverEffect()
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .padding(.horizontal)
@@ -110,15 +112,14 @@ struct ContentView: View {
         isLoading = true
         // Simulate login
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            #if os(iOS)
             let generator = UINotificationFeedbackGenerator()
             generator.notificationOccurred(.success)
+            #endif
 
             withAnimation {
                 isLoading = false
                 isLoggedIn = true
-                #if os(iOS)
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-                #endif
             }
         }
     }
