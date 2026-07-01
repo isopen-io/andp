@@ -29,3 +29,7 @@
 ## 2026-06-28 - [Inner-Loop Optimization via Pre-indexing]
 **Learning:** In static analysis tools that check multi-line context windows (e.g., verifying if a modifier exists within 20 lines of a component), repeated string concatenation and regex searching in the inner loop is extremely expensive. Pre-calculating a list of line indices matching the modifiers and using a membership check (e.g., `any(i <= idx < i + 20 for idx in modifier_indices)`) reduces complexity and avoids massive memory allocations.
 **Action:** When performing sliding-window context checks in large files, pre-index pattern matches to avoid redundant work in the inner loop.
+
+## 2026-06-29 - [Reverse-Pass Lookahead Optimization]
+**Learning:** Implementing lookahead checks (e.g., "is modifier X within 20 lines after component Y?") using a reverse-pass through file lines allows for O(1) state tracking. By iterating from the end of the file, the "nearest future" location of a modifier is always known when a component is encountered, eliminating the need for nested loops or pre-indexed list traversals (`any(i <= idx < i + 20 for idx in modifier_indices)`). Combined with an `INTEREST_PATTERN` pre-filter to skip irrelevant lines, this approach significantly reduces regex engine overhead and improves cache locality.
+**Action:** For static analysis patterns requiring forward-looking context, prefer a reverse-pass with state variables over forward-pass lookahead or pre-indexing to achieve O(N) complexity with minimal overhead.
