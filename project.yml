@@ -131,3 +131,29 @@ targets:
       TEST_TARGET_NAME: Meeshy
     dependencies:
       - target: Meeshy
+
+  MeeshyMac:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Apps/MeeshyMac
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.mac
+      CODE_SIGN_STYLE: Automatic
+    dependencies:
+      - package: MeeshySDK
+        product: MeeshySDK
+
+  MeeshyVision:
+    type: application
+    platform: visionOS
+    deploymentTarget: "1.0"
+    sources:
+      - path: Apps/MeeshyVision
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.vision
+      CODE_SIGN_STYLE: Automatic
+    dependencies:
+      - package: MeeshySDK
+        product: MeeshySDK

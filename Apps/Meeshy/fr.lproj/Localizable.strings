@@ -1,6 +1,5 @@
 "welcome_message" = "Bienvenue sur Meeshy !";
 "login_button" = "Connexion";
-"logging_in_label" = "Connexion en cours...";
 "login_hint" = "Accédez à votre compte en toute sécurité";
 "logged_in_message" = "Vous êtes maintenant connecté !";
 "logout_button" = "Déconnexion";

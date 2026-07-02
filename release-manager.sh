@@ -53,4 +53,20 @@ else
     ./version-manager.sh tag
 fi
 
+# 3. Handle Multi-Platform Metadata Sync (Iteration 7)
+if [ -f "metadata.json" ]; then
+    echo "Syncing multi-platform metadata to App Store Connect..."
+    if [ "$DRY_RUN" = true ]; then
+        echo "[DRY RUN] Would run: ./metadata-manager.sh sync metadata.json"
+    else
+        ./metadata-manager.sh sync metadata.json
+    fi
+fi
+
+# 4. Handle Phased Release (Mocked for Iteration 7)
+if [[ "$*" == *"--phased"* ]]; then
+    echo "Enabling phased release (7-day rollout)..."
+    # In reality: asc-manager.sh phased-release enable <bundle_id>
+fi
+
 echo "Release process complete."

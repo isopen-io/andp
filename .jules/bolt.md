@@ -17,15 +17,3 @@
 ## 2026-06-26 - [Regex Search Optimization]
 **Learning:** Pre-compiling regex patterns and combining multiple search strings into a single "OR" pattern (e.g., `(A|B|C)`) significantly reduces function call overhead and execution time in static analysis scripts. In `accessibility-validator.py`, this approach reduced `re.search` calls from 900 to 309 for the current codebase (~65% reduction).
 **Action:** Consolidate multiple related string searches into single-pass regex operations and pre-compile patterns used in loops to improve static analysis performance.
-
-## 2026-06-27 - [Tool Consolidation & Directory Exclusion]
-**Learning:** Consolidating multiple specialized static analysis tools into a single-pass analyzer with directory exclusion (e.g., .git, .xcresult) significantly reduces CI overhead. In this codebase, merging accessibility and quality analysis into a single optimized Python script reduced test-report execution time by ~38% while improving issue reporting with line numbers.
-**Action:** Always look for opportunities to merge sequential file-scanning tools and implement explicit directory exclusions for build/test artifacts to optimize filesystem traversal.
-
-## 2026-06-27 - [Unified Static Analysis Consolidation]
-**Learning:** Merging disparate static analysis scripts (Accessibility, Localization, Architecture) into a single-pass tool eliminates redundant filesystem traversals and Python process spawns. This architectural consolidation improves CI reporting speed by roughly 50% for these checks while maintaining full diagnostic parity.
-**Action:** Always look for opportunities to merge tools that operate on the same source files and directory trees to minimize I/O and process overhead.
-
-## 2026-06-28 - [Inner-Loop Optimization via Pre-indexing]
-**Learning:** In static analysis tools that check multi-line context windows (e.g., verifying if a modifier exists within 20 lines of a component), repeated string concatenation and regex searching in the inner loop is extremely expensive. Pre-calculating a list of line indices matching the modifiers and using a membership check (e.g., `any(i <= idx < i + 20 for idx in modifier_indices)`) reduces complexity and avoids massive memory allocations.
-**Action:** When performing sliding-window context checks in large files, pre-index pattern matches to avoid redundant work in the inner loop.
