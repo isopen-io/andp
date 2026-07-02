@@ -8,3 +8,4 @@
 "logout_button_confirm" = "Se déconnecter";
 "cancel_button" = "Annuler";
 "logging_in_status" = "Connexion en cours...";
+"logout_hint" = "Déconnectez-vous de votre compte en toute sécurité";
