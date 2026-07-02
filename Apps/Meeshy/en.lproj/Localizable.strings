@@ -8,3 +8,4 @@
 "logout_button_confirm" = "Log Out";
 "cancel_button" = "Cancel";
 "logging_in_status" = "Logging in...";
+"logout_hint" = "Safely sign out of your account";
