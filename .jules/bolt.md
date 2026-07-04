@@ -29,3 +29,7 @@
 ## 2026-06-28 - [Inner-Loop Optimization via Pre-indexing]
 **Learning:** In static analysis tools that check multi-line context windows (e.g., verifying if a modifier exists within 20 lines of a component), repeated string concatenation and regex searching in the inner loop is extremely expensive. Pre-calculating a list of line indices matching the modifiers and using a membership check (e.g., `any(i <= idx < i + 20 for idx in modifier_indices)`) reduces complexity and avoids massive memory allocations.
 **Action:** When performing sliding-window context checks in large files, pre-index pattern matches to avoid redundant work in the inner loop.
+
+## 2026-07-04 - [Telemetry Optimization & Portability]
+**Learning:** Optimizing high-frequency infrastructure scripts (like `analytics-manager.sh`) by replacing external process pipelines with Bash built-ins (e.g., `printf %(...)T`) can cause breaking regressions on older environments like macOS (Bash 3.2). A better approach is to consolidate external calls (e.g., merging multiple `date` calls into one) and streamline pipelines (e.g., using `tr < /dev/urandom | head -c`) to reduce forks while maintaining full portability and correctness.
+**Action:** Always verify shell built-in availability for target environments (especially macOS Bash 3.2) and prefer consolidated process calls over non-portable built-ins.
