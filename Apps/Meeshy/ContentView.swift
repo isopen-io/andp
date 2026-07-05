@@ -34,16 +34,10 @@ struct ContentView: View {
                     .multilineTextAlignment(.center)
                     .accessibilityAddTraits(.isHeader)
 
-                Button(role: .destructive, action: {
-                    showLogoutConfirmation = true
-                }) {
-                    HStack {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .accessibilityHidden(true)
-                        Text("logout_button")
-                            .fontWeight(.semibold)
-                    }
-                    .frame(maxWidth: .infinity)
+                Button(role: .destructive, action: logoutTapped) {
+                    Label("logout_button", systemImage: "rectangle.portrait.and.arrow.right")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
                 }
                 .hoverEffect()
                 .buttonStyle(.bordered)
@@ -108,7 +102,17 @@ struct ContentView: View {
         }
     }
 
+    private func logoutTapped() {
+        #if os(iOS)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        #endif
+        showLogoutConfirmation = true
+    }
+
     private func login() {
+        #if os(iOS)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        #endif
         isLoading = true
         // Simulate login
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
