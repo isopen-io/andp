@@ -24,9 +24,16 @@ if [ "$COMMAND" != "record" ]; then
     usage
 fi
 
-TIMESTAMP=$(date +%s)
-DATE_STR=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-UUID=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)
+# Bolt Optimization: Consolidate two date calls into one to reduce process forks (-1 fork).
+# We fetch both the unix timestamp and the UTC date string in a single invocation.
+DATES=$(date -u +"%s %Y-%m-%dT%H:%M:%SZ")
+TIMESTAMP=${DATES%% *}
+DATE_STR=${DATES#* }
+
+# Bolt Optimization: Streamline UUID generation pipeline to reduce process forks (-2 forks).
+# 'tr' reads directly from /dev/urandom and 'head -c' extracts the characters without 'fold'.
+UUID=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 8)
+
 FILENAME="${METRICS_DIR}/${TYPE}_${TIMESTAMP}_${UUID}.json"
 
 cat <<EOF > "$FILENAME"
