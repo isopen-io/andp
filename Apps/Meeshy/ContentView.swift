@@ -35,7 +35,6 @@ struct ContentView: View {
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
                 }
-                .hoverEffect()
                 .buttonStyle(.bordered)
                 .controlSize(.large)
                 .padding(.horizontal)
@@ -68,15 +67,15 @@ struct ContentView: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
-                .hoverEffect()
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .padding(.horizontal)
                 .disabled(isLoading)
                 .keyboardShortcut(.defaultAction)
                 .accessibilityIdentifier("loginButton")
-                .accessibilityLabel(Text(isLoading ? "logging_in_label" : "login_button"))
+                .accessibilityLabel(isLoading ? Text("logging_in_status") : Text("login_button"))
                 .accessibilityHint(Text("login_hint"))
+                .hoverEffect()
             }
 
             Spacer()
@@ -108,17 +107,6 @@ struct ContentView: View {
                 isLoading = false
                 isLoggedIn = true
             }
-        }
-    }
-}
-
-extension View {
-    @ViewBuilder
-    func pulseEffect(isActive: Bool) -> some View {
-        if #available(iOS 17.0, *) {
-            self.symbolEffect(.pulse, isActive: isActive)
-        } else {
-            self
         }
     }
 }

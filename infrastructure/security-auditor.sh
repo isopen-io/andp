@@ -9,11 +9,9 @@ echo "Starting security audit..."
 
 # 1. Secret Scanning
 echo "Scanning for potential secrets in source code..."
-# Optimization: Combine patterns into a single ERE to avoid multiple full-tree scans.
-# This reduces process creation overhead and improves performance on larger codebases.
 SECRET_PATTERN="KEY=|SECRET=|TOKEN=|PASSWORD=|AKIA|AIza|PRIVATE KEY"
 
-# Ensure we only scan existing directories and use correct casing for Linux compatibility.
+# Scan source code directories
 SCAN_TARGETS=""
 for dir in Apps packages Features Modules; do
     if [ -d "$dir" ]; then
@@ -29,7 +27,6 @@ if [ -n "$SCAN_TARGETS" ]; then
     fi
 fi
 
-# Check for secrets.yml (should not be in git, but we check if it exists locally)
 if [ -f "secrets.yml" ]; then
     echo "✅ secrets.yml found (local only)."
 else
@@ -48,7 +45,6 @@ if [[ "$*" == *"--verify"* ]]; then
     if [ -f "$ARTIFACT" ]; then
         echo "Verifying signature for $ARTIFACT..."
 
-        # Optimization: Skip codesign for mocked artifacts (empty files) in CI
         if [ ! -s "$ARTIFACT" ] && ([ "$CI" == "true" ] || [ "$GITHUB_ACTIONS" == "true" ]); then
             echo "✅ Mocked artifact detected in CI. Skipping signature verification."
             exit 0

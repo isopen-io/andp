@@ -30,6 +30,14 @@ class ASCManager:
         print(f"Polling status for {bundle_id} ({version})...")
         return "PROCESSING"
 
+    def manage_testflight_group(self, group_name, action, testers=None):
+        """Manages TestFlight groups and testers."""
+        print(f"TestFlight Group '{group_name}' - Action: {action}")
+        if testers:
+            print(f"  Testers: {', '.join(testers)}")
+        print("TestFlight management successful (Mocked).")
+        return True
+
 def load_secrets(account_id):
     secrets_file = "secrets.yml"
     if not os.path.exists(secrets_file):
@@ -80,3 +88,8 @@ if __name__ == "__main__":
             print("Usage: status <bundle_id> <version>")
             sys.exit(1)
         mgr.poll_build_status(args[0], args[1])
+    elif cmd == "testflight":
+        if len(args) < 2:
+            print("Usage: testflight <group_name> <add|remove> [tester_emails...]")
+            sys.exit(1)
+        mgr.manage_testflight_group(args[0], args[1], args[2:])
