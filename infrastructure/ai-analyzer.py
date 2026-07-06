@@ -21,6 +21,10 @@ NON_ADAPTIVE_COLOR_PATTERN = re.compile(r"\.foregroundColor\(\.(black|white|red|
 HOVER_EFFECT_MISSING_PATTERN = re.compile(r"Button\(")
 HOVER_EFFECT_PATTERN = re.compile(r"\.hoverEffect\(")
 
+# Bolt Optimization: Single regex to quickly filter lines with potential issues.
+# This avoids running multiple regexes on lines that are purely structural or empty.
+INTEREST_PATTERN = re.compile(r"(Button\(|Image\(|Text\(|Label\(|TextField\(|\.font\(|\.foregroundColor\(|TODO:|accessibility|\.hoverEffect\()")
+
 def analyze_path(path):
     """
     Bolt Optimization: Performs a high-performance single-pass analysis of the codebase.
@@ -59,14 +63,24 @@ def analyze_path(path):
                                 f"{filepath}:0 - Smell: Massive file detected ({line_count} lines)"
                             )
 
-                        # Bolt Optimization: Pre-index modifier and hover effect locations to avoid
-                        # repeated string joining and regex searching in the loop.
-                        modifier_indices = [j for j, l in enumerate(lines) if ACCESSIBILITY_MODIFIER_PATTERN.search(l)]
-                        hover_indices = [j for j, l in enumerate(lines) if HOVER_EFFECT_PATTERN.search(l)]
+                        # Bolt Optimization: Use a reverse pass to implement O(1) lookahead state.
+                        # This avoids repeated array slicing or multi-line string joining.
+                        last_accessibility_line = 999999
+                        last_hover_line = 999999
 
-                        # Single pass through lines for other checks
-                        for i, line in enumerate(lines):
+                        for i in range(line_count - 1, -1, -1):
+                            line = lines[i]
                             line_num = i + 1
+
+                            # Fast-path: skip lines that don't match any pattern of interest
+                            if not INTEREST_PATTERN.search(line):
+                                continue
+
+                            # Update lookahead states
+                            if ACCESSIBILITY_MODIFIER_PATTERN.search(line):
+                                last_accessibility_line = i
+                            if HOVER_EFFECT_PATTERN.search(line):
+                                last_hover_line = i
 
                             # 2. Dead Code (TODOs)
                             if "TODO:" in line:
@@ -74,10 +88,8 @@ def analyze_path(path):
 
                             # 3. Accessibility Risks & Dynamic Type
                             if UI_COMPONENT_PATTERN.search(line):
-                                # Bolt Optimization: Check pre-indexed indices instead of joining context
-                                # Check if any accessibility modifier exists within the next 20 lines.
-                                has_modifier = any(i <= idx < i + 20 for idx in modifier_indices)
-                                if not has_modifier:
+                                # Bolt Optimization: O(1) state check vs O(M) pre-indexed search
+                                if last_accessibility_line - i > 20:
                                     results["accessibility_risks"].append(
                                         f"{filepath}:{line_num} - Risk: UI component missing accessibility modifier"
                                     )
@@ -102,10 +114,8 @@ def analyze_path(path):
                                 )
 
                             if HOVER_EFFECT_MISSING_PATTERN.search(line):
-                                # Bolt Optimization: Check pre-indexed hover indices
-                                # Check if any hover effect exists within the next 10 lines.
-                                has_hover = any(i <= idx < i + 10 for idx in hover_indices)
-                                if not has_hover:
+                                # Bolt Optimization: O(1) state check vs O(M) pre-indexed search
+                                if last_hover_line - i > 10:
                                     results["visionos_readiness"].append(
                                         f"{filepath}:{line_num} - Warning: Interactive element may missing .hoverEffect() for visionOS"
                                     )
@@ -142,6 +152,8 @@ def main():
     for label, key in categories:
         issues = analysis_results[key]
         if issues:
+            # Sort by filename and line number for readability
+            issues.sort()
             found_any = True
             print(f"\n{label}:")
             for issue in issues:

@@ -28,14 +28,10 @@ struct ContentView: View {
                     .multilineTextAlignment(.center)
                     .accessibilityAddTraits(.isHeader)
 
-                Button(role: .destructive, action: {
-                    showLogoutConfirmation = true
-                }) {
+                Button(role: .destructive, action: { showLogoutConfirmation = true }) {
                     HStack {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .accessibilityHidden(true)
-                        Text("logout_button")
-                            .fontWeight(.semibold)
+                        Image(systemName: "rectangle.portrait.and.arrow.right").accessibilityHidden(true)
+                        Text("logout_button").fontWeight(.semibold)
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -45,6 +41,11 @@ struct ContentView: View {
                 .accessibilityLabel(Text("logout_button"))
                 .confirmationDialog("logout_confirm_title", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
                     Button("logout_button_confirm", role: .destructive) {
+                        #if os(iOS)
+                        let generator = UINotificationFeedbackGenerator()
+                        generator.notificationOccurred(.success)
+                        #endif
+
                         withAnimation {
                             isLoggedIn = false
                         }
@@ -90,9 +91,10 @@ struct ContentView: View {
 
     @ViewBuilder
     private var logoView: some View {
-        let logo = Image(systemName: "shippingbox.fill")
+        Image(systemName: "shippingbox.fill")
             .font(.system(size: 80, weight: .regular, design: .rounded))
             .foregroundStyle(.tint)
+            .pulseEffect(isActive: isLoading)
             .scaleEffect(iconScale)
             .opacity(iconOpacity)
             .accessibilityHidden(true)
