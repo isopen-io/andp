@@ -1,104 +1,95 @@
+"""App Store metadata synchronisation.
+
+MetadataSyncer pushes a metadata.json file (bundle_id, version, per-locale
+attributes) to App Store Connect through AppsManager/AppStoreManager.
+The CLI entry point mirrors asc_manager.py: with placeholder credentials it
+runs in DRY-RUN mode so CI works without an Apple account.
+"""
+import json
 import os
 import sys
-import json
-import yaml
 
-class MetadataManager:
-    def __init__(self, key_id, issuer_id, key_content):
-        self.key_id = key_id
-        self.issuer_id = issuer_id
-        self.key_content = key_content
-        self.base_url = "https://api.appstoreconnect.apple.com/v1"
+from apps import AppsManager
+from appstore import AppStoreManager
+from auth import ASCAuth
+from client import ASCClient
+from config import ConfigError, load_account
 
-    def fetch_localized_metadata(self, app_id, version):
-        """Fetches metadata for a specific app version and locale."""
-        print(f"Fetching metadata for app {app_id}, version {version}...")
-        # Mocked API call
-        return {
-            "en-US": {
-                "name": "Meeshy",
-                "description": "Next-gen Apple platform automation.",
-                "keywords": "apple, build, automation, delivery",
-                "whats_new": "Iteration 7 improvements."
-            }
-        }
 
-    def update_localized_metadata(self, app_id, version, locale, metadata):
-        """Updates localized metadata for an app version."""
-        print(f"Updating {locale} metadata for app {app_id}, version {version}...")
-        for key, value in metadata.items():
-            print(f"  Setting {key} to: {value}")
-        print("Update successful (Mocked).")
-        return True
+class MetadataSyncer:
+    def __init__(self, apps_manager, appstore_manager):
+        self.apps = apps_manager
+        self.appstore = appstore_manager
 
-    def sync_metadata_from_file(self, metadata_path):
-        """Syncs metadata from a JSON file to App Store Connect."""
+    def sync_from_file(self, metadata_path):
+        """Push every locale in the file; return {locale: "created"|"updated"}."""
         if not os.path.exists(metadata_path):
-            print(f"Error: Metadata file {metadata_path} not found.")
-            return False
+            raise FileNotFoundError(f"Metadata file not found: {metadata_path}")
 
-        with open(metadata_path, 'r') as f:
+        with open(metadata_path, "r") as f:
             data = json.load(f)
 
-        app_id = data.get("app_id")
-        version = data.get("version")
+        bundle_id = data["bundle_id"]
+        version = data["version"]
         localizations = data.get("localizations", {})
 
-        for locale, meta in localizations.items():
-            self.update_localized_metadata(app_id, version, locale, meta)
+        app = self.apps.find_app(bundle_id)
+        if app is None:
+            raise LookupError(f"App {bundle_id} not found in App Store Connect")
 
-        return True
+        app_store_version = self.appstore.ensure_version(app["id"], version)
 
-def load_secrets(account_id):
-    secrets_file = "secrets.yml"
-    if not os.path.exists(secrets_file):
-        secrets_file = "secrets.example.yml"
+        results = {}
+        for locale, attributes in localizations.items():
+            _, created = self.appstore.upsert_version_localization(
+                app_store_version["id"], locale, attributes
+            )
+            results[locale] = "created" if created else "updated"
+        return results
 
-    with open(secrets_file, 'r') as f:
-        data = yaml.safe_load(f)
 
-    accounts = data.get('accounts', {})
-    if account_id not in accounts:
-        print(f"Error: Account '{account_id}' not found in secrets.")
-        sys.exit(1)
+def main(argv):
+    if not argv:
+        print("Usage: metadata_manager.py <sync> <metadata_json_path> [--account <account_id>]")
+        return 2
 
-    return accounts[account_id]
-
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: metadata_manager.py <command> [args] [--account <account_id>]")
-        sys.exit(1)
-
-    cmd = sys.argv[1]
+    args = list(argv)
     account_id = "primary"
-    args = sys.argv[2:]
-
     if "--account" in args:
         idx = args.index("--account")
-        account_id = args[idx+1]
-        args.pop(idx+1)
-        args.pop(idx)
+        account_id = args[idx + 1]
+        del args[idx:idx + 2]
 
-    account_data = load_secrets(account_id)
-    asc_api = account_data.get('asc_api', {})
+    command, command_args = args[0], args[1:]
 
-    mgr = MetadataManager(
-        asc_api.get('key_id'),
-        asc_api.get('issuer_id'),
-        asc_api.get('key_content')
-    )
+    try:
+        account = load_account(account_id)
+    except ConfigError as exc:
+        print(f"Error: {exc}")
+        return 1
 
-    if cmd == "fetch":
-        if len(args) < 2:
-            print("Usage: fetch <app_id> <version>")
-            sys.exit(1)
-        metadata = mgr.fetch_localized_metadata(args[0], args[1])
-        print(json.dumps(metadata, indent=2))
-    elif cmd == "sync":
-        if not args:
+    if command == "sync":
+        if not command_args:
             print("Usage: sync <metadata_json_path>")
-            sys.exit(1)
-        mgr.sync_metadata_from_file(args[0])
-    else:
-        print(f"Unknown command: {cmd}")
-        sys.exit(1)
+            return 2
+        metadata_path = command_args[0]
+        if not account.is_configured():
+            print(
+                f"[DRY-RUN] No real credentials for account '{account_id}' — "
+                f"would sync metadata from {metadata_path}."
+            )
+            return 0
+        auth = ASCAuth(account.key_id, account.issuer_id, account.key_content)
+        client = ASCClient(auth)
+        syncer = MetadataSyncer(AppsManager(client), AppStoreManager(client))
+        results = syncer.sync_from_file(metadata_path)
+        for locale, outcome in results.items():
+            print(f"{locale}: {outcome}")
+        return 0
+
+    print(f"Unknown command: {command}")
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

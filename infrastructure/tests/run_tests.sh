@@ -6,6 +6,15 @@ set -e
 
 echo "Running Infrastructure Tests..."
 
+# Test App Store Connect API modules (pytest)
+echo "Testing App Store Connect API modules..."
+if python3 -m pytest infrastructure/tests/python/ -q; then
+    echo "✅ ASC API pytest suite PASSED"
+else
+    echo "❌ ASC API pytest suite FAILED"
+    exit 1
+fi
+
 # Test Version Manager
 echo "Testing version-manager.sh..."
 ./version-manager.sh set-version 9.9.9

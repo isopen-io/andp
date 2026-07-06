@@ -30,7 +30,7 @@ cat <<EOF > "$EXPORT_OPTIONS_PLIST"
 <plist version="1.0">
 <dict>
     <key>method</key>
-    <string>app-store</string>
+    <string>app-store-connect</string>
     <key>teamID</key>
     <string>$TEAM_ID</string>
 </dict>

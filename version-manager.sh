@@ -12,29 +12,23 @@ VALUE=$2
 PROJECT_NAME=$(grep "name:" project.yml | head -n 1 | awk '{print $2}')
 XCODEPROJ="${PROJECT_NAME}.xcodeproj"
 
+# VERSION and BUILD_NUMBER files are the single source of truth;
+# agvtool sync is best-effort only (XcodeGen projects may lack
+# apple-generic versioning, where agvtool vers/new-version fail).
+
 function get_marketing_version() {
-    if command -v agvtool >/dev/null 2>&1 && [ -d "$XCODEPROJ" ]; then
-        agvtool mvers -terse
+    if [ -f "VERSION" ]; then
+        cat VERSION
     else
-        # Fallback: search in project.yml or Info.plist
-        # For simplicity in this demo, we read from a version file if it exists, else default
-        if [ -f "VERSION" ]; then
-            cat VERSION
-        else
-            echo "1.0.0"
-        fi
+        echo "1.0.0"
     fi
 }
 
 function get_build_number() {
-    if command -v agvtool >/dev/null 2>&1 && [ -d "$XCODEPROJ" ]; then
-        agvtool vers -terse
+    if [ -f "BUILD_NUMBER" ]; then
+        cat BUILD_NUMBER
     else
-        if [ -f "BUILD_NUMBER" ]; then
-            cat BUILD_NUMBER
-        else
-            echo "1"
-        fi
+        echo "1"
     fi
 }
 
@@ -42,7 +36,7 @@ function set_marketing_version() {
     local version=$1
     echo "Setting marketing version to $version"
     if command -v agvtool >/dev/null 2>&1 && [ -d "$XCODEPROJ" ]; then
-        agvtool new-marketing-version "$version"
+        agvtool new-marketing-version "$version" >/dev/null 2>&1 || true
     fi
     echo "$version" > VERSION
 }
@@ -51,7 +45,7 @@ function set_build_number() {
     local build=$1
     echo "Setting build number to $build"
     if command -v agvtool >/dev/null 2>&1 && [ -d "$XCODEPROJ" ]; then
-        agvtool next-bump # or agvtool new-version -all "$build"
+        agvtool new-version -all "$build" >/dev/null 2>&1 || true
     fi
     echo "$build" > BUILD_NUMBER
 }

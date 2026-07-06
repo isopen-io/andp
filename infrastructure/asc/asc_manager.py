@@ -1,95 +1,194 @@
+"""ANDP App Store Connect CLI.
+
+Wires auth -> client -> managers and exposes the commands used by the
+shell wrappers (asc-manager.sh) and the CI pipeline.
+
+Without real credentials (secrets.example.yml placeholders) every command
+runs in DRY-RUN mode: it validates inputs and prints what it would do,
+so CI stays green without an Apple account.
+"""
 import os
 import sys
-import json
-import requests
-import time
-import yaml
 
-class ASCManager:
-    def __init__(self, key_id, issuer_id, key_content):
-        self.key_id = key_id
-        self.issuer_id = issuer_id
-        self.key_content = key_content
-        self.base_url = "https://api.appstoreconnect.apple.com/v1"
+from apps import AppsManager
+from appstore import AppStoreManager
+from auth import ASCAuth
+from builds import BuildsManager
+from client import ASCClient
+from config import ConfigError, load_account
+from testflight import TestFlightManager
 
-    def generate_token(self):
-        # Placeholder for JWT token generation logic
-        # In real implementation:
-        # import jwt
-        # return jwt.encode({...}, self.key_content, algorithm='ES256', headers={'kid': self.key_id})
-        return "MOCK_TOKEN"
+USAGE = """Usage: asc_manager.py <command> [args] [--account <account_id>]
 
-    def upload_ipa(self, ipa_path):
-        print(f"Uploading {ipa_path} to App Store Connect...")
-        # In reality, we'd use xcrun altool or iTMSTransporter
-        time.sleep(1)
-        print("Upload successful (Mocked).")
-        return True
+Commands:
+  upload <ipa_path>                              Upload a build (Build Upload API)
+  status <bundle_id> <build_number>              Poll build processing state
+  testflight <bundle_id> <group> add [emails...] Manage TestFlight group testers
+  submit <bundle_id> <version>                   Submit a version for App Review
+"""
 
-    def poll_build_status(self, bundle_id, version):
-        print(f"Polling status for {bundle_id} ({version})...")
-        return "PROCESSING"
 
-    def manage_testflight_group(self, group_name, action, testers=None):
-        """Manages TestFlight groups and testers."""
-        print(f"TestFlight Group '{group_name}' - Action: {action}")
-        if testers:
-            print(f"  Testers: {', '.join(testers)}")
-        print("TestFlight management successful (Mocked).")
-        return True
+class Managers:
+    def __init__(self, client):
+        self.client = client
+        self.apps = AppsManager(client)
+        self.builds = BuildsManager(client)
+        self.testflight = TestFlightManager(client)
+        self.appstore = AppStoreManager(client)
 
-def load_secrets(account_id):
-    secrets_file = "secrets.yml"
-    if not os.path.exists(secrets_file):
-        # Fallback to example if real secrets missing (for CI/Testing)
-        secrets_file = "secrets.example.yml"
 
-    with open(secrets_file, 'r') as f:
-        data = yaml.safe_load(f)
+def make_managers(account):
+    auth = ASCAuth(
+        key_id=account.key_id,
+        issuer_id=account.issuer_id,
+        private_key=account.key_content,
+    )
+    return Managers(ASCClient(auth))
 
-    accounts = data.get('accounts', {})
-    if account_id not in accounts:
-        print(f"Error: Account '{account_id}' not found in secrets.")
-        sys.exit(1)
 
-    return accounts[account_id]
+def _read_file_stripped(path, default=""):
+    if os.path.exists(path):
+        with open(path, "r") as f:
+            return f.read().strip()
+    return default
 
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: asc_manager.py <command> [args] [--account <account_id>]")
-        sys.exit(1)
 
-    cmd = sys.argv[1]
+def _cmd_upload(managers, dry_run, args):
+    if not args:
+        print("Error: IPA path required for upload.")
+        return 2
+    ipa_path = args[0]
+    if not os.path.exists(ipa_path):
+        print(f"Error: IPA not found: {ipa_path}")
+        return 1
+    version = _read_file_stripped("VERSION", "0.0.0")
+    build_number = _read_file_stripped("BUILD_NUMBER", "0")
 
+    if dry_run:
+        print(
+            f"[DRY-RUN] Would upload {ipa_path} as version {version} "
+            f"(build {build_number}) via the Build Upload API."
+        )
+        return 0
+
+    upload_id = managers.builds.upload_ipa(ipa_path, version=version, build_number=build_number)
+    print(f"Upload started: buildUploads/{upload_id}")
+    return 0
+
+
+def _cmd_status(managers, dry_run, args):
+    if len(args) < 2:
+        print("Usage: status <bundle_id> <build_number>")
+        return 2
+    bundle_id, build_number = args[0], args[1]
+
+    if dry_run:
+        print(f"[DRY-RUN] Would poll processing state of build {build_number} for {bundle_id}.")
+        return 0
+
+    app = managers.apps.find_app(bundle_id)
+    if app is None:
+        print(f"Error: App {bundle_id} not found in App Store Connect.")
+        return 1
+    build = managers.builds.wait_for_processing(app["id"], build_number)
+    print(f"Build {build_number}: {build['attributes']['processingState']}")
+    return 0
+
+
+def _cmd_testflight(managers, dry_run, args):
+    if len(args) < 3:
+        print("Usage: testflight <bundle_id> <group_name> <add> [tester_emails...]")
+        return 2
+    bundle_id, group_name, action = args[0], args[1], args[2]
+    emails = args[3:]
+
+    if dry_run:
+        print(
+            f"[DRY-RUN] Would ensure group '{group_name}' on {bundle_id} "
+            f"and {action} testers: {', '.join(emails) or '(none)'}"
+        )
+        return 0
+
+    app = managers.apps.find_app(bundle_id)
+    if app is None:
+        print(f"Error: App {bundle_id} not found in App Store Connect.")
+        return 1
+    group = managers.testflight.ensure_group(app["id"], group_name)
+    if action == "add":
+        for email in emails:
+            managers.testflight.add_tester(group["id"], email)
+            print(f"Added tester {email} to '{group_name}'.")
+    else:
+        print(f"Error: Unsupported testflight action '{action}'.")
+        return 2
+    return 0
+
+
+def _cmd_submit(managers, dry_run, args):
+    if len(args) < 2:
+        print("Usage: submit <bundle_id> <version>")
+        return 2
+    bundle_id, version = args[0], args[1]
+
+    if dry_run:
+        print(f"[DRY-RUN] Would submit version {version} of {bundle_id} for App Review.")
+        return 0
+
+    app = managers.apps.find_app(bundle_id)
+    if app is None:
+        print(f"Error: App {bundle_id} not found in App Store Connect.")
+        return 1
+    app_store_version = managers.appstore.ensure_version(app["id"], version)
+    submission = managers.appstore.submit_for_review(app["id"], app_store_version["id"])
+    print(f"Review submission {submission['id']}: {submission['attributes'].get('state')}")
+    return 0
+
+
+COMMANDS = {
+    "upload": _cmd_upload,
+    "status": _cmd_status,
+    "testflight": _cmd_testflight,
+    "submit": _cmd_submit,
+}
+
+
+def main(argv):
+    if not argv:
+        print(USAGE)
+        return 2
+
+    args = list(argv)
     account_id = "primary"
-    args = sys.argv[2:]
     if "--account" in args:
         idx = args.index("--account")
-        account_id = args[idx+1]
-        args.pop(idx+1)
-        args.pop(idx)
+        account_id = args[idx + 1]
+        del args[idx:idx + 2]
 
-    account_data = load_secrets(account_id)
-    asc_api = account_data.get('asc_api', {})
+    command, command_args = args[0], args[1:]
+    handler = COMMANDS.get(command)
+    if handler is None:
+        print(USAGE)
+        print(f"Unknown command: {command}")
+        return 2
 
-    mgr = ASCManager(
-        asc_api.get('key_id'),
-        asc_api.get('issuer_id'),
-        asc_api.get('key_content')
-    )
+    try:
+        account = load_account(account_id)
+    except ConfigError as exc:
+        print(f"Error: {exc}")
+        return 1
 
-    if cmd == "upload":
-        if not args:
-            print("Error: IPA path required for upload.")
-            sys.exit(1)
-        mgr.upload_ipa(args[0])
-    elif cmd == "status":
-        if len(args) < 2:
-            print("Usage: status <bundle_id> <version>")
-            sys.exit(1)
-        mgr.poll_build_status(args[0], args[1])
-    elif cmd == "testflight":
-        if len(args) < 2:
-            print("Usage: testflight <group_name> <add|remove> [tester_emails...]")
-            sys.exit(1)
-        mgr.manage_testflight_group(args[0], args[1], args[2:])
+    dry_run = not account.is_configured()
+    if dry_run:
+        print(
+            f"No real App Store Connect credentials for account '{account_id}' "
+            "(placeholders detected) — running in DRY-RUN mode."
+        )
+        managers = None
+    else:
+        managers = make_managers(account)
+
+    return handler(managers, dry_run, command_args)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

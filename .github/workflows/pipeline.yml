@@ -19,6 +19,9 @@ jobs:
     - name: Validate Project
       run: ./infrastructure/validate-project.sh
 
+    - name: Run Infrastructure Tests
+      run: ./infrastructure/tests/run_tests.sh
+
     - name: Generate Xcode Project
       run: ./generate.sh
 
