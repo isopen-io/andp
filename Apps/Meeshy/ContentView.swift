@@ -29,21 +29,20 @@ struct ContentView: View {
                         .multilineTextAlignment(.center)
                         .accessibilityAddTraits(.isHeader)
 
-                    Button(role: .destructive, action: logoutTapped) {
-                        Label("logout_button", systemImage: "rectangle.portrait.and.arrow.right")
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .hoverEffect()
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .padding(.horizontal)
-                    .accessibilityLabel(Text("logout_button"))
-                    .confirmationDialog("logout_confirm_title", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
-                        Button("logout_button_confirm", role: .destructive) {
-                            withAnimation {
-                                isLoggedIn = false
-                            }
+                Button(role: .destructive, action: logoutTapped) {
+                    Label("logout_button", systemImage: "rectangle.portrait.and.arrow.right")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                }
+                .hoverEffect()
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .padding(.horizontal)
+                .accessibilityLabel(Text("logout_button"))
+                .confirmationDialog("logout_confirm_title", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
+                    Button("logout_button_confirm", role: .destructive) {
+                        withAnimation {
+                            isLoggedIn = false
                         }
                         Button("cancel_button", role: .cancel) {}
                     }
@@ -105,11 +104,17 @@ struct ContentView: View {
         showLogoutConfirmation = true
     }
 
+    private func logoutTapped() {
+        #if os(iOS)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        #endif
+        showLogoutConfirmation = true
+    }
+
     private func login() {
         #if os(iOS)
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         #endif
-
         isLoading = true
         // Simulate login
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
