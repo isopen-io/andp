@@ -14,13 +14,7 @@ struct ContentView: View {
         VStack(spacing: 24) {
             Spacer()
 
-            Image(systemName: "shippingbox.fill")
-                .font(.system(size: 80, weight: .regular, design: .rounded))
-                .foregroundStyle(.tint)
-                .pulseEffect(isActive: isLoading)
-                .scaleEffect(iconScale)
-                .opacity(iconOpacity)
-                .accessibilityHidden(true)
+            logoView
                 .onAppear {
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
                         iconScale = 1.0
@@ -34,9 +28,7 @@ struct ContentView: View {
                     .multilineTextAlignment(.center)
                     .accessibilityAddTraits(.isHeader)
 
-                Button(role: .destructive, action: {
-                    showLogoutConfirmation = true
-                }) {
+                Button(role: .destructive, action: logoutTapped) {
                     HStack {
                         Image(systemName: "rectangle.portrait.and.arrow.right")
                             .accessibilityHidden(true)
@@ -45,11 +37,11 @@ struct ContentView: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
-                .hoverEffect()
                 .buttonStyle(.bordered)
                 .controlSize(.large)
                 .padding(.horizontal)
                 .accessibilityLabel(Text("logout_button"))
+                .hoverEffect()
                 .confirmationDialog("logout_confirm_title", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
                     Button("logout_button_confirm", role: .destructive) {
                         withAnimation {
@@ -69,6 +61,9 @@ struct ContentView: View {
                         if isLoading {
                             ProgressView()
                                 .padding(.trailing, 8)
+                        } else {
+                            Image(systemName: "lock.fill")
+                                .padding(.trailing, 4)
                                 .accessibilityHidden(true)
                         }
                         Text("login_button")
@@ -76,15 +71,15 @@ struct ContentView: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
-                .hoverEffect()
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .padding(.horizontal)
                 .disabled(isLoading)
                 .keyboardShortcut(.defaultAction)
                 .accessibilityIdentifier("loginButton")
-                .accessibilityLabel(Text(isLoading ? "logging_in_label" : "login_button"))
+                .accessibilityLabel(isLoading ? Text("logging_in_status") : Text("login_button"))
                 .accessibilityHint(Text("login_hint"))
+                .hoverEffect()
             }
 
             Spacer()
@@ -101,7 +96,7 @@ struct ContentView: View {
             .opacity(iconOpacity)
             .accessibilityHidden(true)
 
-        if #available(iOS 17.0, *) {
+        if #available(iOS 17.0, macOS 14.0, visionOS 1.0, *) {
             logo.symbolEffect(.pulse, isActive: isLoading)
         } else {
             logo
@@ -123,15 +118,8 @@ struct ContentView: View {
             }
         }
     }
-}
 
-extension View {
-    @ViewBuilder
-    func pulseEffect(isActive: Bool) -> some View {
-        if #available(iOS 17.0, *) {
-            self.symbolEffect(.pulse, isActive: isActive)
-        } else {
-            self
-        }
+    private func logoutTapped() {
+        showLogoutConfirmation = true
     }
 }

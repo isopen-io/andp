@@ -71,10 +71,19 @@ else
 fi
 
 echo ""
-echo "Unified Quality Analysis (Quality, Accessibility, Localization):"
+echo "Unified Quality Analysis (Quality, Accessibility, Localization, visionOS):"
 echo "-------------------------"
 if [ -f "infrastructure/ai-analyzer.py" ]; then
     python3 infrastructure/ai-analyzer.py "Apps"
 else
     echo "AI analyzer not found."
+fi
+
+echo ""
+echo "Visual Regression Status:"
+echo "-------------------------"
+if [ -f "infrastructure/visual-compare.sh" ]; then
+    ./infrastructure/visual-compare.sh --report
+else
+    echo "Visual compare script not found."
 fi

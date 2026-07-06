@@ -18,6 +18,7 @@ Welcome to the ANDP development team. This guide explains how to extend and main
 ## 3. Extending the Build Pipeline
 New orchestration scripts should follow these rules:
 - Place core logic in `infrastructure/`.
+- For App Store Connect related logic, place Python modules in `infrastructure/asc/`.
 - Provide a root-level wrapper script.
 - Support a `--help` flag.
 - Log metrics using `infrastructure/analytics-manager.sh`.
