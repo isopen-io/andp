@@ -29,20 +29,21 @@ struct ContentView: View {
                         .multilineTextAlignment(.center)
                         .accessibilityAddTraits(.isHeader)
 
-                Button(role: .destructive, action: logoutTapped) {
-                    Label("logout_button", systemImage: "rectangle.portrait.and.arrow.right")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .padding(.horizontal)
-                .accessibilityLabel(Text("logout_button"))
-                .accessibilityHint(Text("logout_hint"))
-                .hoverEffect()
-                .confirmationDialog("logout_confirm_title", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
-                    Button("logout_button_confirm", role: .destructive, action: logout)
-                    Button("cancel_button", role: .cancel) {}
+                    Button(role: .destructive, action: logoutTapped) {
+                        Label("logout_button", systemImage: "rectangle.portrait.and.arrow.right")
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .padding(.horizontal)
+                    .accessibilityLabel(Text("logout_button"))
+                    .accessibilityHint(Text("logout_hint"))
+                    .hoverEffect()
+                    .confirmationDialog("logout_confirm_title", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
+                        Button("logout_button_confirm", role: .destructive, action: logout)
+                        Button("cancel_button", role: .cancel) {}
+                    }
                 }
                 .transition(.opacity.combined(with: .scale))
             } else {
@@ -52,18 +53,20 @@ struct ContentView: View {
                         .multilineTextAlignment(.center)
                         .accessibilityAddTraits(.isHeader)
 
-                Button(action: login) {
-                    loginButtonLabel
+                    Button(action: login) {
+                        loginButtonLabel
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .padding(.horizontal)
+                    .disabled(isLoading)
+                    .keyboardShortcut(.defaultAction)
+                    .accessibilityIdentifier("loginButton")
+                    .accessibilityLabel(isLoading ? Text("logging_in_status") : Text("login_button"))
+                    .accessibilityHint(Text("login_hint"))
+                    .hoverEffect()
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .padding(.horizontal)
-                .disabled(isLoading)
-                .keyboardShortcut(.defaultAction)
-                .accessibilityIdentifier("loginButton")
-                .accessibilityLabel(isLoading ? Text("logging_in_status") : Text("login_button"))
-                .accessibilityHint(Text("login_hint"))
-                .hoverEffect()
+                .transition(.opacity.combined(with: .scale))
             }
 
             Spacer()
