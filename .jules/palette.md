@@ -13,3 +13,7 @@
 ## 2026-06-28 - [Semantic Buttons & Lookahead Optimization]
 **Learning:** Using SwiftUI's `Label` instead of manual `HStack` containers for buttons with icons significantly reduces vertical line count and improves semantic accessibility. This conciseness is critical for passing static analysis tools (like `ai-analyzer.py`) that use a strict line-lookahead (e.g., 10 lines) to verify `.hoverEffect()` proximity for visionOS readiness.
 **Action:** Favor `Label` for icon-text pairings and extract multi-step action logic (like haptics + state) into private methods to keep button declarations compact.
+
+## 2026-06-29 - [VisionOS Readiness & Dialog Structure]
+**Learning:** To satisfy strict static analysis (like `ai-analyzer.py`) for visionOS, complex button labels should be extracted into `@ViewBuilder` properties. This keeps the `Button` declaration and its `.hoverEffect()` modifier within the required 10-line proximity. Additionally, buttons within a `confirmationDialog` MUST be siblings; nesting buttons inside other button closures is a structural error that breaks the dialog rendering.
+**Action:** Extract complex button labels to subviews and ensure flat sibling structures for interactive elements in dialogs.

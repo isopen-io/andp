@@ -30,26 +30,19 @@ struct ContentView: View {
                         .accessibilityAddTraits(.isHeader)
 
                 Button(role: .destructive, action: logoutTapped) {
-                    HStack {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .accessibilityHidden(true)
-                        Text("logout_button")
-                            .fontWeight(.semibold)
-                    }
-                    .frame(maxWidth: .infinity)
+                    Label("logout_button", systemImage: "rectangle.portrait.and.arrow.right")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
                 .padding(.horizontal)
                 .accessibilityLabel(Text("logout_button"))
+                .accessibilityHint(Text("logout_hint"))
                 .hoverEffect()
                 .confirmationDialog("logout_confirm_title", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
-                    Button("logout_button_confirm", role: .destructive) {
-                        withAnimation {
-                            isLoggedIn = false
-                        }
-                        Button("cancel_button", role: .cancel) {}
-                    }
+                    Button("logout_button_confirm", role: .destructive, action: logout)
+                    Button("cancel_button", role: .cancel) {}
                 }
                 .transition(.opacity.combined(with: .scale))
             } else {
@@ -60,26 +53,7 @@ struct ContentView: View {
                         .accessibilityAddTraits(.isHeader)
 
                 Button(action: login) {
-                    HStack {
-                        if isLoading {
-                            ProgressView()
-                                .padding(.trailing, 8)
-                        } else {
-                            Image(systemName: "lock.fill")
-                                .padding(.trailing, 4)
-                                .accessibilityHidden(true)
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .hoverEffect()
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .padding(.horizontal)
-                    .disabled(isLoading)
-                    .keyboardShortcut(.defaultAction)
-                    .accessibilityIdentifier("loginButton")
-                    .accessibilityLabel(Text(isLoading ? "logging_in_label" : "login_button"))
-                    .accessibilityHint(Text("login_hint"))
+                    loginButtonLabel
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -98,6 +72,23 @@ struct ContentView: View {
     }
 
     @ViewBuilder
+    private var loginButtonLabel: some View {
+        Group {
+            if isLoading {
+                Label {
+                    Text("logging_in_status")
+                } icon: {
+                    ProgressView()
+                }
+            } else {
+                Label("login_button", systemImage: "lock.fill")
+            }
+        }
+        .fontWeight(.semibold)
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
     private var logoView: some View {
         Image(systemName: "shippingbox.fill")
             .font(.system(size: 80, weight: .regular, design: .rounded))
@@ -106,13 +97,6 @@ struct ContentView: View {
             .scaleEffect(iconScale)
             .opacity(iconOpacity)
             .accessibilityHidden(true)
-    }
-
-        if #available(iOS 17.0, macOS 14.0, visionOS 1.0, *) {
-            logo.symbolEffect(.pulse, isActive: isLoading)
-        } else {
-            logo
-        }
     }
 
     private func login() {
@@ -136,5 +120,32 @@ struct ContentView: View {
 
     private func logoutTapped() {
         showLogoutConfirmation = true
+    }
+
+    private func logout() {
+        #if os(iOS)
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+        #endif
+
+        withAnimation {
+            isLoggedIn = false
+        }
+    }
+}
+
+// MARK: - View Extensions
+
+extension View {
+    /// Applies a pulse effect to the view if available (iOS 17+).
+    /// - Parameter isActive: Whether the pulse effect is active.
+    /// - Returns: A view with the pulse effect applied if supported.
+    @ViewBuilder
+    func pulseEffect(isActive: Bool) -> some View {
+        if #available(iOS 17.0, macOS 14.0, tvOS 17.0, watchOS 10.0, visionOS 1.0, *) {
+            self.symbolEffect(.pulse, isActive: isActive)
+        } else {
+            self
+        }
     }
 }
