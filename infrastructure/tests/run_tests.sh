@@ -84,7 +84,6 @@ rm -rf mock.xcresult
 
 # Test AI Analyzer
 echo "Testing ai-analyzer.py..."
-# Create a temporary file to ensure a predictable error at a specific line
 cat <<EOF > Apps/TestIssue.swift
 import SwiftUI
 struct TestIssue: View {
