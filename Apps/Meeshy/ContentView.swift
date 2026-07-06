@@ -28,17 +28,18 @@ struct ContentView: View {
                     .multilineTextAlignment(.center)
                     .accessibilityAddTraits(.isHeader)
 
-                Button(role: .destructive, action: { showLogoutConfirmation = true }) {
-                    HStack {
-                        Image(systemName: "rectangle.portrait.and.arrow.right").accessibilityHidden(true)
-                        Text("logout_button").fontWeight(.semibold)
-                    }
-                    .frame(maxWidth: .infinity)
+                Button(role: .destructive, action: {
+                    showLogoutConfirmation = true
+                }) {
+                    Label("logout_button", systemImage: "rectangle.portrait.and.arrow.right")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
                 .padding(.horizontal)
                 .accessibilityLabel(Text("logout_button"))
+                .accessibilityHint(Text("logout_hint"))
                 .confirmationDialog("logout_confirm_title", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
                     Button("logout_button_confirm", role: .destructive) {
                         #if os(iOS)
@@ -59,17 +60,10 @@ struct ContentView: View {
                     .accessibilityAddTraits(.isHeader)
 
                 Button(action: login) {
-                    HStack {
-                        if isLoading {
-                            ProgressView()
-                                .padding(.trailing, 8)
-                        } else {
-                            Image(systemName: "lock.fill")
-                                .padding(.trailing, 4)
-                                .accessibilityHidden(true)
-                        }
-                        Text("login_button")
-                            .fontWeight(.semibold)
+                    Label {
+                        Text("login_button").fontWeight(.semibold)
+                    } icon: {
+                        if isLoading { ProgressView() }
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -98,12 +92,6 @@ struct ContentView: View {
             .scaleEffect(iconScale)
             .opacity(iconOpacity)
             .accessibilityHidden(true)
-
-        if #available(iOS 17.0, macOS 14.0, visionOS 1.0, *) {
-            logo.symbolEffect(.pulse, isActive: isLoading)
-        } else {
-            logo
-        }
     }
 
     private func login() {
