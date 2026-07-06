@@ -23,7 +23,7 @@ fi
 # Install python dependencies for ASC manager
 if command -v pip3 >/dev/null 2>&1; then
     # Optimization: Check if dependencies are already satisfied to avoid slow pip call
-    if ! python3 -c "import yaml, requests, jwt" 2>/dev/null; then
+    if ! python3 -c "import yaml, requests, jwt, cryptography, pytest" 2>/dev/null; then
         echo "Installing Python dependencies..."
         # On modern macOS (PEP 668), pip may refuse to install outside a venv.
         # We use --break-system-packages for CI/CD simplicity.
@@ -31,7 +31,8 @@ if command -v pip3 >/dev/null 2>&1; then
         if pip3 install --help | grep -q "break-system-packages"; then
             PIP_FLAGS="$PIP_FLAGS --break-system-packages"
         fi
-        pip3 install PyYAML requests pyjwt $PIP_FLAGS
+        # cryptography is required by PyJWT for ES256 (App Store Connect JWTs)
+        pip3 install PyYAML requests pyjwt cryptography pytest $PIP_FLAGS
     else
         echo "Python dependencies already satisfied."
     fi
