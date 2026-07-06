@@ -55,3 +55,5 @@ This document tracks the evolution of the Apple Native Delivery Platform.
 - [x] App Store metadata management via `metadata-manager.sh`.
 - [x] Advanced TestFlight group and tester orchestration.
 - [x] Phased release support in `release-manager.sh`.
+- [x] Implemented micro-UX improvements (haptics, symbol effects).
+- [x] Enhanced accessibility announcements for async operations.
