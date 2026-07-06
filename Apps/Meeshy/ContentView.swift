@@ -23,10 +23,11 @@ struct ContentView: View {
                 }
 
             if isLoggedIn {
-                Text("logged_in_message")
-                    .font(.title2.bold())
-                    .multilineTextAlignment(.center)
-                    .accessibilityAddTraits(.isHeader)
+                VStack(spacing: 24) {
+                    Text("logged_in_message")
+                        .font(.title2.bold())
+                        .multilineTextAlignment(.center)
+                        .accessibilityAddTraits(.isHeader)
 
                 Button(role: .destructive, action: logoutTapped) {
                     HStack {
@@ -47,14 +48,16 @@ struct ContentView: View {
                         withAnimation {
                             isLoggedIn = false
                         }
+                        Button("cancel_button", role: .cancel) {}
                     }
-                    Button("cancel_button", role: .cancel) {}
                 }
+                .transition(.opacity.combined(with: .scale))
             } else {
-                Text("welcome_message")
-                    .font(.title2.bold())
-                    .multilineTextAlignment(.center)
-                    .accessibilityAddTraits(.isHeader)
+                VStack(spacing: 24) {
+                    Text("welcome_message")
+                        .font(.title2.bold())
+                        .multilineTextAlignment(.center)
+                        .accessibilityAddTraits(.isHeader)
 
                 Button(action: login) {
                     HStack {
@@ -66,10 +69,17 @@ struct ContentView: View {
                                 .padding(.trailing, 4)
                                 .accessibilityHidden(true)
                         }
-                        Text("login_button")
-                            .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
                     }
-                    .frame(maxWidth: .infinity)
+                    .hoverEffect()
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .padding(.horizontal)
+                    .disabled(isLoading)
+                    .keyboardShortcut(.defaultAction)
+                    .accessibilityIdentifier("loginButton")
+                    .accessibilityLabel(Text(isLoading ? "logging_in_label" : "login_button"))
+                    .accessibilityHint(Text("login_hint"))
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -89,12 +99,14 @@ struct ContentView: View {
 
     @ViewBuilder
     private var logoView: some View {
-        let logo = Image(systemName: "shippingbox.fill")
+        Image(systemName: "shippingbox.fill")
             .font(.system(size: 80, weight: .regular, design: .rounded))
             .foregroundStyle(.tint)
+            .pulseEffect(isActive: isLoading)
             .scaleEffect(iconScale)
             .opacity(iconOpacity)
             .accessibilityHidden(true)
+    }
 
         if #available(iOS 17.0, macOS 14.0, visionOS 1.0, *) {
             logo.symbolEffect(.pulse, isActive: isLoading)
@@ -104,6 +116,9 @@ struct ContentView: View {
     }
 
     private func login() {
+        #if os(iOS)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        #endif
         isLoading = true
         // Simulate login
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
