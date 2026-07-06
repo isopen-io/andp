@@ -7,7 +7,6 @@ import json
 
 # Bolt Optimization: Pre-compiled regex patterns for performance and single-pass scanning.
 TEXT_PATTERN = re.compile(r'Text\("([^"]+)"\)')
-# Combining multiple UI patterns into a single regex.
 UI_COMPONENT_PATTERN = re.compile(r"(Button\(|Image\(|Text\(|Label\(|TextField\(\))")
 ACCESSIBILITY_MODIFIER_PATTERN = re.compile(
     r"(accessibilityLabel|accessibilityIdentifier|accessibilityHint|accessibilityValue|accessibilityAddTraits|accessibilityRemoveTraits|accessibilityHidden)"
@@ -21,6 +20,10 @@ NON_ADAPTIVE_COLOR_PATTERN = re.compile(r"\.foregroundColor\(\.(black|white|red|
 # 2. Potential missing hover effects on interactive elements
 HOVER_EFFECT_MISSING_PATTERN = re.compile(r"Button\(")
 HOVER_EFFECT_PATTERN = re.compile(r"\.hoverEffect\(")
+
+# Bolt Optimization: Single regex to quickly filter lines with potential issues.
+# This avoids running multiple regexes on lines that are purely structural or empty.
+INTEREST_PATTERN = re.compile(r"(Button\(|Image\(|Text\(|Label\(|TextField\(|\.font\(|\.foregroundColor\(|TODO:|accessibility|\.hoverEffect\()")
 
 def analyze_path(path):
     """
@@ -60,29 +63,24 @@ def analyze_path(path):
                                 f"{filepath}:0 - Smell: Massive file detected ({line_count} lines)"
                             )
 
-                        # Bolt Optimization: Pre-index modifier and hover effect locations in a single pass.
-                        modifier_indices = []
-                        hover_indices = []
-                        for j, l in enumerate(lines):
-                            if ACCESSIBILITY_MODIFIER_PATTERN.search(l):
-                                modifier_indices.append(j)
-                            if HOVER_EFFECT_PATTERN.search(l):
-                                hover_indices.append(j)
+                        # Bolt Optimization: Use a reverse pass to implement O(1) lookahead state.
+                        # This avoids repeated array slicing or multi-line string joining.
+                        last_accessibility_line = 999999
+                        last_hover_line = 999999
 
-                        # Bolt Optimization: Amortized pointer-based lookup for modifiers and hover effects.
-                        # Since i and indices are both monotonically increasing, we can use pointers.
-                        mod_ptr = 0
-                        hov_ptr = 0
-
-                        # Single pass through lines for other checks
-                        for i, line in enumerate(lines):
+                        for i in range(line_count - 1, -1, -1):
+                            line = lines[i]
                             line_num = i + 1
 
-                            # Update pointers to current or future lines
-                            while mod_ptr < len(modifier_indices) and modifier_indices[mod_ptr] < i:
-                                mod_ptr += 1
-                            while hov_ptr < len(hover_indices) and hover_indices[hov_ptr] < i:
-                                hov_ptr += 1
+                            # Fast-path: skip lines that don't match any pattern of interest
+                            if not INTEREST_PATTERN.search(line):
+                                continue
+
+                            # Update lookahead states
+                            if ACCESSIBILITY_MODIFIER_PATTERN.search(line):
+                                last_accessibility_line = i
+                            if HOVER_EFFECT_PATTERN.search(line):
+                                last_hover_line = i
 
                             # 2. Dead Code (TODOs)
                             if "TODO:" in line:
@@ -90,10 +88,8 @@ def analyze_path(path):
 
                             # 3. Accessibility Risks & Dynamic Type
                             if UI_COMPONENT_PATTERN.search(line):
-                                # Bolt Optimization: Check pre-indexed indices via pointer (O(1) amortized)
-                                has_modifier = (mod_ptr < len(modifier_indices) and
-                                                modifier_indices[mod_ptr] < i + 20)
-                                if not has_modifier:
+                                # Bolt Optimization: O(1) state check vs O(M) pre-indexed search
+                                if last_accessibility_line - i > 20:
                                     results["accessibility_risks"].append(
                                         f"{filepath}:{line_num} - Risk: UI component missing accessibility modifier"
                                     )
@@ -118,10 +114,8 @@ def analyze_path(path):
                                 )
 
                             if HOVER_EFFECT_MISSING_PATTERN.search(line):
-                                # Bolt Optimization: Check pre-indexed hover indices via pointer (O(1) amortized)
-                                has_hover = (hov_ptr < len(hover_indices) and
-                                             hover_indices[hov_ptr] < i + 10)
-                                if not has_hover:
+                                # Bolt Optimization: O(1) state check vs O(M) pre-indexed search
+                                if last_hover_line - i > 10:
                                     results["visionos_readiness"].append(
                                         f"{filepath}:{line_num} - Warning: Interactive element may missing .hoverEffect() for visionOS"
                                     )
@@ -157,6 +151,8 @@ def main():
     for label, key in categories:
         issues = analysis_results[key]
         if issues:
+            # Sort by filename and line number for readability
+            issues.sort()
             found_any = True
             print(f"\n{label}:")
             for issue in issues:
