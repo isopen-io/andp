@@ -26,7 +26,9 @@ fi
 
 TIMESTAMP=$(date +%s)
 DATE_STR=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-UUID=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)
+# Bolt Optimization: Replace expensive /dev/urandom pipeline with shell-native $RANDOM.
+# This significantly reduces process spawning overhead during telemetry recording.
+UUID=$(printf '%04x%04x' $RANDOM $RANDOM)
 FILENAME="${METRICS_DIR}/${TYPE}_${TIMESTAMP}_${UUID}.json"
 
 cat <<EOF > "$FILENAME"

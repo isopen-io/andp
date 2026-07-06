@@ -106,6 +106,10 @@ struct ContentView: View {
     }
 
     private func login() {
+        #if os(iOS)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        #endif
+
         isLoading = true
         // Simulate login
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
@@ -118,17 +122,6 @@ struct ContentView: View {
                 isLoading = false
                 isLoggedIn = true
             }
-        }
-    }
-}
-
-extension View {
-    @ViewBuilder
-    func pulseEffect(isActive: Bool) -> some View {
-        if #available(iOS 17.0, *) {
-            self.symbolEffect(.pulse, isActive: isActive)
-        } else {
-            self
         }
     }
 }
