@@ -27,6 +27,7 @@ struct ContentView: View {
                     .font(.title2.bold())
                     .multilineTextAlignment(.center)
                     .accessibilityAddTraits(.isHeader)
+                    .transition(.opacity.combined(with: .scale))
 
                 Button(role: .destructive, action: {
                     showLogoutConfirmation = true
@@ -43,10 +44,8 @@ struct ContentView: View {
                 .confirmationDialog("logout_confirm_title", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
                     Button("logout_button_confirm", role: .destructive) {
                         #if os(iOS)
-                        let generator = UINotificationFeedbackGenerator()
-                        generator.notificationOccurred(.success)
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         #endif
-
                         withAnimation {
                             isLoggedIn = false
                         }
@@ -58,12 +57,14 @@ struct ContentView: View {
                     .font(.title2.bold())
                     .multilineTextAlignment(.center)
                     .accessibilityAddTraits(.isHeader)
+                    .transition(.opacity.combined(with: .scale))
 
                 Button(action: login) {
-                    Label {
-                        Text("login_button").fontWeight(.semibold)
-                    } icon: {
-                        if isLoading { ProgressView() }
+                    HStack {
+                        if isLoading {
+                            ProgressView().padding(.trailing, 8).accessibilityHidden(true)
+                        }
+                        Text(isLoading ? "logging_in_status" : "login_button").fontWeight(.semibold)
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -95,6 +96,10 @@ struct ContentView: View {
     }
 
     private func login() {
+        #if os(iOS)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        #endif
+
         isLoading = true
         // Simulate login
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
