@@ -14,13 +14,7 @@ struct ContentView: View {
         VStack(spacing: 24) {
             Spacer()
 
-            Image(systemName: "shippingbox.fill")
-                .font(.system(size: 80, weight: .regular, design: .rounded))
-                .foregroundStyle(.tint)
-                .pulseEffect(isActive: isLoading)
-                .scaleEffect(iconScale)
-                .opacity(iconOpacity)
-                .accessibilityHidden(true)
+            logoView
                 .onAppear {
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
                         iconScale = 1.0
@@ -37,21 +31,22 @@ struct ContentView: View {
                 Button(role: .destructive, action: {
                     showLogoutConfirmation = true
                 }) {
-                    HStack {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .accessibilityHidden(true)
-                        Text("logout_button")
-                            .fontWeight(.semibold)
-                    }
-                    .frame(maxWidth: .infinity)
+                    Label("logout_button", systemImage: "rectangle.portrait.and.arrow.right")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
                 }
-                .hoverEffect()
                 .buttonStyle(.bordered)
                 .controlSize(.large)
                 .padding(.horizontal)
                 .accessibilityLabel(Text("logout_button"))
+                .accessibilityHint(Text("logout_hint"))
                 .confirmationDialog("logout_confirm_title", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
                     Button("logout_button_confirm", role: .destructive) {
+                        #if os(iOS)
+                        let generator = UINotificationFeedbackGenerator()
+                        generator.notificationOccurred(.success)
+                        #endif
+
                         withAnimation {
                             isLoggedIn = false
                         }
@@ -65,26 +60,22 @@ struct ContentView: View {
                     .accessibilityAddTraits(.isHeader)
 
                 Button(action: login) {
-                    HStack {
-                        if isLoading {
-                            ProgressView()
-                                .padding(.trailing, 8)
-                                .accessibilityHidden(true)
-                        }
-                        Text("login_button")
-                            .fontWeight(.semibold)
+                    Label {
+                        Text("login_button").fontWeight(.semibold)
+                    } icon: {
+                        if isLoading { ProgressView() }
                     }
                     .frame(maxWidth: .infinity)
                 }
-                .hoverEffect()
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .padding(.horizontal)
                 .disabled(isLoading)
                 .keyboardShortcut(.defaultAction)
                 .accessibilityIdentifier("loginButton")
-                .accessibilityLabel(Text(isLoading ? "logging_in_label" : "login_button"))
+                .accessibilityLabel(isLoading ? Text("logging_in_status") : Text("login_button"))
                 .accessibilityHint(Text("login_hint"))
+                .hoverEffect()
             }
 
             Spacer()
@@ -94,18 +85,13 @@ struct ContentView: View {
 
     @ViewBuilder
     private var logoView: some View {
-        let logo = Image(systemName: "shippingbox.fill")
+        Image(systemName: "shippingbox.fill")
             .font(.system(size: 80, weight: .regular, design: .rounded))
             .foregroundStyle(.tint)
+            .pulseEffect(isActive: isLoading)
             .scaleEffect(iconScale)
             .opacity(iconOpacity)
             .accessibilityHidden(true)
-
-        if #available(iOS 17.0, *) {
-            logo.symbolEffect(.pulse, isActive: isLoading)
-        } else {
-            logo
-        }
     }
 
     private func login() {
@@ -121,17 +107,6 @@ struct ContentView: View {
                 isLoading = false
                 isLoggedIn = true
             }
-        }
-    }
-}
-
-extension View {
-    @ViewBuilder
-    func pulseEffect(isActive: Bool) -> some View {
-        if #available(iOS 17.0, *) {
-            self.symbolEffect(.pulse, isActive: isActive)
-        } else {
-            self
         }
     }
 }
