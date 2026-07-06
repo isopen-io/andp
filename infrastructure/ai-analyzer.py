@@ -148,6 +148,7 @@ def main():
     ]
 
     found_any = False
+    issue_count = 0
     for label, key in categories:
         issues = analysis_results[key]
         if issues:
@@ -157,9 +158,12 @@ def main():
             print(f"\n{label}:")
             for issue in issues:
                 print(f"  - {issue}")
+                issue_count += 1
 
     if not found_any:
         print("\n✅ No major quality risks detected.")
+    else:
+        print(f"\nFound {issue_count} total issues.")
 
     print("\n" + "=" * 40)
 
