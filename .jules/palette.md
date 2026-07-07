@@ -13,3 +13,7 @@
 ## 2026-06-28 - [Semantic Buttons & Lookahead Optimization]
 **Learning:** Using SwiftUI's `Label` instead of manual `HStack` containers for buttons with icons significantly reduces vertical line count and improves semantic accessibility. This conciseness is critical for passing static analysis tools (like `ai-analyzer.py`) that use a strict line-lookahead (e.g., 10 lines) to verify `.hoverEffect()` proximity for visionOS readiness.
 **Action:** Favor `Label` for icon-text pairings and extract multi-step action logic (like haptics + state) into private methods to keep button declarations compact.
+
+## 2026-07-07 - [Accessible Icons & Semantic Labels]
+**Learning:** Using hardcoded sizes for icons (e.g., `.font(.system(size: 80))`) prevents them from scaling with Dynamic Type, failing accessibility audits. Replacing these with semantic styles like `.font(.system(.largeTitle))` combined with `.imageScale(.large)` ensures a responsive and accessible UI. Additionally, favoring the semantic `Label` component over manual `HStack` layouts improves code density and satisfies visionOS static analysis lookahead limits for `.hoverEffect()`.
+**Action:** Use semantic font styles for icons and prefer `Label` for button content to maintain accessibility and visionOS readiness.
