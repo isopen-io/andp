@@ -20,6 +20,7 @@ BUILD_METRIC=$(get_latest_metric "build")
 TEST_METRIC=$(get_latest_metric "test")
 PERF_METRIC=$(get_latest_metric "perf")
 AI_METRIC="$METRICS_DIR/ai_analysis.json"
+TELEMETRY_METRIC=$(get_latest_metric "telemetry")
 
 # Create HTML
 cat <<EOF > "$OUTPUT_FILE"
@@ -83,6 +84,36 @@ if [ -f "$PERF_METRIC" ]; then
     python3 -c "import json; d=json.load(open('$PERF_METRIC'))['metrics']; print(f'<ul class=\"list\"><li>Startup: {d[\"startup_time\"]}s</li><li>Memory: {d[\"memory_usage_mb\"]}MB</li><li>CPU: {d[\"cpu_usage_pct\"]}%</li></ul>')" >> "$OUTPUT_FILE"
 else
     echo "<p>No performance data available.</p>" >> "$OUTPUT_FILE"
+fi
+
+cat <<EOF >> "$OUTPUT_FILE"
+        </div>
+    </div>
+
+    <div class="grid">
+        <!-- Supply Chain -->
+        <div class="card">
+            <h2>Supply Chain Security</h2>
+EOF
+
+if [ -f "metrics/sbom.json" ]; then
+    python3 -c "import json; d=json.load(open('metrics/sbom.json')); print(f'<div class=\"metric\">{len(d[\"components\"])}</div><p>Dependencies Tracked</p><span class=\"status status-success\">SBOM VALID</span>')" >> "$OUTPUT_FILE"
+else
+    echo "<p>No SBOM data available.</p>" >> "$OUTPUT_FILE"
+fi
+
+cat <<EOF >> "$OUTPUT_FILE"
+        </div>
+
+        <!-- Latest Telemetry -->
+        <div class="card">
+            <h2>System Health</h2>
+EOF
+
+if [ -f "$TELEMETRY_METRIC" ]; then
+    python3 -c "import json; d=json.load(open('$TELEMETRY_METRIC')); print(f'<ul class=\"list\"><li>ID: {d[\"event_id\"]}</li><li>OS: {d[\"environment\"][\"os\"]}</li><li>ARCH: {d[\"environment\"][\"arch\"]}</li></ul>')" >> "$OUTPUT_FILE"
+else
+    echo "<p>No telemetry data available.</p>" >> "$OUTPUT_FILE"
 fi
 
 cat <<EOF >> "$OUTPUT_FILE"

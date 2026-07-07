@@ -57,3 +57,10 @@ This document tracks the evolution of the Apple Native Delivery Platform.
 - [x] Phased release support in `release-manager.sh`.
 - [x] Implemented micro-UX improvements (haptics, symbol effects).
 - [x] Enhanced accessibility announcements for async operations.
+
+## Iteration 8: Global Observability & Supply Chain Security (Completed)
+**Goal:** Enhance platform security and monitoring.
+- [x] Automated Software Bill of Materials (SBOM) generation.
+- [x] Integrated dependency vulnerability scanning.
+- [x] Unified telemetry collection for build and quality metrics.
+- [x] Enterprise security auditing enhancements.
