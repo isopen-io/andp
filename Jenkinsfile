@@ -16,9 +16,11 @@ pipeline {
                 sh './build.sh'
             }
         }
-        stage('Test') {
+        stage('Test & Governance') {
             steps {
                 sh './test.sh'
+                sh './infrastructure/governance-report.sh --full'
+                sh './infrastructure/generate-dashboard.sh'
             }
         }
         stage('Archive & Sign') {
@@ -30,7 +32,7 @@ pipeline {
     }
     post {
         always {
-            archiveArtifacts artifacts: 'build/exported/*.ipa, TestResults.xcresult/**', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'build/exported/*.ipa, TestResults.xcresult/**, governance_report.md, dashboard.html', allowEmptyArchive: true
         }
     }
 }
