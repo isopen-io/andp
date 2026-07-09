@@ -13,3 +13,7 @@
 ## 2026-06-28 - [Semantic Buttons & Lookahead Optimization]
 **Learning:** Using SwiftUI's `Label` instead of manual `HStack` containers for buttons with icons significantly reduces vertical line count and improves semantic accessibility. This conciseness is critical for passing static analysis tools (like `ai-analyzer.py`) that use a strict line-lookahead (e.g., 10 lines) to verify `.hoverEffect()` proximity for visionOS readiness.
 **Action:** Favor `Label` for icon-text pairings and extract multi-step action logic (like haptics + state) into private methods to keep button declarations compact.
+
+## 2026-06-29 - [Modifier Ordering & visionOS Readiness]
+**Learning:** For visionOS readiness validation via `ai-analyzer.py`, the physical proximity of the `.hoverEffect()` modifier to the `Button` declaration is critical (10-line limit). Placing `.hoverEffect()` immediately after the button closure ensures it stays within detection range, even when followed by extensive accessibility or styling modifiers. Furthermore, using `@ViewBuilder` for complex labels keeps the primary component structure readable and compliant with static analysis lookahead limits.
+**Action:** Place `.hoverEffect()` as the first or second modifier on interactive elements and use `@ViewBuilder` for multi-line labels.
