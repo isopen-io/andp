@@ -18,18 +18,20 @@ FONT_FIXED_PATTERN = re.compile(r"\.font\(\.system\(size: [0-9]+\)\)")
 # 1. Non-adaptive colors (e.g., .black, .white instead of .label, .secondary)
 NON_ADAPTIVE_COLOR_PATTERN = re.compile(r"\.foregroundColor\(\.(black|white|red|blue|green)\)")
 # 2. Potential missing hover effects on interactive elements
-HOVER_EFFECT_MISSING_PATTERN = re.compile(r"Button\(")
-HOVER_EFFECT_PATTERN = re.compile(r"\.hoverEffect\(")
+HOVER_EFFECT_MISSING_PATTERN = re.compile(r"(Button\(|Label\()", re.IGNORECASE)
+HOVER_EFFECT_PATTERN = re.compile(r"(\.hoverEffect\(|\.onHover\()", re.IGNORECASE)
+
+# 3. Safe Area and Multi-window/Stage Manager
+SAFE_AREA_IGNORE_PATTERN = re.compile(r"\.ignoresSafeArea\(", re.IGNORECASE)
+MULTI_WINDOW_PATTERN = re.compile(r"(WindowGroup|Window\()", re.IGNORECASE)
 
 # Bolt Optimization: Single regex to quickly filter lines with potential issues.
-# This avoids running multiple regexes on lines that are purely structural or empty.
-INTEREST_PATTERN = re.compile(r"(Button\(|Image\(|Text\(|Label\(|TextField\(|\.font\(|\.foregroundColor\(|TODO:|accessibility|\.hoverEffect\()")
+INTEREST_PATTERN = re.compile(r"(Button\(|Image\(|Text\(|Label\(|TextField\(|\.font\(|\.foregroundColor\(|TODO:|accessibility|\.hoverEffect\(|\.onHover\(|\.ignoresSafeArea\(|WindowGroup|Window\()", re.IGNORECASE)
 
 def analyze_path(path):
     """
     Bolt Optimization: Performs a high-performance single-pass analysis of the codebase.
     Consolidates architectural, dead code, accessibility, and localization checks.
-    Includes directory exclusion to speed up traversal.
     """
     print(f"Analyzing {path}...")
 
@@ -38,15 +40,22 @@ def analyze_path(path):
         "dead_code": [],
         "accessibility_risks": [],
         "localization_risks": [],
-        "visionos_readiness": []
+        "visionos_readiness": [],
+        "multi_window_support": [],
+        "governance_metrics": {
+            "ui_components_total": 0,
+            "accessibility_modifiers_found": 0,
+            "strings_total": 0,
+            "hardcoded_strings_found": 0,
+            "safe_area_overrides": 0
+        }
     }
 
     # Bolt Optimization: Exclude heavy/irrelevant directories
-    EXCLUDE_DIRS = {'.git', '.xcresult', 'DerivedData', 'build', 'artifacts'}
+    EXCLUDE_DIRS = {'.git', '.xcresult', 'DerivedData', 'build', 'artifacts', 'metrics'}
 
     file_count = 0
     for root, dirs, files in os.walk(path):
-        # In-place modification of dirs to skip excluded ones
         dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
 
         for file in files:
@@ -57,14 +66,11 @@ def analyze_path(path):
                         lines = f.readlines()
                         line_count = len(lines)
 
-                        # 1. Architectural Smells (Whole file check)
                         if line_count > 500:
                             results["architectural_smells"].append(
                                 f"{filepath}:0 - Smell: Massive file detected ({line_count} lines)"
                             )
 
-                        # Bolt Optimization: Use a reverse pass to implement O(1) lookahead state.
-                        # This avoids repeated array slicing or multi-line string joining.
                         last_accessibility_line = 999999
                         last_hover_line = 999999
 
@@ -72,23 +78,20 @@ def analyze_path(path):
                             line = lines[i]
                             line_num = i + 1
 
-                            # Fast-path: skip lines that don't match any pattern of interest
                             if not INTEREST_PATTERN.search(line):
                                 continue
 
-                            # Update lookahead states
                             if ACCESSIBILITY_MODIFIER_PATTERN.search(line):
                                 last_accessibility_line = i
+                                results["governance_metrics"]["accessibility_modifiers_found"] += 1
                             if HOVER_EFFECT_PATTERN.search(line):
                                 last_hover_line = i
 
-                            # 2. Dead Code (TODOs)
                             if "TODO:" in line:
                                 results["dead_code"].append(f"{filepath}:{line_num} - Note: Unresolved TODO")
 
-                            # 3. Accessibility Risks & Dynamic Type
                             if UI_COMPONENT_PATTERN.search(line):
-                                # Bolt Optimization: O(1) state check vs O(M) pre-indexed search
+                                results["governance_metrics"]["ui_components_total"] += 1
                                 if last_accessibility_line - i > 20:
                                     results["accessibility_risks"].append(
                                         f"{filepath}:{line_num} - Risk: UI component missing accessibility modifier"
@@ -99,30 +102,52 @@ def analyze_path(path):
                                     f"{filepath}:{line_num} - Risk: Dynamic Type Violation (Fixed font size)"
                                 )
 
-                            # 4. Localization Risks
                             hardcoded = TEXT_PATTERN.findall(line)
                             for match in hardcoded:
+                                results["governance_metrics"]["strings_total"] += 1
                                 if match and not match.isupper():
+                                    results["governance_metrics"]["hardcoded_strings_found"] += 1
                                     results["localization_risks"].append(
                                         f"{filepath}:{line_num} - Risk: Possibly hardcoded string '{match}'"
                                     )
 
-                            # 5. visionOS Readiness
                             if NON_ADAPTIVE_COLOR_PATTERN.search(line):
                                 results["visionos_readiness"].append(
-                                    f"{filepath}:{line_num} - Warning: Non-adaptive color used (use semantic colors for visionOS)"
+                                    f"{filepath}:{line_num} - Warning: Non-adaptive color used"
                                 )
 
                             if HOVER_EFFECT_MISSING_PATTERN.search(line):
-                                # Bolt Optimization: O(1) state check vs O(M) pre-indexed search
                                 if last_hover_line - i > 10:
                                     results["visionos_readiness"].append(
-                                        f"{filepath}:{line_num} - Warning: Interactive element may missing .hoverEffect() for visionOS"
+                                        f"{filepath}:{line_num} - Warning: Interactive element may missing .hoverEffect() or .onHover()"
                                     )
+
+                            if SAFE_AREA_IGNORE_PATTERN.search(line):
+                                results["governance_metrics"]["safe_area_overrides"] += 1
+                                results["visionos_readiness"].append(
+                                    f"{filepath}:{line_num} - Note: Explicit Safe Area override detected"
+                                )
+
+                            if MULTI_WINDOW_PATTERN.search(line):
+                                results["multi_window_support"].append(
+                                    f"{filepath}:{line_num} - Info: Multi-window/Stage Manager support detected"
+                                )
 
                 except Exception as e:
                     print(f"Warning: Could not read {filepath}: {e}")
                 file_count += 1
+
+    # Calculate final scores
+    metrics = results["governance_metrics"]
+    metrics["accessibility_score"] = 0
+    if metrics["ui_components_total"] > 0:
+        # Simple ratio: components that didn't trigger a risk
+        risks_count = len(results["accessibility_risks"])
+        metrics["accessibility_score"] = max(0, 100 - (risks_count * 100 // metrics["ui_components_total"]))
+
+    metrics["localization_score"] = 0
+    if metrics["strings_total"] > 0:
+        metrics["localization_score"] = 100 - (metrics["hardcoded_strings_found"] * 100 // metrics["strings_total"])
 
     print(f"Processed {file_count} files in a single pass.")
     return results
@@ -132,19 +157,24 @@ def main():
     if len(sys.argv) > 1:
         path = sys.argv[1]
 
-    print("ANDP AI Quality Analysis (Bolt Optimized)")
-    print("=" * 40)
+    print("ANDP AI Quality Analysis & Governance (Bolt Optimized)")
+    print("=" * 60)
 
-    # Single-pass execution
     analysis_results = analyze_path(path)
 
-    # Sort and print results
+    # Scorecard
+    m = analysis_results["governance_metrics"]
+    print(f"\nGOVERNANCE SCORECARD:")
+    print(f"  Accessibility Score: {m['accessibility_score']}%")
+    print(f"  Localization Score:  {m['localization_score']}%")
+
     categories = [
         ("Architectural Smells", "architectural_smells"),
         ("Dead Code", "dead_code"),
         ("Accessibility Risks", "accessibility_risks"),
         ("Localization Risks", "localization_risks"),
-        ("visionOS Readiness", "visionos_readiness")
+        ("visionOS Readiness", "visionos_readiness"),
+        ("Multi-window Support", "multi_window_support")
     ]
 
     found_any = False
@@ -152,7 +182,6 @@ def main():
     for label, key in categories:
         issues = analysis_results[key]
         if issues:
-            # Sort by filename and line number for readability
             issues.sort()
             found_any = True
             print(f"\n{label}:")
@@ -165,12 +194,14 @@ def main():
     else:
         print(f"\nFound {issue_count} total issues.")
 
-    print("\n" + "=" * 40)
+    print("\n" + "=" * 60)
 
-    # Save results for dashboard
     os.makedirs("metrics", exist_ok=True)
     with open("metrics/ai_analysis.json", "w") as f:
         json.dump(analysis_results, f, indent=2)
+
+    with open("metrics/governance_scorecard.json", "w") as f:
+        json.dump(analysis_results["governance_metrics"], f, indent=2)
 
 if __name__ == "__main__":
     main()

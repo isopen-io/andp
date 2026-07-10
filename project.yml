@@ -94,6 +94,32 @@ targets:
       - package: MeeshySDK
         product: MeeshySDK
 
+  MeeshyWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "9.0"
+    sources:
+      - path: Apps/MeeshyWatch
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.watch
+      CODE_SIGN_STYLE: Automatic
+    dependencies:
+      - package: MeeshySDK
+        product: MeeshySDK
+
+  MeeshyTV:
+    type: application
+    platform: tvOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Apps/MeeshyTV
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.tv
+      CODE_SIGN_STYLE: Automatic
+    dependencies:
+      - package: MeeshySDK
+        product: MeeshySDK
+
   MeeshyTests:
     type: bundle.unit-test
     platform: iOS

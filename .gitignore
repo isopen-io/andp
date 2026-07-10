@@ -25,4 +25,8 @@ secrets.yml
 
 # GitHub
 .github/local_config.yml
+
+# ANDP Artifacts
 metrics/
+dashboard.html
+governance_report.md
