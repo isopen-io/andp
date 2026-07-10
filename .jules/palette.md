@@ -13,3 +13,7 @@
 ## 2026-06-28 - [Semantic Buttons & Lookahead Optimization]
 **Learning:** Using SwiftUI's `Label` instead of manual `HStack` containers for buttons with icons significantly reduces vertical line count and improves semantic accessibility. This conciseness is critical for passing static analysis tools (like `ai-analyzer.py`) that use a strict line-lookahead (e.g., 10 lines) to verify `.hoverEffect()` proximity for visionOS readiness.
 **Action:** Favor `Label` for icon-text pairings and extract multi-step action logic (like haptics + state) into private methods to keep button declarations compact.
+
+## 2026-07-10 - [Delightful Feedback & Proximity Governance]
+**Learning:** Pairing `symbolEffect(.bounce)` with successful async operations (like login) provides a high-delight micro-interaction that signals completion more effectively than static text. For governance, keeping `.hoverEffect()` within 10 lines of a `Button` declaration is mandatory for visionOS readiness; extracting complex labels into `@ViewBuilder` properties is an effective pattern to satisfy this proximity check while maintaining readable code.
+**Action:** Use bounce effects for success states and extract complex button labels to keep modifiers within static analysis lookahead limits.
