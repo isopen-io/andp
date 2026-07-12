@@ -16,6 +16,9 @@ ANDP is an enterprise-grade, fully native Apple ecosystem automation platform. I
 - Automated signing and App Store Connect integration
 - Accessibility, Localization, and Design validation
 - AI-powered quality analysis
+- Automated Governance Reporting & Scorecards
+- Software Bill of Materials (SBOM) Generation
+- Unified Platform Telemetry & Productivity Dashboards
 
 ## Directory Structure
 - `Apps/`: Application targets
