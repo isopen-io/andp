@@ -3,6 +3,7 @@ stages:
   - generate
   - build
   - test
+  - governance
   - archive
   - sign
   - deploy
@@ -46,6 +47,21 @@ test:
     when: always
     paths:
       - TestResults.xcresult
+      - metrics/
+
+governance:
+  stage: governance
+  script:
+    - ./infrastructure/sbom-generator.sh
+    - ./infrastructure/security-auditor.sh
+    - ./infrastructure/governance-report.sh
+    - ./infrastructure/generate-dashboard.sh
+  tags:
+    - macos
+  artifacts:
+    paths:
+      - governance_report.md
+      - dashboard.html
       - metrics/
 
 archive:

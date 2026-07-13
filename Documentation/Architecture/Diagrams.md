@@ -24,6 +24,7 @@ graph TD
         Gen[Project Generator - XcodeGen]
         Build[Build Engine - xcodebuild]
         Test[Test Platform - XCTest/Swift Testing]
+        Gov[Governance & Quality - ai-analyzer/sbom]
         Sign[Signing Engine - codesign/security]
         Dist[Distribution Manager - ASC API]
     end
@@ -31,7 +32,8 @@ graph TD
     Config[project.yml] --> Gen
     Gen --> Build
     Build --> Test
-    Build --> Sign
+    Test --> Gov
+    Gov --> Sign
     Sign --> Dist
     Dist --> ASC[App Store Connect]
 ```
@@ -78,6 +80,7 @@ sequenceDiagram
     participant CI as CI/CD Pipeline
     participant ANDP as ANDP Scripts
     participant Xcode as xcodebuild
+    participant Gov as Governance (AI/SBOM)
     participant ASC as App Store Connect
 
     Dev->>CI: Push to main
@@ -87,6 +90,9 @@ sequenceDiagram
     CI->>ANDP: ./test-matrix.sh
     ANDP->>Xcode: test
     Xcode-->>ANDP: success
+    CI->>ANDP: ./infrastructure/governance-report.sh
+    ANDP->>Gov: Validate Quality/Security
+    Gov-->>ANDP: Scorecard
     CI->>ANDP: ./archive.sh
     ANDP->>Xcode: archive
     Xcode-->>ANDP: .xcarchive
@@ -108,6 +114,8 @@ graph TD
 
     subgraph Validation
         SecAudit[security-auditor.sh]
+        SBOM[sbom-generator.sh]
+        GovReport[governance-report.sh]
         SignVerify[codesign --verify]
     end
 
@@ -118,6 +126,8 @@ graph TD
 
     SecretsFile --> SecAudit
     EnvVars --> SecAudit
+    SecAudit --> GovReport
+    SBOM --> GovReport
     Keychain --> CertMgr
     CertMgr --> SignVerify
     SignVerify --> Artifacts[.ipa / .pkg]
@@ -131,6 +141,8 @@ graph LR
     Secrets[secrets.yml] -->|Credentials| Build
     Build -->|Artifacts| Sign[Signing System]
     Sign -->|Signed IPA| Dist[Distribution System]
-    Build -->|Metrics| Analytics[Analytics System]
+    Build -->|Test Results| Gov[Governance System]
+    Gov -->|Compliance Data| Analytics[Analytics System]
+    Build -->|Metrics| Analytics
     Analytics -->|Report| Dash[HTML Dashboard]
 ```
