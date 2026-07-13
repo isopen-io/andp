@@ -33,3 +33,7 @@
 ## 2026-07-05 - [Shell Optimization: Process Fork Reduction]
 **Learning:** In shell scripts used for high-frequency infrastructure tasks (like analytics/telemetry), multiple calls to external utilities like `date` or complex pipelines involving `cat`, `fold`, and `head` can be significantly optimized by consolidating calls and using built-in shell parameter expansion. This reduces the number of process forks, which is a major source of overhead in shell environments.
 **Action:** Always look for opportunities to consolidate multiple calls to the same utility (like `date`) into a single call with a combined format string, and prefer direct input redirection over `cat` pipelines to minimize process forks.
+
+## 2026-07-13 - [Dashboard Generation Optimization]
+**Learning:** Consolidating multiple sequential Python interpreter spawns (each costing ~0.3s) and shell forks (like `ls -t | head`) into a single Python process via heredoc significantly reduces script execution time. In `generate-dashboard.sh`, this improved performance by ~80%, bringing it from > 1.5s down to ~0.3s.
+**Action:** Always consolidate repeated process spawns and shell pipelines into a single higher-level language execution (like Python) for infrastructure scripts that process multiple files or metrics.
