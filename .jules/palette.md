@@ -13,3 +13,7 @@
 ## 2026-06-28 - [Semantic Buttons & Lookahead Optimization]
 **Learning:** Using SwiftUI's `Label` instead of manual `HStack` containers for buttons with icons significantly reduces vertical line count and improves semantic accessibility. This conciseness is critical for passing static analysis tools (like `ai-analyzer.py`) that use a strict line-lookahead (e.g., 10 lines) to verify `.hoverEffect()` proximity for visionOS readiness.
 **Action:** Favor `Label` for icon-text pairings and extract multi-step action logic (like haptics + state) into private methods to keep button declarations compact.
+
+## 2026-06-29 - [Semantic Labels & VoiceOver Redundancy]
+**Learning:** To ensure clean VoiceOver output, if a SwiftUI `Button` is assigned an explicit `.accessibilityLabel`, its internal label content (e.g., `Text` or `Image`) should be marked with `.accessibilityHidden(true)`. This prevents redundant announcements by screen readers. Additionally, placing `.hoverEffect()` immediately after the `Button` declaration, even before `.buttonStyle()`, ensures it remains within the lookahead window of static analysis tools.
+**Action:** Hide internal text/images when using parent accessibility labels and prioritize `.hoverEffect()` proximity in button declarations.
