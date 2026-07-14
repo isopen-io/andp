@@ -30,9 +30,9 @@ DATES=$(date -u +"%s %Y-%m-%dT%H:%M:%SZ")
 TIMESTAMP=${DATES%% *}
 DATE_STR=${DATES#* }
 
-# Bolt Optimization: Streamline UUID generation pipeline to reduce process forks (-2 forks).
-# 'tr' reads directly from /dev/urandom and 'head -c' extracts the characters without 'fold'.
-UUID=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 8)
+# Bolt Optimization: Use shell built-in $RANDOM for UUID generation to eliminate process forks (-2 forks).
+# This replaces the 'tr /dev/urandom | head' pipeline which is much more expensive.
+UUID="${RANDOM}${RANDOM}"
 
 FILENAME="${METRICS_DIR}/${TYPE}_${TIMESTAMP}_${UUID}.json"
 
