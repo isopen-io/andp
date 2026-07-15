@@ -1,28 +1,21 @@
-# Xcode
+.DS_Store
+*.swp
+*.lock
 build/
 DerivedData/
 *.xcodeproj
 *.xcworkspace
 !project.yml
-*.xcresult/
-
-# macOS
-.DS_Store
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-venv/
-.env
-
-# ANDP Secrets
-secrets.yml
 *.ipa
+*.app
 *.xcarchive
-*.pkg
 *.dmg
-
-# GitHub
-.github/local_config.yml
+*.pkg
 metrics/
+.python_history
+__pycache__/
+*.pyc
+node_modules/
+.env
+secrets.yml
+!secrets.example.yml
