@@ -17,6 +17,10 @@ stages:
       displayName: 'Build'
     - script: ./test.sh
       displayName: 'Test'
+    - script: ./infrastructure/governance-report.sh --full
+      displayName: 'Governance Audit'
+    - script: ./infrastructure/generate-dashboard.sh
+      displayName: 'Generate Dashboard'
     - script: ./archive.sh
       displayName: 'Archive'
     - script: ./sign.sh build/*.xcarchive
@@ -25,3 +29,7 @@ stages:
       inputs:
         PathtoPublish: 'build/exported'
         ArtifactName: 'ipa'
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: 'governance_report.md'
+        ArtifactName: 'governance'
