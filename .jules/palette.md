@@ -13,3 +13,7 @@
 ## 2026-06-28 - [Semantic Buttons & Lookahead Optimization]
 **Learning:** Using SwiftUI's `Label` instead of manual `HStack` containers for buttons with icons significantly reduces vertical line count and improves semantic accessibility. This conciseness is critical for passing static analysis tools (like `ai-analyzer.py`) that use a strict line-lookahead (e.g., 10 lines) to verify `.hoverEffect()` proximity for visionOS readiness.
 **Action:** Favor `Label` for icon-text pairings and extract multi-step action logic (like haptics + state) into private methods to keep button declarations compact.
+
+## 2026-06-29 - [Compact Semantic Labels and Multi-State Buttons]
+**Learning:** For interactive SwiftUI elements that display dynamic loading or visual state (e.g. login with a loading spinner), utilizing a compact `Label` with custom `title` and `icon` closures inline keeps the entire button structure under 10 lines. This ensures the `.hoverEffect()` modifier stays in proximity to `Button(` for static analysis, while preserving fully native and accessible button layouts.
+**Action:** When a button requires conditional icons (like `ProgressView`), prefer inline `Label(title:icon:)` and keep it compact to satisfy proximity validators and semantic accessibility.
