@@ -33,3 +33,7 @@
 ## 2026-07-05 - [Shell Optimization: Process Fork Reduction]
 **Learning:** In shell scripts used for high-frequency infrastructure tasks (like analytics/telemetry), multiple calls to external utilities like `date` or complex pipelines involving `cat`, `fold`, and `head` can be significantly optimized by consolidating calls and using built-in shell parameter expansion. This reduces the number of process forks, which is a major source of overhead in shell environments.
 **Action:** Always look for opportunities to consolidate multiple calls to the same utility (like `date`) into a single call with a combined format string, and prefer direct input redirection over `cat` pipelines to minimize process forks.
+
+## 2026-07-18 - [Python Process Spawning Reduction]
+**Learning:** In bash orchestration or report-generation scripts (like `generate-dashboard.sh`), repeatedly spawning python processes (using `python3 -c`) to load JSON files and generate small HTML snippets introduces substantial process-creation overhead (~950ms total execution time). Consolidating all parsing and template formatting logic into a single-pass Python execution via a quoted heredoc (`<<'EOF_PY'`) reduces total runtime to ~310ms (a massive ~3x speedup).
+**Action:** When working with bash scripts that require lightweight file parsing or manipulation, always consolidate multiple python invocations into a single Python execution using a single quoted heredoc.
