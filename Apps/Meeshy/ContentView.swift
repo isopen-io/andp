@@ -45,7 +45,9 @@ struct ContentView: View {
             .accessibilityHidden(true)
 
         if #available(iOS 17.0, macOS 14.0, visionOS 1.0, *) {
-            logo.symbolEffect(.pulse, isActive: isLoading)
+            logo
+                .symbolEffect(.pulse, isActive: isLoading)
+                .symbolEffect(.bounce, value: isLoggedIn)
         } else {
             logo
         }
@@ -59,27 +61,26 @@ struct ContentView: View {
                 .accessibilityAddTraits(.isHeader)
 
             Button(role: .destructive, action: logoutTapped) {
-                HStack {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .accessibilityHidden(true)
-                    Text("logout_button")
-                        .fontWeight(.semibold)
-                }
-                .frame(maxWidth: .infinity)
+                logoutButtonContent
             }
+            .hoverEffect()
             .buttonStyle(.bordered)
             .controlSize(.large)
             .padding(.horizontal)
             .accessibilityLabel(Text("logout_button"))
             .accessibilityHint(Text("logout_hint"))
-            .hoverEffect()
             .confirmationDialog("logout_confirm_title", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
                 Button("logout_button_confirm", role: .destructive) {
                     withAnimation {
                         isLoggedIn = false
                     }
                 }
+                .accessibilityLabel(Text("logout_button_confirm"))
+                .hoverEffect()
+
                 Button("cancel_button", role: .cancel) {}
+                    .accessibilityLabel(Text("cancel_button"))
+                    .hoverEffect()
             }
         }
     }
@@ -92,20 +93,9 @@ struct ContentView: View {
                 .accessibilityAddTraits(.isHeader)
 
             Button(action: login) {
-                HStack {
-                    if isLoading {
-                        ProgressView()
-                            .padding(.trailing, 8)
-                    } else {
-                        Image(systemName: "lock.fill")
-                            .padding(.trailing, 4)
-                            .accessibilityHidden(true)
-                    }
-                    Text(isLoading ? "logging_in_status" : "login_button")
-                        .fontWeight(.semibold)
-                }
-                .frame(maxWidth: .infinity)
+                loginButtonContent
             }
+            .hoverEffect()
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .padding(.horizontal)
@@ -114,8 +104,39 @@ struct ContentView: View {
             .accessibilityIdentifier("loginButton")
             .accessibilityLabel(isLoading ? Text("logging_in_status") : Text("login_button"))
             .accessibilityHint(Text("login_hint"))
-            .hoverEffect()
         }
+    }
+
+    @ViewBuilder
+    private var loginButtonContent: some View {
+        Label {
+            Text(isLoading ? "logging_in_status" : "login_button")
+                .fontWeight(.semibold)
+        } icon: {
+            if isLoading {
+                ProgressView()
+            } else {
+                Image(systemName: "lock.fill")
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(isLoading ? Text("logging_in_status") : Text("login_button"))
+    }
+
+    @ViewBuilder
+    private var logoutButtonContent: some View {
+        Label {
+            Text("logout_button")
+                .fontWeight(.semibold)
+        } icon: {
+            Image(systemName: "rectangle.portrait.and.arrow.right")
+                .accessibilityHidden(true)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text("logout_button"))
     }
 
     private func login() {
