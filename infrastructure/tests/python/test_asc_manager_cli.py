@@ -121,3 +121,62 @@ def test_upload_reads_versions_from_ipa_payload(ci_like_dir, capsys):
     assert "2.5.0" in output
     assert "77" in output
     assert "1.2.0" not in output
+
+
+def test_upload_real_resolves_app_from_ipa_bundle_id(
+    tmp_path, monkeypatch, ec_private_key_pem, capsys
+):
+    """With real credentials, upload reads CFBundleIdentifier from the IPA,
+    resolves the app record, and links it in the buildUploads reservation."""
+    import plistlib
+    import zipfile
+
+    from conftest import FakeResponse, FakeSession
+    from test_builds import _upload_flow_responses
+
+    indented_key = "\n".join(
+        f"        {line}" for line in ec_private_key_pem.strip().splitlines()
+    )
+    (tmp_path / "secrets.yml").write_text(f"""
+accounts:
+  primary:
+    asc_api:
+      key_id: "REALKEY001"
+      issuer_id: "11111111-2222-3333-4444-555555555555"
+      key_content: |
+{indented_key}
+""")
+    plist = plistlib.dumps(
+        {
+            "CFBundleIdentifier": "ceo.services.rekonect",
+            "CFBundleShortVersionString": "1.0",
+            "CFBundleVersion": "1",
+        }
+    )
+    with zipfile.ZipFile(tmp_path / "Rekonect.ipa", "w") as zf:
+        zf.writestr("Payload/App.app/Info.plist", plist)
+    monkeypatch.chdir(tmp_path)
+
+    session = FakeSession()
+    session.queue(
+        FakeResponse(200, {"data": [{"id": "6786703445", "type": "apps"}]}),
+        *_upload_flow_responses(FakeResponse, [])
+    )
+    original = asc_manager.make_managers
+
+    def patched(account):
+        managers = original(account)
+        managers.client.session = session
+        managers.builds.upload_transport = lambda *a, **k: None
+        return managers
+
+    monkeypatch.setattr(asc_manager, "make_managers", patched)
+
+    exit_code = asc_manager.main(["upload", "Rekonect.ipa"])
+
+    assert exit_code == 0
+    find_app_request = session.requests[0]
+    assert find_app_request["params"]["filter[bundleId]"] == "ceo.services.rekonect"
+    reserve = session.requests[1]["json"]["data"]
+    assert reserve["relationships"]["app"]["data"]["id"] == "6786703445"
+    assert reserve["attributes"]["cfBundleShortVersionString"] == "1.0"

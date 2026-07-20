@@ -45,7 +45,7 @@ def test_upload_ipa_runs_reserve_upload_commit(asc_client, fake_session, fake_re
     transport = RecordingTransport()
     mgr = BuildsManager(asc_client, upload_transport=transport)
 
-    upload_id = mgr.upload_ipa(ipa_file, version="1.2.0", build_number="42", platform="IOS")
+    upload_id = mgr.upload_ipa(ipa_file, version="1.2.0", build_number="42", app_id="6786703445", platform="IOS")
 
     reserve_upload = fake_session.requests[0]["json"]["data"]
     assert reserve_upload["type"] == "buildUploads"
@@ -54,6 +54,8 @@ def test_upload_ipa_runs_reserve_upload_commit(asc_client, fake_session, fake_re
         "cfBundleVersion": "42",
         "platform": "IOS",
     }
+    # The API returns 409 without the app relationship (observed live 2026-07-20)
+    assert reserve_upload["relationships"]["app"]["data"] == {"type": "apps", "id": "6786703445"}
 
     reserve_file = fake_session.requests[1]["json"]["data"]
     assert reserve_file["type"] == "buildUploadFiles"
@@ -85,7 +87,7 @@ def test_upload_ipa_chunks_according_to_operations(asc_client, fake_session, fak
     transport = RecordingTransport()
     mgr = BuildsManager(asc_client, upload_transport=transport)
 
-    mgr.upload_ipa(ipa_file, version="1.2.0", build_number="42")
+    mgr.upload_ipa(ipa_file, version="1.2.0", build_number="42", app_id="6786703445")
 
     assert transport.calls[0]["data"] == b"0123456789"
     assert transport.calls[1]["data"] == b"ABCDEF"

@@ -34,8 +34,12 @@ class BuildsManager:
 
     # -- Build Upload API --------------------------------------------------
 
-    def upload_ipa(self, file_path, version, build_number, platform="IOS"):
-        """Upload a signed .ipa and return the buildUpload resource id."""
+    def upload_ipa(self, file_path, version, build_number, app_id, platform="IOS"):
+        """Upload a signed .ipa and return the buildUpload resource id.
+
+        app_id is mandatory: the API rejects reservations without the app
+        relationship (409 "must provide a value for the relationship 'app'").
+        """
         upload = self.client.post(
             "/v1/buildUploads",
             {
@@ -45,6 +49,9 @@ class BuildsManager:
                         "cfBundleShortVersionString": version,
                         "cfBundleVersion": build_number,
                         "platform": platform,
+                    },
+                    "relationships": {
+                        "app": {"data": {"type": "apps", "id": app_id}}
                     },
                 }
             },

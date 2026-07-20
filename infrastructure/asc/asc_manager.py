@@ -55,9 +55,9 @@ def _read_file_stripped(path, default=""):
     return default
 
 
-def _ipa_versions(ipa_path):
-    """(version, build) from the IPA's own Info.plist — the upload metadata must
-    match the binary, not the calling repo. Returns (None, None) if unreadable."""
+def _ipa_metadata(ipa_path):
+    """(bundle_id, version, build) from the IPA's own Info.plist — the upload
+    metadata must match the binary, not the calling repo. All None if unreadable."""
     import plistlib
     import zipfile
 
@@ -67,12 +67,13 @@ def _ipa_versions(ipa_path):
                 if name.endswith(".app/Info.plist") and name.startswith("Payload/"):
                     info = plistlib.loads(zf.read(name))
                     return (
+                        info.get("CFBundleIdentifier"),
                         info.get("CFBundleShortVersionString"),
                         info.get("CFBundleVersion"),
                     )
     except Exception:
         pass
-    return None, None
+    return None, None, None
 
 
 def _cmd_verify(account, managers, dry_run, args):
@@ -127,7 +128,7 @@ def _cmd_upload(account, managers, dry_run, args):
     if not os.path.exists(ipa_path):
         print(f"Error: IPA not found: {ipa_path}")
         return 1
-    version, build_number = _ipa_versions(ipa_path)
+    bundle_id, version, build_number = _ipa_metadata(ipa_path)
     if not version:
         version = _read_file_stripped("VERSION", "0.0.0")
     if not build_number:
@@ -140,7 +141,17 @@ def _cmd_upload(account, managers, dry_run, args):
         )
         return 0
 
-    upload_id = managers.builds.upload_ipa(ipa_path, version=version, build_number=build_number)
+    if not bundle_id:
+        print(f"Error: Could not read CFBundleIdentifier from {ipa_path}.")
+        return 1
+    app = managers.apps.find_app(bundle_id)
+    if app is None:
+        print(f"Error: App {bundle_id} not found in App Store Connect.")
+        return 1
+
+    upload_id = managers.builds.upload_ipa(
+        ipa_path, version=version, build_number=build_number, app_id=app["id"]
+    )
     print(f"Upload started: buildUploads/{upload_id}")
     return 0
 
