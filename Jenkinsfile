@@ -18,6 +18,8 @@ pipeline {
         }
         stage('Test & Governance') {
             steps {
+                sh './infrastructure/validate-project.sh'
+                sh './infrastructure/tests/run_tests.sh'
                 sh './test.sh'
                 sh './infrastructure/governance-report.sh --full'
                 sh './infrastructure/generate-dashboard.sh'

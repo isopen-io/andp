@@ -22,6 +22,22 @@ jobs:
     - name: Run Infrastructure Tests
       run: ./infrastructure/tests/run_tests.sh
 
+    - name: Governance Audit
+      run: ./infrastructure/governance-report.sh --full
+
+    - name: Generate Dashboard
+      run: ./infrastructure/generate-dashboard.sh
+
+    - name: Upload Governance Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: governance
+        path: |
+          governance_report.md
+          dashboard.html
+          metrics/
+        if-no-files-found: warn
+
     - name: Generate Xcode Project
       run: ./generate.sh
 

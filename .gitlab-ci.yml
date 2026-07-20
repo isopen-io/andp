@@ -40,6 +40,8 @@ build:
 test:
   stage: test
   script:
+    - ./infrastructure/validate-project.sh
+    - ./infrastructure/tests/run_tests.sh
     - ./test.sh
   tags:
     - macos

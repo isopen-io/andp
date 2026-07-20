@@ -15,6 +15,10 @@ stages:
       displayName: 'Generate Project'
     - script: ./build.sh
       displayName: 'Build'
+    - script: ./infrastructure/validate-project.sh
+      displayName: 'Validate Project'
+    - script: ./infrastructure/tests/run_tests.sh
+      displayName: 'Infrastructure Tests'
     - script: ./test.sh
       displayName: 'Test'
     - script: ./infrastructure/governance-report.sh --full
