@@ -50,12 +50,30 @@ case $COMMAND in
             DEVICE_ID=$(xcrun simctl create "$DEVICE_NAME" "com.apple.CoreSimulator.SimDeviceType.$(echo $DEVICE_NAME | sed 's/ /-/g')" "$RUNTIME_ID")
         fi
 
-        echo "Booting device $DEVICE_ID..."
-        xcrun simctl boot "$DEVICE_ID" || true
+        # Iteration 11: Robust boot logic with retries
+        RETRY_COUNT=0
+        MAX_RETRIES=3
+        BOOT_SUCCESS=false
 
-        echo "Waiting for device to boot..."
-        xcrun simctl bootstatus "$DEVICE_ID"
-        echo "Device is ready."
+        while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            echo "Booting device $DEVICE_ID (Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)..."
+            if xcrun simctl boot "$DEVICE_ID" 2>/dev/null || xcrun simctl list devices | grep "$DEVICE_ID" | grep -q "Booted"; then
+                echo "Waiting for device $DEVICE_ID to be ready..."
+                if xcrun simctl bootstatus "$DEVICE_ID" >/dev/null 2>&1; then
+                    echo "✅ Device is ready."
+                    BOOT_SUCCESS=true
+                    break
+                fi
+            fi
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            echo "⚠️ Boot failed. Waiting 5s before retry..."
+            sleep 5
+        done
+
+        if [ "$BOOT_SUCCESS" = false ]; then
+            echo "❌ Failed to boot device $DEVICE_ID after $MAX_RETRIES attempts."
+            exit 1
+        fi
         ;;
     shutdown)
         DEVICE_ID=$(xcrun simctl list devices | grep "$DEVICE_NAME" | grep "Booted" | head -n 1 | sed -E 's/.*\(([-A-Z0-9]+)\).*/\1/')

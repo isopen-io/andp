@@ -43,7 +43,51 @@ else
     echo "✅ No obvious secrets found in source code."
 fi
 
-# 2. Signature Verification
+# 2. Dependency Vulnerability Scanning
+echo "Scanning dependencies for vulnerabilities..."
+if [ -f "metrics/sbom.json" ]; then
+    # In a real enterprise environment, this would call an API like Snyk, GitHub Advisory Database, or OSV
+    # Here we implement a mock scanner that checks against a local vulnerability database
+    python3 - << 'END'
+import json
+import sys
+
+# Mock vulnerability database
+VULN_DB = {
+    "Firebase": [
+        {"version": "10.0.0", "id": "CVE-2023-XXXX", "severity": "High", "description": "Mock vulnerability in old Firebase"}
+    ]
+}
+
+try:
+    with open('metrics/sbom.json', 'r') as f:
+        sbom = json.load(f)
+
+    vulnerabilities_found = 0
+    for component in sbom.get('components', []):
+        name = component.get('name')
+        version = component.get('version')
+
+        if name in VULN_DB:
+            for vuln in VULN_DB[name]:
+                if version == vuln['version']:
+                    print(f"❌ VULNERABILITY FOUND: {name}@{version} - {vuln['id']} ({vuln['severity']})")
+                    print(f"   Description: {vuln['description']}")
+                    vulnerabilities_found += 1
+
+    if vulnerabilities_found == 0:
+        print("✅ No known vulnerabilities found in dependencies.")
+    else:
+        print(f"⚠️ Found {vulnerabilities_found} vulnerability/vulnerabilities.")
+
+except Exception as e:
+    print(f"⚠️ Could not perform dependency scan: {e}")
+END
+else
+    echo "⚠️ SBOM missing. Run ./infrastructure/sbom-generator.sh first."
+fi
+
+# 3. Signature Verification
 if [[ "$*" == *"--verify"* ]]; then
     # Find the artifact path in arguments
     ARTIFACT=""

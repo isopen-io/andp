@@ -26,3 +26,5 @@ secrets.yml
 # GitHub
 .github/local_config.yml
 metrics/
+dashboard.html
+governance_report.md

@@ -9,6 +9,7 @@ def generate_gitlab_ci():
   - generate
   - build
   - test
+  - governance
   - archive
   - sign
   - deploy
@@ -52,6 +53,21 @@ test:
     when: always
     paths:
       - TestResults.xcresult
+      - metrics/
+
+governance:
+  stage: governance
+  script:
+    - ./infrastructure/sbom-generator.sh
+    - ./infrastructure/security-auditor.sh
+    - ./infrastructure/governance-report.sh
+    - ./infrastructure/generate-dashboard.sh
+  tags:
+    - macos
+  artifacts:
+    paths:
+      - governance_report.md
+      - dashboard.html
       - metrics/
 
 archive:
@@ -108,6 +124,10 @@ stages:
       displayName: 'Build'
     - script: ./test.sh
       displayName: 'Test'
+    - script: ./infrastructure/governance-report.sh --full
+      displayName: 'Governance Audit'
+    - script: ./infrastructure/generate-dashboard.sh
+      displayName: 'Generate Dashboard'
     - script: ./archive.sh
       displayName: 'Archive'
     - script: ./sign.sh build/*.xcarchive
@@ -116,6 +136,10 @@ stages:
       inputs:
         PathtoPublish: 'build/exported'
         ArtifactName: 'ipa'
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: 'governance_report.md'
+        ArtifactName: 'governance'
 """
     with open("azure-pipelines.yml", "w") as f:
         f.write(content)
@@ -140,9 +164,11 @@ def generate_jenkinsfile():
                 sh './build.sh'
             }
         }
-        stage('Test') {
+        stage('Test & Governance') {
             steps {
                 sh './test.sh'
+                sh './infrastructure/governance-report.sh --full'
+                sh './infrastructure/generate-dashboard.sh'
             }
         }
         stage('Archive & Sign') {
@@ -154,7 +180,7 @@ def generate_jenkinsfile():
     }
     post {
         always {
-            archiveArtifacts artifacts: 'build/exported/*.ipa, TestResults.xcresult/**', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'build/exported/*.ipa, TestResults.xcresult/**, governance_report.md, dashboard.html', allowEmptyArchive: true
         }
     }
 }
@@ -164,7 +190,7 @@ def generate_jenkinsfile():
     print("✅ Generated Jenkinsfile")
 
 def main():
-    print("ANDP Pipeline Generator")
+    print("ANDP Pipeline Generator (Iteration 9 Optimized)")
     print("=" * 30)
     generate_gitlab_ci()
     generate_azure_pipelines()

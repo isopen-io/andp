@@ -12,6 +12,12 @@ START_TIME=$(date +%s)
 
 echo "Building scheme: $SCHEME ($CONFIGURATION) for $SDK..."
 
+# Iteration 11: Distributed build prep - resolve dependencies first
+if command -v xcodebuild >/dev/null 2>&1; then
+    echo "Resolving Swift Package dependencies..."
+    xcodebuild -resolvePackageDependencies -scheme "$SCHEME" -configuration "$CONFIGURATION"
+fi
+
 # Build settings to allow compilation in CI without certificates
 BUILD_SETTINGS=""
 if [ "$CI" == "true" ] || [ "$GITHUB_ACTIONS" == "true" ]; then

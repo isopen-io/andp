@@ -59,13 +59,9 @@ struct ContentView: View {
                 .accessibilityAddTraits(.isHeader)
 
             Button(role: .destructive, action: logoutTapped) {
-                HStack {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .accessibilityHidden(true)
-                    Text("logout_button")
-                        .fontWeight(.semibold)
-                }
-                .frame(maxWidth: .infinity)
+                Label("logout_button", systemImage: "rectangle.portrait.and.arrow.right")
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
             .controlSize(.large)
@@ -138,6 +134,9 @@ struct ContentView: View {
     }
 
     private func logoutTapped() {
+        #if os(iOS)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        #endif
         showLogoutConfirmation = true
     }
 }
