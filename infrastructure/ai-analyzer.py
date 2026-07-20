@@ -18,18 +18,21 @@ FONT_FIXED_PATTERN = re.compile(r"\.font\(\.system\(size: [0-9]+\)\)")
 # 1. Non-adaptive colors (e.g., .black, .white instead of .label, .secondary)
 NON_ADAPTIVE_COLOR_PATTERN = re.compile(r"\.foregroundColor\(\.(black|white|red|blue|green)\)")
 # 2. Potential missing hover effects on interactive elements
-HOVER_EFFECT_MISSING_PATTERN = re.compile(r"Button\(")
-HOVER_EFFECT_PATTERN = re.compile(r"\.hoverEffect\(")
+HOVER_EFFECT_MISSING_PATTERN = re.compile(r"(?<![A-Za-z])(Button|Label)\(")
+HOVER_EFFECT_PATTERN = re.compile(r"(\.hoverEffect\(|\.onHover\()")
+
+# 3. Multi-window/Stage Manager support (Iteration 9)
+MULTI_WINDOW_PATTERN = re.compile(r"(WindowGroup|Window\()")
 
 # Design & Responsiveness patterns (Iteration 10)
-SAFE_AREA_OVERRIDE_PATTERN = re.compile(r"\.ignoresSafeArea\(\)")
+SAFE_AREA_OVERRIDE_PATTERN = re.compile(r"\.ignoresSafeArea\(")
 FIXED_FRAME_PATTERN = re.compile(r"\.frame\(width: [0-9]+(\.[0-9]+)?, height: [0-9]+(\.[0-9]+)?\)")
 RESTRICTIVE_NAV_STYLE_PATTERN = re.compile(r"\.navigationViewStyle\(\.stack\)")
 
 # Bolt Optimization: Single regex to quickly filter lines with potential issues.
 # This avoids running multiple regexes on lines that are purely structural or empty.
 INTEREST_PATTERN = re.compile(
-    r"(Button\(|Image\(|Text\(|Label\(|TextField\(|\.font\(|\.foregroundColor\(|TODO:|accessibility|\.hoverEffect\(|\.ignoresSafeArea\(|\.frame\(width:|\.navigationViewStyle\(\.stack\)|HStack|VStack|ZStack)"
+    r"(Button\(|Image\(|Text\(|Label\(|TextField\(|\.font\(|\.foregroundColor\(|TODO:|accessibility|\.hoverEffect\(|\.onHover\(|\.ignoresSafeArea\(|\.frame\(width:|\.navigationViewStyle\(\.stack\)|HStack|VStack|ZStack|WindowGroup|Window\()"
 )
 
 # Iteration 11: Patterns for dead code detection
@@ -50,11 +53,13 @@ def analyze_path(path):
         "localization_risks": [],
         "visionos_readiness": [],
         "design_violations": [],
+        "multi_window_support": [],
         "governance_metrics": {
             "ui_components_total": 0,
             "accessibility_modifiers_found": 0,
             "strings_total": 0,
             "hardcoded_strings_found": 0,
+            "safe_area_overrides": 0,
             "design_compliance_score": 100
         }
     }
@@ -172,7 +177,7 @@ def analyze_path(path):
                                 # Check if a hover effect was seen within the last 10 lines (below this line)
                                 if last_hover_line == -1 or (last_hover_line - i > 10):
                                     results["visionos_readiness"].append(
-                                        f"{filepath}:{line_num} - Warning: Interactive element may missing .hoverEffect() for visionOS"
+                                        f"{filepath}:{line_num} - Warning: Interactive element may missing .hoverEffect() or .onHover()"
                                     )
                                 last_hover_line = -1 # Reset for next component
 
@@ -181,6 +186,7 @@ def analyze_path(path):
                                 results["design_violations"].append(
                                     f"{filepath}:{line_num} - Design: Safe Area override detected (.ignoresSafeArea())"
                                 )
+                                results["governance_metrics"]["safe_area_overrides"] += 1
                                 design_issues_count += 1
 
                             if FIXED_FRAME_PATTERN.search(line):
@@ -194,6 +200,11 @@ def analyze_path(path):
                                     f"{filepath}:{line_num} - Design: Restrictive navigation style (.stack) may break iPad layout"
                                 )
                                 design_issues_count += 1
+
+                            if MULTI_WINDOW_PATTERN.search(line):
+                                results["multi_window_support"].append(
+                                    f"{filepath}:{line_num} - Info: Multi-window/Stage Manager support detected"
+                                )
 
                 except Exception as e:
                     print(f"Warning: Could not read {filepath}: {e}")
@@ -242,7 +253,8 @@ def main():
         ("Accessibility Risks", "accessibility_risks"),
         ("Localization Risks", "localization_risks"),
         ("visionOS Readiness", "visionos_readiness"),
-        ("Design Violations", "design_violations")
+        ("Design Violations", "design_violations"),
+        ("Multi-window Support", "multi_window_support")
     ]
 
     found_any = False
