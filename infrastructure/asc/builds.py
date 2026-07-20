@@ -66,7 +66,8 @@ class BuildsManager:
                     "attributes": {
                         "fileName": os.path.basename(file_path),
                         "fileSize": file_size,
-                        "assetType": "IPA",
+                        "assetType": "ASSET",
+                        "uti": "com.apple.ipa",
                     },
                     "relationships": {
                         "buildUpload": {

@@ -61,6 +61,10 @@ def test_upload_ipa_runs_reserve_upload_commit(asc_client, fake_session, fake_re
     assert reserve_file["type"] == "buildUploadFiles"
     assert reserve_file["attributes"]["fileName"] == "Meeshy.ipa"
     assert reserve_file["attributes"]["fileSize"] == 16
+    # Live API contract (observed 2026-07-20): assetType must be ASSET
+    # (IPA is rejected) and uti is mandatory.
+    assert reserve_file["attributes"]["assetType"] == "ASSET"
+    assert reserve_file["attributes"]["uti"] == "com.apple.ipa"
     assert reserve_file["relationships"]["buildUpload"]["data"]["id"] == "UP1"
 
     assert transport.calls[0]["method"] == "PUT"
