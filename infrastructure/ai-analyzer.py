@@ -18,7 +18,10 @@ FONT_FIXED_PATTERN = re.compile(r"\.font\(\.system\(size: [0-9]+\)\)")
 # 1. Non-adaptive colors (e.g., .black, .white instead of .label, .secondary)
 NON_ADAPTIVE_COLOR_PATTERN = re.compile(r"\.foregroundColor\(\.(black|white|red|blue|green)\)")
 # 2. Potential missing hover effects on interactive elements
-HOVER_EFFECT_MISSING_PATTERN = re.compile(r"(?<![A-Za-z])(Button|Label)\(")
+# Note: Label( is deliberately excluded — a Label is not interactive by itself, and in the
+# dominant Button { Label } pattern it would consume the hover modifier during the reverse
+# pass and falsely flag the enclosing Button.
+HOVER_EFFECT_MISSING_PATTERN = re.compile(r"(?<![A-Za-z])Button\(")
 HOVER_EFFECT_PATTERN = re.compile(r"(\.hoverEffect\(|\.onHover\()")
 
 # 3. Multi-window/Stage Manager support (Iteration 9)
