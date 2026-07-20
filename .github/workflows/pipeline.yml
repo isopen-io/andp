@@ -1,5 +1,8 @@
 name: ANDP Pipeline
 
+# Dogfooding: the ANDP repo runs its own reusable release workflow
+# against the bundled example app (examples/meeshy).
+
 on:
   push:
     branches: [ main ]
@@ -8,51 +11,9 @@ on:
 
 jobs:
   build-and-publish:
-    runs-on: macos-latest
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Bootstrap ANDP
-      run: ./infrastructure/bootstrap.sh
-
-    - name: Validate Project
-      run: ./infrastructure/validate-project.sh
-
-    - name: Run Infrastructure Tests
-      run: ./infrastructure/tests/run_tests.sh
-
-    - name: Governance Audit
-      run: ./infrastructure/governance-report.sh --full
-
-    - name: Generate Dashboard
-      run: ./infrastructure/generate-dashboard.sh
-
-    - name: Upload Governance Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: governance
-        path: |
-          governance_report.md
-          dashboard.html
-          metrics/
-        if-no-files-found: warn
-
-    - name: Generate Xcode Project
-      run: ./generate.sh
-
-    - name: Build App
-      run: ./build.sh Meeshy Release iphoneos
-
-    - name: Archive App
-      run: ./archive.sh Meeshy
-
-    - name: Sign and Export
-      run: ./sign.sh build/Meeshy.xcarchive
-      env:
-        # Secrets would be injected here in a real production repo
-        ASC_API_KEY: ${{ secrets.ASC_API_KEY }}
-
-    - name: Upload to App Store Connect
-      if: github.ref == 'refs/heads/main'
-      run: ./asc-manager.sh upload build/exported/Meeshy.ipa
+    uses: ./.github/workflows/andp-release.yml
+    with:
+      scheme: Meeshy
+      app-dir: examples/meeshy
+      upload: ${{ github.ref == 'refs/heads/main' }}
+    secrets: inherit

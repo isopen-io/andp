@@ -1,3 +1,12 @@
+## 1.5.0 - 2026-07-20
+### ANDP is the product (H1: package extraction)
+- Repository restructured: the tool is the product, Meeshy is a sample app moved to `examples/meeshy/` (all pipeline scripts now target `$ANDP_APP_DIR`, default `examples/meeshy`)
+- `andp` Python package extracted from `infrastructure/asc` (`andp.asc.*`, relative imports); `pip install -e .` provides the `andp` CLI, `python3 -m andp` works without install
+- Tests moved to `tests/` with package imports (80 passing); wrappers `asc-manager.sh`/`metadata-manager.sh` call the package
+- Reusable GitHub workflow `.github/workflows/andp-release.yml` (`workflow_call`: scheme, app-dir, andp-ref, upload) — consumable by any app repo; `pipeline.yml` dogfoods it
+- README rewritten around the product positioning; docs updated to the new layout
+- Proven live on an external Capacitor app (Rekonect): verify preflight, API-created distribution profile, real Build Upload, build VALID on App Store Connect
+
 ## 1.4.0 - 2026-07-20
 ### Iteration 11 Consolidation
 - Merged Iteration 11 enterprise hardening (#58): governance report, SBOM generator, telemetry collector, asset validator, AI quality layer (dead code, nesting heuristics, design compliance score)

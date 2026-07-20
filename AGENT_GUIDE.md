@@ -21,7 +21,7 @@ Welcome, Agent. You are tasked with evolving the Apple Native Delivery Platform 
 - **Project Generation:** `xcodegen`
 - **Builds:** `xcodebuild`
 - **Artifacts:** `xcarchive`, `ipa`, `pkg`
-- **API:** App Store Connect API (Python-based client in `infrastructure/asc/`)
+- **API:** App Store Connect API (Python-based client in `andp/asc/`)
 
 ## Future Iterations Hook
 When picking up a new iteration, check the next "Goal" in `ITERATIONS.md` and decompose it into specific, testable components.

@@ -1,0 +1,115 @@
+name: ANDP Release
+
+# Reusable delivery pipeline. Call it from any app repository:
+#
+#   jobs:
+#     release:
+#       uses: isopen-io/andp/.github/workflows/andp-release.yml@main
+#       with:
+#         scheme: MyApp
+#         app-dir: .          # directory containing project.yml
+#         andp-ref: main      # ANDP tooling version to use
+#       secrets: inherit
+#
+# Inside the ANDP repo itself, andp-ref stays empty so the pipeline runs
+# against the tooling of the current commit (dogfooding).
+
+on:
+  workflow_call:
+    inputs:
+      scheme:
+        description: 'Xcode scheme to build/archive'
+        type: string
+        default: 'Meeshy'
+      app-dir:
+        description: 'Directory containing the app project.yml (relative to the caller repo)'
+        type: string
+        default: 'examples/meeshy'
+      andp-ref:
+        description: 'ANDP repo ref to fetch the tooling from; empty = use the current checkout'
+        type: string
+        default: ''
+      upload:
+        description: 'Upload the signed IPA to App Store Connect (main-branch releases)'
+        type: boolean
+        default: false
+
+jobs:
+  release:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Checkout ANDP tooling
+      if: inputs.andp-ref != ''
+      uses: actions/checkout@v4
+      with:
+        repository: isopen-io/andp
+        ref: ${{ inputs.andp-ref }}
+        path: .andp
+
+    - name: Resolve ANDP home and app dir
+      env:
+        ANDP_REF: ${{ inputs.andp-ref }}
+        APP_DIR_INPUT: ${{ inputs.app-dir }}
+      run: |
+        if [ -n "$ANDP_REF" ]; then
+          echo "ANDP_HOME=$GITHUB_WORKSPACE/.andp" >> "$GITHUB_ENV"
+        else
+          echo "ANDP_HOME=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+        fi
+        echo "ANDP_APP_DIR=$GITHUB_WORKSPACE/$APP_DIR_INPUT" >> "$GITHUB_ENV"
+
+    - name: Bootstrap ANDP
+      run: cd "$ANDP_HOME" && ./infrastructure/bootstrap.sh
+
+    - name: Validate Project
+      run: cd "$ANDP_HOME" && ./infrastructure/validate-project.sh
+
+    - name: Run Infrastructure Tests
+      run: cd "$ANDP_HOME" && ./infrastructure/tests/run_tests.sh
+
+    - name: Governance Audit
+      run: cd "$ANDP_HOME" && ./infrastructure/governance-report.sh --full
+
+    - name: Generate Dashboard
+      run: cd "$ANDP_HOME" && ./infrastructure/generate-dashboard.sh
+
+    - name: Upload Governance Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: governance
+        path: |
+          governance_report.md
+          dashboard.html
+          metrics/
+          .andp/governance_report.md
+          .andp/dashboard.html
+          .andp/metrics/
+        if-no-files-found: warn
+
+    - name: Generate Xcode Project
+      run: cd "$ANDP_HOME" && ./generate.sh
+
+    - name: Build App
+      env:
+        SCHEME: ${{ inputs.scheme }}
+      run: cd "$ANDP_HOME" && ./build.sh "$SCHEME" Release iphoneos
+
+    - name: Archive App
+      env:
+        SCHEME: ${{ inputs.scheme }}
+      run: cd "$ANDP_HOME" && ./archive.sh "$SCHEME"
+
+    - name: Sign and Export
+      env:
+        SCHEME: ${{ inputs.scheme }}
+        ASC_API_KEY: ${{ secrets.ASC_API_KEY }}
+      run: cd "$ANDP_HOME" && ./sign.sh "build/$SCHEME.xcarchive"
+
+    - name: Upload to App Store Connect
+      if: inputs.upload
+      env:
+        SCHEME: ${{ inputs.scheme }}
+      run: cd "$ANDP_HOME" && ./asc-manager.sh upload "build/exported/$SCHEME.ipa"

@@ -2,7 +2,7 @@
 
 État de l'art : **juillet 2026** (App Store Connect API 4.4). Base URL : `https://api.appstoreconnect.apple.com` (format JSON:API).
 
-Ce document résume ce qui est nécessaire pour configurer une application pour TestFlight et l'App Store **entièrement par API**, et comment ANDP l'implémente (`infrastructure/asc/`).
+Ce document résume ce qui est nécessaire pour configurer une application pour TestFlight et l'App Store **entièrement par API**, et comment ANDP l'implémente (package `andp/asc/`).
 
 ## 1. Prérequis compte
 
@@ -76,7 +76,7 @@ Sans credentials réels (placeholders de `secrets.example.yml`), toutes les comm
 
 ## 6. Tests
 
-Suite TDD complète : `infrastructure/tests/python/` (pytest, 71 tests) — JWT, client JSON:API (pagination, 429, erreurs), provisioning, fiche app, Build Upload, TestFlight, Review Submissions, screenshots, CLI dry-run. Lancée par `infrastructure/tests/run_tests.sh` et par le pipeline GitHub Actions.
+Suite TDD complète : `tests/` (pytest, 80 tests) — JWT, client JSON:API (pagination, 429, erreurs), provisioning, fiche app, Build Upload, TestFlight, Review Submissions, screenshots, CLI dry-run. Lancée par `infrastructure/tests/run_tests.sh` et par le pipeline GitHub Actions.
 
 ## Sources
 
