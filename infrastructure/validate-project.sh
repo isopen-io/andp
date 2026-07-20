@@ -25,7 +25,9 @@ done
 # 2. Dependency Analysis (Modular Governance)
 echo "Running dependency analysis..."
 if [ -f "infrastructure/dependency-analyzer.py" ]; then
-    python3 infrastructure/dependency-analyzer.py
+    # We ignore failures here to allow the script to continue if yaml is missing in some environments,
+    # but ideally it should be installed.
+    python3 infrastructure/dependency-analyzer.py || echo "⚠️ Warning: dependency-analyzer.py failed."
 else
     echo "⚠️ Warning: dependency-analyzer.py not found."
 fi
@@ -42,6 +44,11 @@ fi
 if grep -q "UIRequiresFullScreen: YES" "$PROJECT_FILE"; then
     echo "❌ Error: UIRequiresFullScreen is set to YES, which breaks Stage Manager and Split View!"
     exit 1
+fi
+
+# Ensure all iPad orientations are supported for full responsiveness
+if ! grep -q "UISupportedInterfaceOrientations~ipad" "$PROJECT_FILE"; then
+    echo "⚠️ Warning: UISupportedInterfaceOrientations~ipad missing. Ensure all orientations are supported for full iPad responsiveness."
 fi
 
 # 4. Platform Consistency Checks

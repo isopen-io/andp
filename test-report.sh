@@ -80,6 +80,15 @@ else
 fi
 
 echo ""
+echo "Localization Governance (Multi-locale & RTL Readiness):"
+echo "-------------------------"
+if [ -f "infrastructure/localization-validator.py" ]; then
+    python3 infrastructure/localization-validator.py "Apps/Meeshy"
+else
+    echo "Localization validator not found."
+fi
+
+echo ""
 echo "Visual Regression Status:"
 echo "-------------------------"
 if [ -f "infrastructure/visual-compare.sh" ]; then

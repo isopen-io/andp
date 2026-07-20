@@ -17,6 +17,8 @@ fi
 
 # Test Version Manager
 echo "Testing version-manager.sh..."
+OLD_VERSION=$(cat VERSION)
+OLD_BUILD=$(cat BUILD_NUMBER)
 ./version-manager.sh set-version 9.9.9
 ./version-manager.sh set-build 100
 VERSION_INFO=$(./version-manager.sh get)
@@ -35,6 +37,11 @@ else
     echo "❌ version-manager.sh bump FAILED: $VERSION_INFO"
     exit 1
 fi
+# Restore version and build number so tests never pollute the working tree
+./version-manager.sh set-version "$OLD_VERSION"
+./version-manager.sh set-build "$OLD_BUILD"
+git checkout -- Apps/Meeshy/Info.plist 2>/dev/null || true
+rm -f Apps/MeeshyTests/Info.plist.new1
 
 # Test Artifact Manager
 echo "Testing artifact-manager.sh..."
@@ -93,6 +100,7 @@ rm -rf mock.xcresult
 
 # Test AI Analyzer
 echo "Testing ai-analyzer.py..."
+# Create a temporary file to ensure a predictable error at a specific line
 cat <<AI_EOF > Apps/TestIssue.swift
 import SwiftUI
 struct TestIssue: View {
@@ -111,6 +119,17 @@ else
     echo "$AI_OUTPUT"
     exit 1
 fi
+
+# Test Visual Compare (Basic check)
+echo "Testing visual-compare.sh..."
+touch img1.png img2.png
+if ./infrastructure/visual-compare.sh img1.png img1.png > /dev/null; then
+    echo "✅ visual-compare.sh identical case PASSED"
+else
+    echo "❌ visual-compare.sh identical case FAILED"
+    exit 1
+fi
+rm img1.png img2.png
 
 # Test Dashboard Generator
 echo "Testing generate-dashboard.sh..."
