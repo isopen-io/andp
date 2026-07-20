@@ -10,7 +10,9 @@ def load_project_config(filepath="project.yml"):
         return None
     try:
         with open(filepath, "r") as f:
-            return yaml.safe_load(f)
+            # Bolt Optimization: Use PyYAML's LibYAML-backed CSafeLoader if available (~8x speedup)
+            loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+            return yaml.load(f, Loader=loader)
     except Exception as e:
         print(f"Error loading {filepath}: {e}")
         return None

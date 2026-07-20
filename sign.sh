@@ -20,7 +20,7 @@ echo "Signing and exporting archive: $ARCHIVE_PATH using account: $ACCOUNT..."
 mkdir -p "$EXPORT_PATH"
 
 # Extract Team ID from secrets if possible
-TEAM_ID=$(python3 -c "import yaml, sys; data = yaml.safe_load(open('secrets.yml' if sys.path[0]+'/secrets.yml' else 'secrets.example.yml')); print(data.get('accounts', {}).get('$ACCOUNT', {}).get('signing', {}).get('development_team', 'REPLACE_WITH_TEAM_ID'))" 2>/dev/null || echo "REPLACE_WITH_TEAM_ID")
+TEAM_ID=$(python3 -c "import yaml, sys; loader = getattr(yaml, 'CSafeLoader', yaml.SafeLoader); data = yaml.load(open('secrets.yml' if sys.path[0]+'/secrets.yml' else 'secrets.example.yml'), Loader=loader); print(data.get('accounts', {}).get('$ACCOUNT', {}).get('signing', {}).get('development_team', 'REPLACE_WITH_TEAM_ID'))" 2>/dev/null || echo "REPLACE_WITH_TEAM_ID")
 
 # Create a default ExportOptions.plist if it doesn't exist or for this account
 mkdir -p infrastructure/build

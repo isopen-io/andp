@@ -37,3 +37,7 @@
 ## 2026-07-05 - [Shell Optimization: Process Fork Reduction]
 **Learning:** In shell scripts used for high-frequency infrastructure tasks (like analytics/telemetry), multiple calls to external utilities like `date` or complex pipelines involving `cat`, `fold`, and `head` can be significantly optimized by consolidating calls and using built-in shell parameter expansion. This reduces the number of process forks, which is a major source of overhead in shell environments.
 **Action:** Always look for opportunities to consolidate multiple calls to the same utility (like `date`) into a single call with a combined format string, and prefer direct input redirection over `cat` pipelines to minimize process forks.
+
+## 2026-07-19 - [YAML Loader Optimization]
+**Learning:** Pure-Python `yaml.safe_load()` is CPU-heavy and slow. Leveraging PyYAML's LibYAML-backed `CSafeLoader` (via `getattr(yaml, 'CSafeLoader', yaml.SafeLoader)`) instead of pure-Python `safe_load` provides an ~8x performance speedup when parsing configuration and secrets YAML files.
+**Action:** Always prefer using `CSafeLoader` with a graceful fallback to standard `SafeLoader` when parsing YAML configurations in Python or inline Python shell blocks.
