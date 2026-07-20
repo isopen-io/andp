@@ -1,11 +1,13 @@
 #!/bin/bash
+APP_DIR="${ANDP_APP_DIR:-examples/meeshy}"
+
 
 # ANDP Localization Manager
 # Orchestrates localization validation
 
 set -e
 
-RESOURCES_PATH="Apps/Meeshy"
+RESOURCES_PATH="$APP_DIR/Apps/Meeshy"
 
 echo "Running localization validation..."
 

@@ -5,11 +5,14 @@
 
 set -e
 
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+APP_DIR="${ANDP_APP_DIR:-examples/meeshy}"
+
 SCHEME=${1:-"Meeshy"}
 DEVICE_NAME=${2:-"iPhone 15"}
 OS_VERSION=${3:-"17.0"}
 
-RESULT_BUNDLE_PATH="TestResults.xcresult"
+RESULT_BUNDLE_PATH="$ROOT_DIR/TestResults.xcresult"
 
 START_TIME=$(date +%s)
 
@@ -32,11 +35,11 @@ fi
 
 STATUS="SUCCESS"
 if command -v xcodebuild >/dev/null 2>&1; then
-    if ! xcodebuild test \
+    if ! (cd "$APP_DIR" && xcodebuild test \
         -scheme "$SCHEME" \
         -destination "platform=iOS Simulator,name=$DEVICE_NAME,OS=$OS_VERSION" \
         -resultBundlePath "$RESULT_BUNDLE_PATH" \
-        $BUILD_SETTINGS; then
+        $BUILD_SETTINGS); then
         STATUS="FAILED"
     fi
 else
@@ -50,8 +53,8 @@ END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
 
 # Record metrics
-if [ -x "./infrastructure/analytics-manager.sh" ]; then
-    ./infrastructure/analytics-manager.sh record "test" "$SCHEME" "$DURATION" "$STATUS"
+if [ -x "$ROOT_DIR/infrastructure/analytics-manager.sh" ]; then
+    "$ROOT_DIR/infrastructure/analytics-manager.sh" record "test" "$SCHEME" "$DURATION" "$STATUS"
 fi
 
 echo "Tests complete in ${DURATION}s."

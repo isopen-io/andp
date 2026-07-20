@@ -1,12 +1,14 @@
 #!/bin/bash
+APP_DIR="${ANDP_APP_DIR:-examples/meeshy}"
+
 
 # ANDP Asset Validator (Iteration 10)
 # Verifies that all targets in project.yml have required assets in their .xcassets
 
 set -e
 
-PROJECT_YML="project.yml"
-ASSETS_DIR="Apps"
+PROJECT_YML="$APP_DIR/project.yml"
+ASSETS_DIR="$APP_DIR/Apps"
 
 echo "Running ANDP Asset Governance..."
 
@@ -26,7 +28,7 @@ for TARGET in $TARGETS; do
     echo "Validating target: $TARGET"
 
     # Try to find the directory for the target
-    TARGET_DIR=$(find Apps -maxdepth 1 -type d -name "$TARGET")
+    TARGET_DIR=$(find "$APP_DIR/Apps" -maxdepth 1 -type d -name "$TARGET")
 
     if [ -d "$TARGET_DIR" ]; then
         ASSETS_PATH=$(find "$TARGET_DIR" -name "*.xcassets")

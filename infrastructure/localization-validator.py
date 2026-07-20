@@ -73,7 +73,7 @@ def validate_localization(base_path):
 
 if __name__ == "__main__":
     # Default search paths if none provided
-    search_paths = ["Apps/Meeshy"]
+    search_paths = [os.path.join(os.environ.get("ANDP_APP_DIR", "examples/meeshy"), "Apps/Meeshy")]
     if len(sys.argv) > 1:
         search_paths = sys.argv[1:]
 

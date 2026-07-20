@@ -1,4 +1,6 @@
 #!/bin/bash
+APP_DIR="${ANDP_APP_DIR:-examples/meeshy}"
+
 
 # ANDP Infrastructure Integration Tests
 
@@ -40,8 +42,8 @@ fi
 # Restore version and build number so tests never pollute the working tree
 ./version-manager.sh set-version "$OLD_VERSION"
 ./version-manager.sh set-build "$OLD_BUILD"
-git checkout -- Apps/Meeshy/Info.plist 2>/dev/null || true
-rm -f Apps/MeeshyTests/Info.plist.new1
+git checkout -- "$APP_DIR/Apps/Meeshy/Info.plist" 2>/dev/null || true
+rm -f "$APP_DIR/Apps/MeeshyTests/Info.plist.new1"
 
 # Test Artifact Manager
 echo "Testing artifact-manager.sh..."
@@ -101,7 +103,7 @@ rm -rf mock.xcresult
 # Test AI Analyzer
 echo "Testing ai-analyzer.py..."
 # Create a temporary file to ensure a predictable error at a specific line
-cat <<AI_EOF > Apps/TestIssue.swift
+cat <<AI_EOF > "$APP_DIR/Apps/TestIssue.swift"
 import SwiftUI
 struct TestIssue: View {
     var body: some View {
@@ -110,8 +112,8 @@ struct TestIssue: View {
     }
 }
 AI_EOF
-AI_OUTPUT=$(python3 infrastructure/ai-analyzer.py Apps)
-rm Apps/TestIssue.swift
+AI_OUTPUT=$(python3 infrastructure/ai-analyzer.py "$APP_DIR/Apps")
+rm "$APP_DIR/Apps/TestIssue.swift"
 if [[ "$AI_OUTPUT" == *"Bolt Optimized"* ]] && [[ "$AI_OUTPUT" == *"TestIssue.swift:5 - Risk:"* ]]; then
     echo "✅ ai-analyzer.py PASSED"
 else

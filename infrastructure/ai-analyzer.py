@@ -233,7 +233,7 @@ def analyze_path(path):
     return results
 
 def main():
-    path = "Apps"
+    path = os.path.join(os.environ.get("ANDP_APP_DIR", "examples/meeshy"), "Apps")
     if len(sys.argv) > 1:
         path = sys.argv[1]
 

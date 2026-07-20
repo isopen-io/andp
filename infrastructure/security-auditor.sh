@@ -1,4 +1,6 @@
 #!/bin/bash
+APP_DIR="${ANDP_APP_DIR:-examples/meeshy}"
+
 
 # ANDP Security Auditor
 # Scans for secrets and verifies build signatures
@@ -14,7 +16,7 @@ FOUND_SECRETS=0
 # Bolt Optimization: Single-pass scan for multiple patterns
 # Dynamically detect directories to scan (Apps, Features, Modules, Packages)
 SCAN_DIRS=()
-for dir in Apps Features Modules packages; do
+for dir in "$APP_DIR/Apps" "$APP_DIR/packages" Features Modules; do
     if [ -d "$dir" ]; then
         SCAN_DIRS+=("$dir")
     fi

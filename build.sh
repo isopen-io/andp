@@ -4,18 +4,21 @@
 
 set -e
 
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+APP_DIR="${ANDP_APP_DIR:-examples/meeshy}"
+
 SCHEME=${1:-"Meeshy"}
 CONFIGURATION=${2:-"Release"}
 SDK=${3:-"iphoneos"}
 
 START_TIME=$(date +%s)
 
-echo "Building scheme: $SCHEME ($CONFIGURATION) for $SDK..."
+echo "Building scheme: $SCHEME ($CONFIGURATION) for $SDK... (app: $APP_DIR)"
 
 # Iteration 11: Distributed build prep - resolve dependencies first
 if command -v xcodebuild >/dev/null 2>&1; then
     echo "Resolving Swift Package dependencies..."
-    xcodebuild -resolvePackageDependencies -scheme "$SCHEME" -configuration "$CONFIGURATION"
+    (cd "$APP_DIR" && xcodebuild -resolvePackageDependencies -scheme "$SCHEME" -configuration "$CONFIGURATION")
 fi
 
 # Build settings to allow compilation in CI without certificates
@@ -27,11 +30,11 @@ fi
 
 STATUS="SUCCESS"
 if command -v xcodebuild >/dev/null 2>&1; then
-    if ! xcodebuild -scheme "$SCHEME" \
+    if ! (cd "$APP_DIR" && xcodebuild -scheme "$SCHEME" \
                -configuration "$CONFIGURATION" \
                -sdk "$SDK" \
                $BUILD_SETTINGS \
-               build; then
+               build); then
         STATUS="FAILED"
     fi
 else
@@ -42,8 +45,8 @@ END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
 
 # Record metrics
-if [ -x "./infrastructure/analytics-manager.sh" ]; then
-    ./infrastructure/analytics-manager.sh record "build" "$SCHEME" "$DURATION" "$STATUS"
+if [ -x "$ROOT_DIR/infrastructure/analytics-manager.sh" ]; then
+    "$ROOT_DIR/infrastructure/analytics-manager.sh" record "build" "$SCHEME" "$DURATION" "$STATUS"
 fi
 
 if [ "$STATUS" == "FAILED" ]; then

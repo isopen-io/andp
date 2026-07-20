@@ -4,7 +4,9 @@ import os
 import sys
 import yaml
 
-def load_project_config(filepath="project.yml"):
+def load_project_config(filepath=None):
+    if filepath is None:
+        filepath = os.path.join(os.environ.get("ANDP_APP_DIR", "examples/meeshy"), "project.yml")
     if not os.path.exists(filepath):
         print(f"Error: {filepath} not found.")
         return None

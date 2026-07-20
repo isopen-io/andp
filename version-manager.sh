@@ -1,4 +1,6 @@
 #!/bin/bash
+APP_DIR="${ANDP_APP_DIR:-examples/meeshy}"
+
 
 # ANDP Version Manager
 # Handles semantic versioning and build numbers
@@ -9,8 +11,8 @@ COMMAND=$1
 VALUE=$2
 
 # Project info
-PROJECT_NAME=$(grep "name:" project.yml | head -n 1 | awk '{print $2}')
-XCODEPROJ="${PROJECT_NAME}.xcodeproj"
+PROJECT_NAME=$(grep "name:" "$APP_DIR/project.yml" | head -n 1 | awk '{print $2}')
+XCODEPROJ="$APP_DIR/${PROJECT_NAME}.xcodeproj"
 
 # VERSION and BUILD_NUMBER files are the single source of truth;
 # agvtool sync is best-effort only (XcodeGen projects may lack
@@ -36,7 +38,7 @@ function set_marketing_version() {
     local version=$1
     echo "Setting marketing version to $version"
     if command -v agvtool >/dev/null 2>&1 && [ -d "$XCODEPROJ" ]; then
-        agvtool new-marketing-version "$version" >/dev/null 2>&1 || true
+        (cd "$APP_DIR" && agvtool new-marketing-version "$version") >/dev/null 2>&1 || true
     fi
     echo "$version" > VERSION
 }
@@ -45,7 +47,7 @@ function set_build_number() {
     local build=$1
     echo "Setting build number to $build"
     if command -v agvtool >/dev/null 2>&1 && [ -d "$XCODEPROJ" ]; then
-        agvtool new-version -all "$build" >/dev/null 2>&1 || true
+        (cd "$APP_DIR" && agvtool new-version -all "$build") >/dev/null 2>&1 || true
     fi
     echo "$build" > BUILD_NUMBER
 }

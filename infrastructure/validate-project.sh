@@ -1,10 +1,12 @@
 #!/bin/bash
+APP_DIR="${ANDP_APP_DIR:-examples/meeshy}"
+
 
 # ANDP Project Validation Script
 
 set -e
 
-PROJECT_FILE="project.yml"
+PROJECT_FILE="$APP_DIR/project.yml"
 
 echo "Validating project configuration..."
 
@@ -14,7 +16,7 @@ if [ ! -f "$PROJECT_FILE" ]; then
 fi
 
 # 1. Directory Checks
-REQUIRED_DIRS=("Apps/Meeshy" "packages/MeeshySDK" "Apps/MeeshyWidgets" "Apps/MeeshyNotificationExtension" "Apps/MeeshyTests" "Apps/MeeshyMac" "Apps/MeeshyVision")
+REQUIRED_DIRS=("$APP_DIR/Apps/Meeshy" "$APP_DIR/packages/MeeshySDK" "$APP_DIR/Apps/MeeshyWidgets" "$APP_DIR/Apps/MeeshyNotificationExtension" "$APP_DIR/Apps/MeeshyTests" "$APP_DIR/Apps/MeeshyMac" "$APP_DIR/Apps/MeeshyVision")
 
 for dir in "${REQUIRED_DIRS[@]}"; do
     if [ ! -d "$dir" ]; then

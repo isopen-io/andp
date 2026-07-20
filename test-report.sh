@@ -1,4 +1,6 @@
 #!/bin/bash
+APP_DIR="${ANDP_APP_DIR:-examples/meeshy}"
+
 
 # ANDP Test Reporter
 # Processes .xcresult bundles using xcresulttool
@@ -74,7 +76,7 @@ echo ""
 echo "Unified Quality Analysis (Quality, Accessibility, Localization, visionOS):"
 echo "-------------------------"
 if [ -f "infrastructure/ai-analyzer.py" ]; then
-    python3 infrastructure/ai-analyzer.py "Apps"
+    python3 infrastructure/ai-analyzer.py "$APP_DIR/Apps"
 else
     echo "AI analyzer not found."
 fi
@@ -83,7 +85,7 @@ echo ""
 echo "Localization Governance (Multi-locale & RTL Readiness):"
 echo "-------------------------"
 if [ -f "infrastructure/localization-validator.py" ]; then
-    python3 infrastructure/localization-validator.py "Apps/Meeshy"
+    python3 infrastructure/localization-validator.py "$APP_DIR/Apps/Meeshy"
 else
     echo "Localization validator not found."
 fi

@@ -1,4 +1,6 @@
 #!/bin/bash
+APP_DIR="${ANDP_APP_DIR:-examples/meeshy}"
+
 set -e
 
 # ANDP Software Bill of Materials (SBOM) Generator
@@ -9,7 +11,7 @@ mkdir -p "$OUTPUT_DIR"
 OUTPUT_FILE="${OUTPUT_DIR}/sbom.json"
 
 # Project metadata from project.yml
-PROJECT_NAME=$(grep "name:" project.yml | head -n 1 | awk '{print $2}')
+PROJECT_NAME=$(grep "name:" "$APP_DIR/project.yml" | head -n 1 | awk '{print $2}')
 [ -z "$PROJECT_NAME" ] && PROJECT_NAME="UnknownProject"
 
 echo "Generating SBOM for $PROJECT_NAME..."
@@ -87,7 +89,7 @@ import sys
 import yaml
 
 try:
-    with open('project.yml', 'r') as f:
+    with open(os.environ.get('ANDP_APP_DIR', 'examples/meeshy') + '/project.yml', 'r') as f:
         config = yaml.safe_load(f)
 
     packages = config.get('packages', {})
