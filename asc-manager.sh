@@ -26,4 +26,4 @@ done
 
 echo "Running ASC command: $COMMAND for account: $ACCOUNT..."
 
-python3 infrastructure/asc/asc_manager.py "$COMMAND" "${PARAMS[@]}" --account "$ACCOUNT"
+python3 -m andp "$COMMAND" "${PARAMS[@]}" --account "$ACCOUNT"

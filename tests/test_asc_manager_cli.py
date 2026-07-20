@@ -7,7 +7,7 @@ import os
 
 import pytest
 
-import asc_manager
+from andp.asc import asc_manager
 
 PLACEHOLDER_SECRETS = """
 accounts:
@@ -84,7 +84,7 @@ def test_status_dry_run(ci_like_dir, capsys):
 
 def test_make_managers_wires_real_stack(ec_private_key_pem):
     """Avec des credentials réels, la CLI assemble la pile complète auth→client→managers."""
-    from config import AccountConfig
+    from andp.asc.config import AccountConfig
 
     account = AccountConfig(
         account_id="primary",

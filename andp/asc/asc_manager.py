@@ -10,13 +10,13 @@ so CI stays green without an Apple account.
 import os
 import sys
 
-from apps import AppsManager
-from appstore import AppStoreManager
-from auth import ASCAuth, ASCAuthError
-from builds import BuildsManager
-from client import ASCAPIError, ASCClient
-from config import ConfigError, load_account
-from testflight import TestFlightManager
+from .apps import AppsManager
+from .appstore import AppStoreManager
+from .auth import ASCAuth, ASCAuthError
+from .builds import BuildsManager
+from .client import ASCAPIError, ASCClient
+from .config import ConfigError, load_account
+from .testflight import TestFlightManager
 
 USAGE = """Usage: asc_manager.py <command> [args] [--account <account_id>]
 

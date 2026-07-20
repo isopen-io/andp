@@ -3,9 +3,9 @@ import json
 
 import pytest
 
-from appstore import AppStoreManager
-from apps import AppsManager
-from metadata_manager import MetadataSyncer
+from andp.asc.appstore import AppStoreManager
+from andp.asc.apps import AppsManager
+from andp.asc.metadata_manager import MetadataSyncer
 
 
 @pytest.fixture

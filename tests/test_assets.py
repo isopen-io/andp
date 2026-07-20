@@ -7,7 +7,7 @@ import hashlib
 
 import pytest
 
-from assets import ScreenshotManager
+from andp.asc.assets import ScreenshotManager
 
 PNG_BYTES = b"\x89PNG-fake-screenshot-bytes"
 

@@ -5,7 +5,7 @@ on ne fait que retrouver et configurer une app existante.
 """
 import pytest
 
-from apps import AppsManager
+from andp.asc.apps import AppsManager
 
 
 def test_find_app_filters_by_bundle_id(asc_client, fake_session, fake_response):

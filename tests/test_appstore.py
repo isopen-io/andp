@@ -2,7 +2,7 @@
 build, Review Submissions (API moderne) et release."""
 import pytest
 
-from appstore import AppStoreManager
+from andp.asc.appstore import AppStoreManager
 
 
 def test_ensure_version_returns_existing(asc_client, fake_session, fake_response):

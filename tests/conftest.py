@@ -3,12 +3,10 @@ import sys
 
 import pytest
 
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-ASC_DIR = os.path.join(REPO_ROOT, "infrastructure", "asc")
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-for path in (ASC_DIR, REPO_ROOT):
-    if path not in sys.path:
-        sys.path.insert(0, path)
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
 
 
 @pytest.fixture(scope="session")
@@ -78,7 +76,7 @@ def fake_session():
 @pytest.fixture
 def asc_client(fake_session):
     """Un vrai ASCClient branché sur un transport factice."""
-    from client import ASCClient
+    from andp.asc.client import ASCClient
 
     class _StubAuth:
         def token(self):

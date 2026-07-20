@@ -6,7 +6,7 @@ GET /v1/builds jusqu'à processingState VALID.
 """
 import pytest
 
-from builds import BuildProcessingError, BuildsManager
+from andp.asc.builds import BuildProcessingError, BuildsManager
 
 
 class RecordingTransport:

@@ -3,7 +3,7 @@
 Référence : App Store Connect API — bundleIds, bundleIdCapabilities,
 certificates (csrContent PEM), profiles (POST uniquement, pas de PATCH), devices.
 """
-from provisioning import ProvisioningManager
+from andp.asc.provisioning import ProvisioningManager
 
 
 def test_register_bundle_id_posts_identifier(asc_client, fake_session, fake_response):

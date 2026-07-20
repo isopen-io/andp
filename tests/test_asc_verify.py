@@ -6,7 +6,7 @@ with real credentials it must hit the API and report auth + app lookup status.
 """
 import pytest
 
-import asc_manager
+from andp.asc import asc_manager
 from conftest import FakeResponse, FakeSession
 
 PARTIAL_SECRETS = """

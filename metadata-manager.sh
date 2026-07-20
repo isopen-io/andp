@@ -26,4 +26,4 @@ done
 
 echo "Running Metadata command: $COMMAND for account: $ACCOUNT..."
 
-python3 infrastructure/asc/metadata_manager.py "$COMMAND" "${PARAMS[@]}" --account "$ACCOUNT"
+python3 -m andp.asc.metadata_manager "$COMMAND" "${PARAMS[@]}" --account "$ACCOUNT"

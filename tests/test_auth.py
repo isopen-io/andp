@@ -8,7 +8,7 @@ import time
 import jwt as pyjwt
 import pytest
 
-from auth import ASCAuth, ASCAuthError
+from andp.asc.auth import ASCAuth, ASCAuthError
 
 KEY_ID = "TESTKEY123"
 ISSUER_ID = "69a6de70-0000-47e3-e053-5b8c7c11a4d1"

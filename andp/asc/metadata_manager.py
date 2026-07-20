@@ -9,11 +9,11 @@ import json
 import os
 import sys
 
-from apps import AppsManager
-from appstore import AppStoreManager
-from auth import ASCAuth
-from client import ASCClient
-from config import ConfigError, load_account
+from .apps import AppsManager
+from .appstore import AppStoreManager
+from .auth import ASCAuth
+from .client import ASCClient
+from .config import ConfigError, load_account
 
 
 class MetadataSyncer:

@@ -10,7 +10,7 @@ echo "Running Infrastructure Tests..."
 
 # Test App Store Connect API modules (pytest)
 echo "Testing App Store Connect API modules..."
-if python3 -m pytest infrastructure/tests/python/ -q; then
+if python3 -m pytest tests/ -q; then
     echo "✅ ASC API pytest suite PASSED"
 else
     echo "❌ ASC API pytest suite FAILED"

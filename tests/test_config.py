@@ -1,7 +1,7 @@
 """Tests for infrastructure/asc/config.py — chargement des secrets multi-comptes."""
 import pytest
 
-from config import AccountConfig, ConfigError, load_account
+from andp.asc.config import AccountConfig, ConfigError, load_account
 
 
 SECRETS_REAL = """

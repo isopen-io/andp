@@ -1,7 +1,7 @@
 """Tests for infrastructure/asc/testflight.py — groupes beta, testeurs, What to Test, Beta App Review."""
 import pytest
 
-from testflight import TestFlightManager
+from andp.asc.testflight import TestFlightManager
 
 
 def test_ensure_group_returns_existing(asc_client, fake_session, fake_response):

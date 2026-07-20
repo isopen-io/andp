@@ -1,7 +1,7 @@
 """Tests for infrastructure/asc/client.py — client HTTP App Store Connect (JSON:API)."""
 import pytest
 
-from client import ASCAPIError, ASCClient
+from andp.asc.client import ASCAPIError, ASCClient
 
 BASE = "https://api.appstoreconnect.apple.com"
 

@@ -1,7 +1,7 @@
 """TestFlight automation via the App Store Connect API: beta groups,
 testers, per-build "What to Test" notes and Beta App Review submission."""
 
-from client import ASCAPIError
+from .client import ASCAPIError
 
 
 class TestFlightManager:
