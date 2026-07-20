@@ -3,6 +3,8 @@
 Handles Bearer-token injection, JSON:API error surfacing, cursor pagination
 (links.next) and 429 rate-limit retries with Retry-After support.
 """
+import json
+import os
 import time
 
 import requests
@@ -73,8 +75,22 @@ class ASCClient:
                 )
                 self._sleep(retry_after)
                 continue
+            self._audit(method, url, response.status_code)
             return self._parse(response)
         raise AssertionError("unreachable")
+
+    @staticmethod
+    def _audit(method, url, status):
+        """Append mutations to a JSONL trail when ANDP_AUDIT_LOG is set —
+        agent-driven publishing must leave a traceable record."""
+        if method == "GET":
+            return
+        audit_path = os.environ.get("ANDP_AUDIT_LOG")
+        if not audit_path:
+            return
+        entry = {"ts": time.time(), "method": method, "path": url, "status": status}
+        with open(audit_path, "a") as f:
+            f.write(json.dumps(entry) + "\n")
 
     @staticmethod
     def _parse(response):

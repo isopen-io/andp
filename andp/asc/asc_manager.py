@@ -7,23 +7,25 @@ Without real credentials (secrets.example.yml placeholders) every command
 runs in DRY-RUN mode: it validates inputs and prints what it would do,
 so CI stays green without an Apple account.
 """
+import json
 import os
 import sys
 
 from .apps import AppsManager
 from .appstore import AppStoreManager
 from .auth import ASCAuth, ASCAuthError
-from .builds import BuildsManager
+from .builds import BuildProcessingError, BuildsManager
 from .client import ASCAPIError, ASCClient
 from .config import ConfigError, load_account
 from .testflight import TestFlightManager
 
 USAGE = """Usage: asc_manager.py <command> [args] [--account <account_id>]
 
-Commands:
+Commands (all accept --json for a structured, agent-friendly envelope):
   verify [bundle_id]                             Preflight: credentials -> JWT -> API -> app lookup
                                                  (exits 1 when publishing is not possible)
   upload <ipa_path>                              Upload a build (Build Upload API)
+  release <ipa_path> [--group <name>]            verify -> upload -> wait processing -> TestFlight group
   status <bundle_id> <build_number>              Poll build processing state
   testflight <bundle_id> <group> add [emails...] Manage TestFlight group testers
   submit <bundle_id> <version>                   Submit a version for App Review
@@ -76,51 +78,80 @@ def _ipa_metadata(ipa_path):
     return None, None, None
 
 
-def _cmd_verify(account, managers, dry_run, args):
+def _cmd_verify(account, managers, dry_run, args, json_mode=False):
     """Publish preflight. Unlike the other commands this one FAILS in DRY-RUN:
     its whole point is to tell the truth about whether publishing can work."""
     bundle_id = args[0] if args else None
-    print(f"ASC publish preflight (account '{account.account_id}'):")
+    checks = []
+    app_payload = None
+
+    def check(name, ok, text, **extra):
+        checks.append({"name": name, "ok": ok, "detail": text, **extra})
+        if not json_mode:
+            print(f"  {'✅' if ok else '❌'} {text}")
+
+    def finish(ok):
+        if json_mode:
+            payload = {"command": "verify", "ok": ok, "checks": checks}
+            if app_payload:
+                payload["app"] = app_payload
+            print(json.dumps(payload))
+        else:
+            if ok:
+                print("PREFLIGHT PASSED — the tool can publish to App Store Connect.")
+        return 0 if ok else 1
+
+    if not json_mode:
+        print(f"ASC publish preflight (account '{account.account_id}'):")
 
     missing = account.missing_fields()
     if missing:
         for name in missing:
-            print(f"  ❌ credentials — missing: {name} (absent or placeholder in secrets.yml)")
-        print("PREFLIGHT FAILED — fill in the fields above (template: secrets.example.yml).")
-        return 1
-    print(f"  ✅ credentials — key_id {account.key_id}, issuer_id set, private key present")
+            if not json_mode:
+                print(f"  ❌ credentials — missing: {name} (absent or placeholder in secrets.yml)")
+        checks.append({"name": "credentials", "ok": False,
+                       "detail": "missing or placeholder fields", "missing": missing})
+        if not json_mode:
+            print("PREFLIGHT FAILED — fill in the fields above (template: secrets.example.yml).")
+        return finish(False)
+    check("credentials", True,
+          f"credentials — key_id {account.key_id}, issuer_id set, private key present")
 
     try:
         managers.client.auth.token()
     except ASCAuthError as exc:
-        print(f"  ❌ JWT signing failed: {exc}")
-        print("PREFLIGHT FAILED — the private key is not a usable ES256 (.p8) key.")
-        return 1
-    print("  ✅ JWT signed (ES256)")
+        check("jwt", False, f"JWT signing failed: {exc}")
+        if not json_mode:
+            print("PREFLIGHT FAILED — the private key is not a usable ES256 (.p8) key.")
+        return finish(False)
+    check("jwt", True, "JWT signed (ES256)")
 
     try:
         if bundle_id:
             app = managers.apps.find_app(bundle_id)
-            print("  ✅ API authentication accepted")
+            check("api_auth", True, "API authentication accepted")
             if app is None:
-                print(f"  ❌ app '{bundle_id}' not found on this App Store Connect account")
-                print("PREFLIGHT FAILED — create the app record in the ASC UI first.")
-                return 1
+                check("app_record", False,
+                      f"app '{bundle_id}' not found on this App Store Connect account")
+                if not json_mode:
+                    print("PREFLIGHT FAILED — create the app record in the ASC UI first.")
+                return finish(False)
             name = (app.get("attributes") or {}).get("name", "?")
-            print(f"  ✅ app found: {name} ({bundle_id}) — id {app['id']}")
+            app_payload = {"id": app["id"], "name": name, "bundle_id": bundle_id}
+            check("app_record", True, f"app found: {name} ({bundle_id}) — id {app['id']}")
         else:
             managers.client.get("/v1/apps", params={"limit": 1})
-            print("  ✅ API authentication accepted (GET /v1/apps)")
+            check("api_auth", True, "API authentication accepted (GET /v1/apps)")
     except ASCAPIError as exc:
-        print(f"  ❌ API rejected the request: {exc}")
-        print("PREFLIGHT FAILED — check key_id/issuer_id and the key's ASC role.")
-        return 1
+        check("api_auth", False, f"API rejected the request: {exc}")
+        if not json_mode:
+            print("PREFLIGHT FAILED — check key_id/issuer_id and the key's ASC role.")
+        return finish(False)
 
-    print("PREFLIGHT PASSED — the tool can publish to App Store Connect.")
-    return 0
+    return finish(True)
 
 
-def _cmd_upload(account, managers, dry_run, args):
+def _cmd_upload(account, managers, dry_run, args, json_mode=False):
     if not args:
         print("Error: IPA path required for upload.")
         return 2
@@ -135,10 +166,15 @@ def _cmd_upload(account, managers, dry_run, args):
         build_number = _read_file_stripped("BUILD_NUMBER", "0")
 
     if dry_run:
-        print(
-            f"[DRY-RUN] Would upload {ipa_path} as version {version} "
-            f"(build {build_number}) via the Build Upload API."
-        )
+        if json_mode:
+            print(json.dumps({"command": "upload", "ok": True, "dry_run": True,
+                              "ipa": ipa_path, "bundle_id": bundle_id,
+                              "version": version, "build_number": build_number}))
+        else:
+            print(
+                f"[DRY-RUN] Would upload {ipa_path} as version {version} "
+                f"(build {build_number}) via the Build Upload API."
+            )
         return 0
 
     if not bundle_id:
@@ -152,11 +188,100 @@ def _cmd_upload(account, managers, dry_run, args):
     upload_id = managers.builds.upload_ipa(
         ipa_path, version=version, build_number=build_number, app_id=app["id"]
     )
-    print(f"Upload started: buildUploads/{upload_id}")
+    if json_mode:
+        print(json.dumps({"command": "upload", "ok": True, "dry_run": False,
+                          "ipa": ipa_path, "bundle_id": bundle_id,
+                          "version": version, "build_number": build_number,
+                          "app_id": app["id"], "upload_id": upload_id}))
+    else:
+        print(f"Upload started: buildUploads/{upload_id}")
     return 0
 
 
-def _cmd_status(account, managers, dry_run, args):
+def _cmd_release(account, managers, dry_run, args, json_mode=False):
+    """One-shot automation primitive: verify app record -> upload -> wait for
+    Apple processing -> optional TestFlight group assignment."""
+    group_name = None
+    args = list(args)
+    if "--group" in args:
+        idx = args.index("--group")
+        group_name = args[idx + 1]
+        del args[idx:idx + 2]
+    if not args:
+        print("Usage: release <ipa_path> [--group <name>]")
+        return 2
+    ipa_path = args[0]
+    if not os.path.exists(ipa_path):
+        print(f"Error: IPA not found: {ipa_path}")
+        return 1
+    bundle_id, version, build_number = _ipa_metadata(ipa_path)
+
+    if dry_run:
+        planned = ["app_record", "upload", "processing"] + (["testflight_group"] if group_name else [])
+        if json_mode:
+            print(json.dumps({"command": "release", "ok": True, "dry_run": True,
+                              "ipa": ipa_path, "bundle_id": bundle_id,
+                              "stages_planned": planned}))
+        else:
+            print(f"[DRY-RUN] Would release {ipa_path}: {' -> '.join(planned)}.")
+        return 0
+
+    stages = []
+
+    def stage(name, ok, detail):
+        stages.append({"name": name, "ok": ok, "detail": detail})
+        if not json_mode:
+            print(f"  {'✅' if ok else '❌'} {name}: {detail}")
+
+    def finish(ok, build=None, app_id=None, upload_id=None):
+        if json_mode:
+            payload = {"command": "release", "ok": ok, "dry_run": False,
+                       "ipa": ipa_path, "bundle_id": bundle_id, "stages": stages}
+            if app_id:
+                payload["app_id"] = app_id
+            if upload_id:
+                payload["upload_id"] = upload_id
+            if build is not None:
+                payload["build"] = {
+                    "id": build["id"],
+                    "processing_state": build["attributes"].get("processingState"),
+                }
+            print(json.dumps(payload))
+        else:
+            print("RELEASE " + ("SUCCEEDED" if ok else "FAILED"))
+        return 0 if ok else 1
+
+    if not bundle_id:
+        stage("app_record", False, f"Could not read CFBundleIdentifier from {ipa_path}")
+        return finish(False)
+    app = managers.apps.find_app(bundle_id)
+    if app is None:
+        stage("app_record", False, f"App {bundle_id} not found in App Store Connect")
+        return finish(False)
+    app_name = (app.get("attributes") or {}).get("name", "?")
+    stage("app_record", True, f"{app_name} ({bundle_id}) — id {app['id']}")
+
+    upload_id = managers.builds.upload_ipa(
+        ipa_path, version=version, build_number=build_number, app_id=app["id"]
+    )
+    stage("upload", True, f"buildUploads/{upload_id} ({version} build {build_number})")
+
+    try:
+        build = managers.builds.wait_for_processing(app["id"], build_number)
+    except BuildProcessingError as exc:
+        stage("processing", False, str(exc))
+        return finish(False, app_id=app["id"], upload_id=upload_id)
+    stage("processing", True, f"build {build['id']} is {build['attributes'].get('processingState')}")
+
+    if group_name:
+        group = managers.testflight.ensure_group(app["id"], group_name)
+        managers.testflight.add_build_to_group(group["id"], build["id"])
+        stage("testflight_group", True, f"build linked to group '{group_name}' ({group['id']})")
+
+    return finish(True, build=build, app_id=app["id"], upload_id=upload_id)
+
+
+def _cmd_status(account, managers, dry_run, args, json_mode=False):
     if len(args) < 2:
         print("Usage: status <bundle_id> <build_number>")
         return 2
@@ -175,7 +300,7 @@ def _cmd_status(account, managers, dry_run, args):
     return 0
 
 
-def _cmd_testflight(account, managers, dry_run, args):
+def _cmd_testflight(account, managers, dry_run, args, json_mode=False):
     if len(args) < 3:
         print("Usage: testflight <bundle_id> <group_name> <add> [tester_emails...]")
         return 2
@@ -204,7 +329,7 @@ def _cmd_testflight(account, managers, dry_run, args):
     return 0
 
 
-def _cmd_submit(account, managers, dry_run, args):
+def _cmd_submit(account, managers, dry_run, args, json_mode=False):
     if len(args) < 2:
         print("Usage: submit <bundle_id> <version>")
         return 2
@@ -227,6 +352,7 @@ def _cmd_submit(account, managers, dry_run, args):
 COMMANDS = {
     "verify": _cmd_verify,
     "upload": _cmd_upload,
+    "release": _cmd_release,
     "status": _cmd_status,
     "testflight": _cmd_testflight,
     "submit": _cmd_submit,
@@ -244,6 +370,9 @@ def main(argv):
         idx = args.index("--account")
         account_id = args[idx + 1]
         del args[idx:idx + 2]
+    json_mode = "--json" in args
+    if json_mode:
+        args.remove("--json")
 
     command, command_args = args[0], args[1:]
     handler = COMMANDS.get(command)
@@ -259,7 +388,7 @@ def main(argv):
         return 1
 
     dry_run = not account.is_configured()
-    if dry_run:
+    if dry_run and not json_mode:
         print(
             f"No real App Store Connect credentials for account '{account_id}' "
             "(placeholders detected) — running in DRY-RUN mode."
@@ -268,7 +397,7 @@ def main(argv):
     else:
         managers = make_managers(account)
 
-    return handler(account, managers, dry_run, command_args)
+    return handler(account, managers, dry_run, command_args, json_mode=json_mode)
 
 
 if __name__ == "__main__":

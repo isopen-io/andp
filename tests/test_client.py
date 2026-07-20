@@ -144,3 +144,37 @@ def test_rate_limit_gives_up_after_max_retries(fake_session, fake_response):
 
     assert exc_info.value.status == 429
     assert len(sleeps) == 3  # 3 retries puis abandon
+
+
+def test_mutations_are_audit_logged_when_enabled(
+    asc_client, fake_session, fake_response, tmp_path, monkeypatch
+):
+    """Every write to the API (POST/PATCH/DELETE) leaves a JSONL audit trail
+    when ANDP_AUDIT_LOG is set — agent actions must be traceable. GETs are not logged."""
+    import json as jsonlib
+
+    audit_path = tmp_path / "audit.jsonl"
+    monkeypatch.setenv("ANDP_AUDIT_LOG", str(audit_path))
+
+    fake_session.queue(
+        fake_response(200, {"data": []}),
+        fake_response(201, {"data": {"id": "X1", "type": "profiles"}}),
+    )
+    asc_client.get("/v1/apps")
+    asc_client.post("/v1/profiles", {"data": {"type": "profiles"}})
+
+    lines = [jsonlib.loads(l) for l in audit_path.read_text().splitlines()]
+    assert len(lines) == 1
+    entry = lines[0]
+    assert entry["method"] == "POST"
+    assert entry["path"].endswith("/v1/profiles")
+    assert entry["status"] == 201
+    assert "ts" in entry
+
+
+def test_no_audit_log_by_default(asc_client, fake_session, fake_response, tmp_path, monkeypatch):
+    monkeypatch.delenv("ANDP_AUDIT_LOG", raising=False)
+    monkeypatch.chdir(tmp_path)
+    fake_session.queue(fake_response(201, {"data": {"id": "X1", "type": "profiles"}}))
+    asc_client.post("/v1/profiles", {"data": {"type": "profiles"}})
+    assert list(tmp_path.iterdir()) == []

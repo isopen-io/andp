@@ -15,6 +15,7 @@
 - **The IPA is the source of truth** — upload metadata (bundle id, version, build) is read from the IPA's own Info.plist, so ANDP publishes apps built anywhere, not just in this repo.
 - **Governance built in** — every pipeline run can emit a CycloneDX SBOM, a security audit, a governance report and a productivity dashboard.
 - **Multi-account native** — every command takes `--account` (see `secrets.example.yml`).
+- **Agent-native** — every command speaks `--json`, `andp release` drives IPA→TestFlight in one call, and `python3 -m andp.mcp` exposes publishing as MCP tools with policy guardrails (App Review submission off by default) and a JSONL audit trail. See [`Documentation/Agents.md`](Documentation/Agents.md).
 
 ## Install
 
@@ -31,10 +32,13 @@ cp secrets.example.yml secrets.yml   # fill in key_id, issuer_id, key_content (n
 
 andp verify me.your.app              # preflight: can I publish?
 andp upload build/Your.ipa           # Build Upload API (reads version from the IPA)
+andp release build/Your.ipa --group "Beta"   # upload -> wait VALID -> TestFlight group
 andp status me.your.app 42           # poll processing state
 andp testflight me.your.app "Beta" add tester@example.com
 andp submit me.your.app 1.2.0        # App Review submission
 ```
+
+Add `--json` to any command for a structured, agent-friendly envelope.
 
 Without real credentials every command (except `verify`) runs in DRY-RUN mode — it validates inputs, prints what it would do, and exits 0 so CI stays green.
 

@@ -88,3 +88,45 @@ def asc_client(fake_session):
 @pytest.fixture
 def fake_response():
     return FakeResponse
+
+
+def real_secrets_yaml(ec_private_key_pem):
+    indented_key = "\n".join(
+        f"        {line}" for line in ec_private_key_pem.strip().splitlines()
+    )
+    return f"""
+accounts:
+  primary:
+    asc_api:
+      key_id: "TESTKEY001"
+      issuer_id: "11111111-2222-3333-4444-555555555555"
+      key_content: |
+{indented_key}
+"""
+
+
+@pytest.fixture
+def configured_dir(tmp_path, monkeypatch, ec_private_key_pem):
+    """Working dir with real-looking (test-only) credentials in secrets.yml."""
+    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
+@pytest.fixture
+def fake_transport(monkeypatch):
+    """Route the real auth->client->managers stack through a recording FakeSession."""
+    from andp.asc import asc_manager
+
+    session = FakeSession()
+    original = asc_manager.make_managers
+
+    def patched(account):
+        managers = original(account)
+        managers.client.session = session
+        managers.builds.upload_transport = lambda *a, **k: None
+        managers.builds._sleep = lambda s: None
+        return managers
+
+    monkeypatch.setattr(asc_manager, "make_managers", patched)
+    return session

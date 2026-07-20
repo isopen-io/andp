@@ -22,49 +22,12 @@ accounts:
 """
 
 
-def _real_secrets(ec_private_key_pem):
-    indented_key = "\n".join(
-        f"        {line}" for line in ec_private_key_pem.strip().splitlines()
-    )
-    return f"""
-accounts:
-  primary:
-    asc_api:
-      key_id: "REALKEY001"
-      issuer_id: "11111111-2222-3333-4444-555555555555"
-      key_content: |
-{indented_key}
-"""
-
-
 @pytest.fixture
 def partial_secrets_dir(tmp_path, monkeypatch):
     """secrets.yml exists but issuer_id and key are still template placeholders."""
     (tmp_path / "secrets.yml").write_text(PARTIAL_SECRETS)
     monkeypatch.chdir(tmp_path)
     return tmp_path
-
-
-@pytest.fixture
-def configured_dir(tmp_path, monkeypatch, ec_private_key_pem):
-    (tmp_path / "secrets.yml").write_text(_real_secrets(ec_private_key_pem))
-    monkeypatch.chdir(tmp_path)
-    return tmp_path
-
-
-@pytest.fixture
-def fake_transport(monkeypatch):
-    """Route the real auth->client->managers stack through a recording FakeSession."""
-    session = FakeSession()
-    original = asc_manager.make_managers
-
-    def patched(account):
-        managers = original(account)
-        managers.client.session = session
-        return managers
-
-    monkeypatch.setattr(asc_manager, "make_managers", patched)
-    return session
 
 
 def test_verify_unconfigured_fails_and_names_missing_fields(partial_secrets_dir, capsys):

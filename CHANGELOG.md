@@ -1,3 +1,13 @@
+## 1.7.0 - 2026-07-20
+### H3: agent-native publishing
+- `--json` on every command: structured envelopes (checks, stages, app/build ids) an agent can reason about — no prose parsing
+- `andp release <ipa> [--group G]`: one-shot IPA -> upload -> wait for Apple processing -> TestFlight group link, with per-stage results
+- MCP server (`python3 -m andp.mcp`): verify/upload/release/status/testflight_add/submit as native agent tools (JSON-RPC over stdio)
+- Policy guardrails (`andp.yml`): App Review submission refused for agents unless `policy.allow_submit: true`
+- Audit trail: `ANDP_AUDIT_LOG` appends every API mutation (POST/PATCH/DELETE) as JSONL
+- `Documentation/Agents.md`: the agent-native publishing guide
+- 98 tests (18 new), verify --json validated against the live API
+
 ## 1.6.0 - 2026-07-20
 ### H2: public readiness
 - License: Apache-2.0; CONTRIBUTING.md (TDD + observed-contract rules); SECURITY.md (credentials handling policy, private reporting)
