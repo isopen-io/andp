@@ -67,6 +67,7 @@ struct ContentView: View {
             .buttonStyle(.bordered)
             .controlSize(.large)
             .padding(.horizontal)
+            .accessibilityIdentifier("logoutButton")
             .accessibilityHint(Text("logout_hint"))
             .confirmationDialog("logout_confirm_title", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
                 Button("logout_button_confirm", role: .destructive, action: performLogout)
