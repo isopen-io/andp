@@ -78,3 +78,17 @@ def test_real_account_is_configured(tmp_path):
     secrets = _write(tmp_path, "secrets.yml", SECRETS_REAL)
     account = load_account("primary", secrets_file=secrets)
     assert account.is_configured() is True
+
+
+def test_placeholder_issuer_with_real_key_is_not_configured(tmp_path):
+    """A real .p8 key with a REPLACE_WITH_* issuer must stay in DRY-RUN."""
+    secrets = _write(
+        tmp_path,
+        "secrets.yml",
+        SECRETS_REAL.replace(
+            'issuer_id: "11111111-2222-3333-4444-555555555555"',
+            'issuer_id: "REPLACE_WITH_ISSUER_ID"',
+        ),
+    )
+    account = load_account("primary", secrets_file=secrets)
+    assert account.is_configured() is False

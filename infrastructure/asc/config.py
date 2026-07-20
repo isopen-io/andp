@@ -32,11 +32,18 @@ class AccountConfig:
 
     def is_configured(self):
         """True only when the credentials look real (not template placeholders)."""
-        if not self.key_id or not self.issuer_id or not self.key_content:
-            return False
-        if self.key_id in _PLACEHOLDER_KEY_IDS:
-            return False
-        return not any(marker in self.key_content for marker in _PLACEHOLDER_MARKERS)
+        return not self.missing_fields()
+
+    def missing_fields(self):
+        """Names of credential fields that are absent or still template placeholders."""
+        missing = []
+        if not self.key_id or self.key_id in _PLACEHOLDER_KEY_IDS:
+            missing.append("key_id")
+        if not self.issuer_id or any(m in self.issuer_id for m in _PLACEHOLDER_MARKERS):
+            missing.append("issuer_id")
+        if not self.key_content or any(m in self.key_content for m in _PLACEHOLDER_MARKERS):
+            missing.append("key_content")
+        return missing
 
 
 def load_account(account_id, secrets_file=None):

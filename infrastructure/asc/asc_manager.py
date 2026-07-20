@@ -12,15 +12,17 @@ import sys
 
 from apps import AppsManager
 from appstore import AppStoreManager
-from auth import ASCAuth
+from auth import ASCAuth, ASCAuthError
 from builds import BuildsManager
-from client import ASCClient
+from client import ASCAPIError, ASCClient
 from config import ConfigError, load_account
 from testflight import TestFlightManager
 
 USAGE = """Usage: asc_manager.py <command> [args] [--account <account_id>]
 
 Commands:
+  verify [bundle_id]                             Preflight: credentials -> JWT -> API -> app lookup
+                                                 (exits 1 when publishing is not possible)
   upload <ipa_path>                              Upload a build (Build Upload API)
   status <bundle_id> <build_number>              Poll build processing state
   testflight <bundle_id> <group> add [emails...] Manage TestFlight group testers
@@ -53,7 +55,51 @@ def _read_file_stripped(path, default=""):
     return default
 
 
-def _cmd_upload(managers, dry_run, args):
+def _cmd_verify(account, managers, dry_run, args):
+    """Publish preflight. Unlike the other commands this one FAILS in DRY-RUN:
+    its whole point is to tell the truth about whether publishing can work."""
+    bundle_id = args[0] if args else None
+    print(f"ASC publish preflight (account '{account.account_id}'):")
+
+    missing = account.missing_fields()
+    if missing:
+        for name in missing:
+            print(f"  ❌ credentials — missing: {name} (absent or placeholder in secrets.yml)")
+        print("PREFLIGHT FAILED — fill in the fields above (template: secrets.example.yml).")
+        return 1
+    print(f"  ✅ credentials — key_id {account.key_id}, issuer_id set, private key present")
+
+    try:
+        managers.client.auth.token()
+    except ASCAuthError as exc:
+        print(f"  ❌ JWT signing failed: {exc}")
+        print("PREFLIGHT FAILED — the private key is not a usable ES256 (.p8) key.")
+        return 1
+    print("  ✅ JWT signed (ES256)")
+
+    try:
+        if bundle_id:
+            app = managers.apps.find_app(bundle_id)
+            print("  ✅ API authentication accepted")
+            if app is None:
+                print(f"  ❌ app '{bundle_id}' not found on this App Store Connect account")
+                print("PREFLIGHT FAILED — create the app record in the ASC UI first.")
+                return 1
+            name = (app.get("attributes") or {}).get("name", "?")
+            print(f"  ✅ app found: {name} ({bundle_id}) — id {app['id']}")
+        else:
+            managers.client.get("/v1/apps", params={"limit": 1})
+            print("  ✅ API authentication accepted (GET /v1/apps)")
+    except ASCAPIError as exc:
+        print(f"  ❌ API rejected the request: {exc}")
+        print("PREFLIGHT FAILED — check key_id/issuer_id and the key's ASC role.")
+        return 1
+
+    print("PREFLIGHT PASSED — the tool can publish to App Store Connect.")
+    return 0
+
+
+def _cmd_upload(account, managers, dry_run, args):
     if not args:
         print("Error: IPA path required for upload.")
         return 2
@@ -76,7 +122,7 @@ def _cmd_upload(managers, dry_run, args):
     return 0
 
 
-def _cmd_status(managers, dry_run, args):
+def _cmd_status(account, managers, dry_run, args):
     if len(args) < 2:
         print("Usage: status <bundle_id> <build_number>")
         return 2
@@ -95,7 +141,7 @@ def _cmd_status(managers, dry_run, args):
     return 0
 
 
-def _cmd_testflight(managers, dry_run, args):
+def _cmd_testflight(account, managers, dry_run, args):
     if len(args) < 3:
         print("Usage: testflight <bundle_id> <group_name> <add> [tester_emails...]")
         return 2
@@ -124,7 +170,7 @@ def _cmd_testflight(managers, dry_run, args):
     return 0
 
 
-def _cmd_submit(managers, dry_run, args):
+def _cmd_submit(account, managers, dry_run, args):
     if len(args) < 2:
         print("Usage: submit <bundle_id> <version>")
         return 2
@@ -145,6 +191,7 @@ def _cmd_submit(managers, dry_run, args):
 
 
 COMMANDS = {
+    "verify": _cmd_verify,
     "upload": _cmd_upload,
     "status": _cmd_status,
     "testflight": _cmd_testflight,
@@ -187,7 +234,7 @@ def main(argv):
     else:
         managers = make_managers(account)
 
-    return handler(managers, dry_run, command_args)
+    return handler(account, managers, dry_run, command_args)
 
 
 if __name__ == "__main__":
