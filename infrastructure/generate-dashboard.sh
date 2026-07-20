@@ -13,15 +13,16 @@ echo "Generating Developer Productivity Dashboard..."
 
 # Bolt Optimization: Consolidate multiple Python spawns and shell forks into a single Python process.
 # This reduces execution time by eliminating process overhead and shell fork/pipe chains.
-python3 <<EOF > "$OUTPUT_FILE"
+# The heredoc is quoted so no shell expansion can corrupt the Python code; config is passed via env.
+ANDP_METRICS_DIR="$METRICS_DIR" ANDP_VISUAL_DIR="$VISUAL_DIR" python3 <<'EOF' > "$OUTPUT_FILE"
 import json
 import os
 import glob
 import base64
 from datetime import datetime
 
-METRICS_DIR = "$METRICS_DIR"
-VISUAL_DIR = "$VISUAL_DIR"
+METRICS_DIR = os.environ.get("ANDP_METRICS_DIR", "metrics")
+VISUAL_DIR = os.environ.get("ANDP_VISUAL_DIR", "Tests/VisualBaselines/Diffs")
 
 def get_latest_metric(metric_type):
     files = glob.glob(os.path.join(METRICS_DIR, f"{metric_type}*.json"))
