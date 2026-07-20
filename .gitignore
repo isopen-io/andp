@@ -30,3 +30,4 @@ secrets.yml
 metrics/
 dashboard.html
 governance_report.md
+.andp/
