@@ -100,3 +100,24 @@ def test_make_managers_wires_real_stack(ec_private_key_pem):
     assert managers.appstore is not None
     # le token JWT est réellement généré (signé ES256)
     assert managers.client.auth.token().count(".") == 2
+
+
+def test_upload_reads_versions_from_ipa_payload(ci_like_dir, capsys):
+    """The IPA's own Info.plist is the source of truth for the upload metadata;
+    the repo-root VERSION/BUILD_NUMBER files are only a fallback."""
+    import plistlib
+    import zipfile
+
+    plist = plistlib.dumps(
+        {"CFBundleShortVersionString": "2.5.0", "CFBundleVersion": "77"}
+    )
+    with zipfile.ZipFile(ci_like_dir / "Real.ipa", "w") as zf:
+        zf.writestr("Payload/Real.app/Info.plist", plist)
+
+    exit_code = asc_manager.main(["upload", "Real.ipa"])
+
+    output = capsys.readouterr().out
+    assert exit_code == 0
+    assert "2.5.0" in output
+    assert "77" in output
+    assert "1.2.0" not in output

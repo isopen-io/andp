@@ -55,6 +55,26 @@ def _read_file_stripped(path, default=""):
     return default
 
 
+def _ipa_versions(ipa_path):
+    """(version, build) from the IPA's own Info.plist — the upload metadata must
+    match the binary, not the calling repo. Returns (None, None) if unreadable."""
+    import plistlib
+    import zipfile
+
+    try:
+        with zipfile.ZipFile(ipa_path) as zf:
+            for name in zf.namelist():
+                if name.endswith(".app/Info.plist") and name.startswith("Payload/"):
+                    info = plistlib.loads(zf.read(name))
+                    return (
+                        info.get("CFBundleShortVersionString"),
+                        info.get("CFBundleVersion"),
+                    )
+    except Exception:
+        pass
+    return None, None
+
+
 def _cmd_verify(account, managers, dry_run, args):
     """Publish preflight. Unlike the other commands this one FAILS in DRY-RUN:
     its whole point is to tell the truth about whether publishing can work."""
@@ -107,8 +127,11 @@ def _cmd_upload(account, managers, dry_run, args):
     if not os.path.exists(ipa_path):
         print(f"Error: IPA not found: {ipa_path}")
         return 1
-    version = _read_file_stripped("VERSION", "0.0.0")
-    build_number = _read_file_stripped("BUILD_NUMBER", "0")
+    version, build_number = _ipa_versions(ipa_path)
+    if not version:
+        version = _read_file_stripped("VERSION", "0.0.0")
+    if not build_number:
+        build_number = _read_file_stripped("BUILD_NUMBER", "0")
 
     if dry_run:
         print(
