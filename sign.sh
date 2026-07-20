@@ -7,6 +7,8 @@ set -e
 ARCHIVE_PATH=$1
 ACCOUNT=${2:-"primary"}
 EXPORT_PATH="build/exported"
+# The app/IPA name follows the archive name (e.g. build/MyApp.xcarchive -> MyApp.ipa)
+APP_NAME=$(basename "${ARCHIVE_PATH:-Meeshy.xcarchive}" .xcarchive)
 EXPORT_OPTIONS_PLIST="infrastructure/build/ExportOptions_$ACCOUNT.plist"
 
 if [ -z "$ARCHIVE_PATH" ]; then
@@ -41,7 +43,7 @@ if command -v xcodebuild >/dev/null 2>&1; then
     # In CI without real certificates, we must skip actual signing/exporting to avoid exit code 70
     if [ "$CI" == "true" ] || [ "$GITHUB_ACTIONS" == "true" ]; then
         echo "CI environment detected without signing certificates. Simulating export success."
-        touch "$EXPORT_PATH/Meeshy.ipa"
+        touch "$EXPORT_PATH/$APP_NAME.ipa"
     else
         echo "Executing xcodebuild exportArchive for Team: $TEAM_ID..."
         xcodebuild -exportArchive \
@@ -52,14 +54,14 @@ if command -v xcodebuild >/dev/null 2>&1; then
 else
     echo "Warning: xcodebuild not found. Simulating export success."
     # We must ensure the expected artifact exists for the next pipeline step
-    touch "$EXPORT_PATH/Meeshy.ipa"
+    touch "$EXPORT_PATH/$APP_NAME.ipa"
 fi
 
 # Validation / Auditing
 echo "Auditing signature..."
-if [ -f "$EXPORT_PATH/Meeshy.ipa" ]; then
+if [ -f "$EXPORT_PATH/$APP_NAME.ipa" ]; then
     if [ -x "./infrastructure/security-auditor.sh" ]; then
-         ./infrastructure/security-auditor.sh --verify "$EXPORT_PATH/Meeshy.ipa"
+         ./infrastructure/security-auditor.sh --verify "$EXPORT_PATH/$APP_NAME.ipa"
     fi
 fi
 
