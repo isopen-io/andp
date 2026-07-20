@@ -62,6 +62,7 @@ Envoi : `Authorization: Bearer <token>`. ANDP régénère le token à 19 min ave
 ```bash
 # Renseigner secrets.yml (copie de secrets.example.yml) avec key_id, issuer_id, key_content
 
+./asc-manager.sh verify me.meeshy.app                        # préflight de publication
 ./asc-manager.sh upload build/exported/Meeshy.ipa            # Build Upload API
 ./asc-manager.sh status me.meeshy.app 42                     # polling processingState
 ./asc-manager.sh testflight me.meeshy.app "Beta" add jc@x.co # groupes + testeurs
@@ -70,6 +71,8 @@ Envoi : `Authorization: Bearer <token>`. ANDP régénère le token à 19 min ave
 ```
 
 Sans credentials réels (placeholders de `secrets.example.yml`), toutes les commandes passent en **DRY-RUN** (aucun appel réseau, exit 0) — c'est ce qui permet à la CI de rester verte.
+
+**Exception : `verify`.** C'est le préflight de publication ; son rôle est de dire la vérité sur la capacité à publier, donc il **échoue** (exit 1) tant que les credentials sont incomplets, en nommant précisément chaque champ manquant. Avec des credentials réels il enchaîne : signature JWT ES256 → authentification effective contre l'API (`GET /v1/apps`) → si un bundle id est fourni, vérification que la fiche app existe sur le compte. `PREFLIGHT PASSED` garantit que la chaîne upload/testflight/submit fonctionnera avec ces credentials.
 
 ## 6. Tests
 
