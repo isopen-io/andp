@@ -59,28 +59,44 @@ struct ContentView: View {
                 .accessibilityAddTraits(.isHeader)
 
             Button(role: .destructive, action: logoutTapped) {
-                HStack {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .accessibilityHidden(true)
-                    Text("logout_button")
-                        .fontWeight(.semibold)
-                }
-                .frame(maxWidth: .infinity)
+                Label("logout_button", systemImage: "rectangle.portrait.and.arrow.right")
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
             }
+            .hoverEffect()
             .buttonStyle(.bordered)
             .controlSize(.large)
             .padding(.horizontal)
             .accessibilityLabel(Text("logout_button"))
             .accessibilityHint(Text("logout_hint"))
-            .hoverEffect()
             .confirmationDialog("logout_confirm_title", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
-                Button("logout_button_confirm", role: .destructive) {
+                Button.init("logout_button_confirm", role: .destructive) {
                     withAnimation {
                         isLoggedIn = false
                     }
                 }
-                Button("cancel_button", role: .cancel) {}
+
+                Button.init("cancel_button", role: .cancel) {}
             }
+        }
+    }
+
+    @ViewBuilder
+    private var loginButtonLabel: some View {
+        if isLoading {
+            Label {
+                Text("logging_in_status")
+                    .fontWeight(.semibold)
+            } icon: {
+                ProgressView()
+            }
+            .frame(maxWidth: .infinity)
+            .accessibilityIdentifier("loginLoadingLabel")
+        } else {
+            Label("login_button", systemImage: "lock.fill")
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("loginLockLabel")
         }
     }
 
@@ -92,20 +108,9 @@ struct ContentView: View {
                 .accessibilityAddTraits(.isHeader)
 
             Button(action: login) {
-                HStack {
-                    if isLoading {
-                        ProgressView()
-                            .padding(.trailing, 8)
-                    } else {
-                        Image(systemName: "lock.fill")
-                            .padding(.trailing, 4)
-                            .accessibilityHidden(true)
-                    }
-                    Text(isLoading ? "logging_in_status" : "login_button")
-                        .fontWeight(.semibold)
-                }
-                .frame(maxWidth: .infinity)
+                loginButtonLabel
             }
+            .hoverEffect()
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .padding(.horizontal)
@@ -114,7 +119,6 @@ struct ContentView: View {
             .accessibilityIdentifier("loginButton")
             .accessibilityLabel(isLoading ? Text("logging_in_status") : Text("login_button"))
             .accessibilityHint(Text("login_hint"))
-            .hoverEffect()
         }
     }
 
