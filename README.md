@@ -1,5 +1,8 @@
 # ANDP — Apple Native Delivery Platform
 
+[![ANDP Pipeline](https://github.com/isopen-io/andp/actions/workflows/pipeline.yml/badge.svg)](https://github.com/isopen-io/andp/actions/workflows/pipeline.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 **API-first App Store Connect publishing.** ANDP builds, signs, verifies and publishes Apple apps using only Apple-supported tooling and the official App Store Connect API — no altool, no Transporter, no Ruby.
 
 > **Meeshy, the app in `examples/meeshy/`, is a sample app.** It exists to exercise and demonstrate the tooling (it is also the integration fixture for CI). ANDP itself is the product: the `andp` Python package, the pipeline scripts, and the governance layer.
@@ -35,6 +38,29 @@ andp submit me.your.app 1.2.0        # App Review submission
 
 Without real credentials every command (except `verify`) runs in DRY-RUN mode — it validates inputs, prints what it would do, and exits 0 so CI stays green.
 
+## Gate your PRs with the preflight (GitHub Action)
+
+```yaml
+- uses: isopen-io/andp@main
+  with:
+    key-id: ${{ secrets.ASC_KEY_ID }}
+    issuer-id: ${{ secrets.ASC_ISSUER_ID }}
+    private-key: ${{ secrets.ASC_PRIVATE_KEY }}
+    bundle-id: me.your.app     # optional: also checks the app record exists
+```
+
+The job fails — with the exact reason — whenever publishing cannot work: placeholder or missing credentials, a key the live API rejects, or a missing app record. Cheapest release insurance you can add to a pipeline.
+
+Full pipeline as a reusable workflow instead:
+
+```yaml
+jobs:
+  release:
+    uses: isopen-io/andp/.github/workflows/andp-release.yml@main
+    with: { scheme: MyApp, app-dir: ., andp-ref: main }
+    secrets: inherit
+```
+
 ## Pipeline scripts
 
 The shell layer drives a full delivery pipeline against the app in `$ANDP_APP_DIR` (default: `examples/meeshy`):
@@ -64,4 +90,10 @@ Point `ANDP_APP_DIR` at any XcodeGen-based app directory to drive another projec
 
 ## Documentation
 
-Start with [`Documentation/ASC-API.md`](Documentation/ASC-API.md) for the App Store Connect API layer (auth, DRY-RUN convention, API limits, verify preflight).
+- [`Documentation/ASC-API.md`](Documentation/ASC-API.md) — the App Store Connect API layer (auth, DRY-RUN convention, API limits, verify preflight)
+- [The Build Upload API contract you'll actually hit](Documentation/articles/build-upload-api-observed-contract.md) — the three undocumented requirements, with verbatim errors
+- [Publishing a Capacitor app without Appflow](Documentation/articles/capacitor-without-appflow.md) — the migration path, proven in production
+
+## License
+
+Apache-2.0 — see [LICENSE](LICENSE). Security reports: see [SECURITY.md](SECURITY.md).

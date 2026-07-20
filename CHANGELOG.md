@@ -1,3 +1,11 @@
+## 1.6.0 - 2026-07-20
+### H2: public readiness
+- License: Apache-2.0; CONTRIBUTING.md (TDD + observed-contract rules); SECURITY.md (credentials handling policy, private reporting)
+- GitHub Action `isopen-io/andp` (action.yml): App Store Connect publish preflight as a PR gate — script validated end-to-end against the live API
+- Articles: the observed Build Upload API contract (three undocumented requirements with verbatim errors) and the Capacitor-without-Appflow migration guide
+- Full-history secret scan: no real key, issuer or secrets.yml ever committed; test fixtures use placeholder ids and an annotated inert PEM fragment
+- README: CI badge, license badge, Action snippet, articles section
+
 ## 1.5.0 - 2026-07-20
 ### ANDP is the product (H1: package extraction)
 - Repository restructured: the tool is the product, Meeshy is a sample app moved to `examples/meeshy/` (all pipeline scripts now target `$ANDP_APP_DIR`, default `examples/meeshy`)

@@ -13,7 +13,7 @@ PARTIAL_SECRETS = """
 accounts:
   primary:
     asc_api:
-      key_id: "5542B6LVNL"
+      key_id: "TESTKEY001"
       issuer_id: "REPLACE_WITH_ISSUER_ID"
       key_content: |
         -----BEGIN PRIVATE KEY-----

@@ -4,6 +4,9 @@ import pytest
 from andp.asc.config import AccountConfig, ConfigError, load_account
 
 
+# The PEM below is a deliberately TRUNCATED, non-functional fragment (openssl
+# cannot parse it). It only needs to look "real enough" for is_configured();
+# it has never been a working key and is safe for secret scanners to ignore.
 SECRETS_REAL = """
 accounts:
   primary:

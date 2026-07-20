@@ -1,0 +1,60 @@
+name: 'ANDP Verify — App Store Connect publish preflight'
+description: >-
+  Honest preflight for App Store Connect publishing: proves your credentials
+  sign, authenticate against the live API, and that the app record exists —
+  before you spend 30 minutes building. Fails the job when publishing cannot
+  work, and names the exact reason.
+author: 'Sylorion'
+branding:
+  icon: 'check-circle'
+  color: 'blue'
+
+inputs:
+  key-id:
+    description: 'App Store Connect API Key ID (10 characters)'
+    required: true
+  issuer-id:
+    description: 'App Store Connect Issuer ID (UUID shown at the top of Users and Access → Integrations)'
+    required: true
+  private-key:
+    description: 'Content of the .p8 private key — pass a repository secret, never a literal'
+    required: true
+  bundle-id:
+    description: 'Optional bundle id: also verifies the app record exists on the account'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install ANDP
+      shell: bash
+      run: python3 -m pip install --quiet "${{ github.action_path }}"
+
+    - name: Run publish preflight
+      shell: bash
+      env:
+        ANDP_KEY_ID: ${{ inputs.key-id }}
+        ANDP_ISSUER_ID: ${{ inputs.issuer-id }}
+        ANDP_PRIVATE_KEY: ${{ inputs.private-key }}
+        ANDP_BUNDLE_ID: ${{ inputs.bundle-id }}
+      run: |
+        set -euo pipefail
+        WORKDIR="$(mktemp -d)"
+        trap 'rm -rf "$WORKDIR"' EXIT
+        umask 077
+        {
+          echo "accounts:"
+          echo "  primary:"
+          echo "    asc_api:"
+          echo "      key_id: \"$ANDP_KEY_ID\""
+          echo "      issuer_id: \"$ANDP_ISSUER_ID\""
+          echo "      key_content: |"
+          printf '%s\n' "$ANDP_PRIVATE_KEY" | sed 's/^/        /'
+        } > "$WORKDIR/secrets.yml"
+        cd "$WORKDIR"
+        if [ -n "$ANDP_BUNDLE_ID" ]; then
+          python3 -m andp verify "$ANDP_BUNDLE_ID"
+        else
+          python3 -m andp verify
+        fi
