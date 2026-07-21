@@ -42,6 +42,13 @@ class ReleaseMachine:
         return sha256(path)
 
     @classmethod
+    def load(cls, store, managers, release_id, clock=time.time):
+        state = store.load(release_id)
+        if state is None:
+            return None
+        return cls(store, managers, state, clock=clock)
+
+    @classmethod
     def start(cls, store, managers, ipa_path, *, account="primary", group=None,
               clock=time.time, poll_budget=30):
         bundle_id, version, build_number = read_metadata(ipa_path)
