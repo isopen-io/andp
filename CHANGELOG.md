@@ -1,3 +1,17 @@
+## 1.9.1 - 2026-07-21
+### v1.1 hardening (pre-release code review)
+- BUG 1: write-ahead submission_id + strong-consistent resume by id — the App
+  Store path can no longer create a second review submission on retry
+- BUG 2: the submit gate reads allow_submit LIVE from andp.yml, so revoking it
+  stops in-flight releases (was frozen at start)
+- BUG 3: approval is bound to the plan (approved_ts + plan_hash; plan_changed if
+  the pinned build/version moved after approval)
+- BUG 4: blocking `release <ipa> --ship` is rejected (points to `release start
+  --ship`) instead of silently ignoring the flag
+- BUG 5/6/7: needs_approval + next_action surface in the agent view; absent/
+  unknown version state rejected defensively; approve() normalizes old state
+- 187 tests
+
 ## 1.9.0 - 2026-07-21
 ### v1.1: App Store distribution path (--ship)
 - The release machine now ships to App Store review, not just TestFlight:

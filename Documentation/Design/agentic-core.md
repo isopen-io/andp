@@ -235,6 +235,35 @@ prompt. ANDP makes the action explicit, gated, annotated and audited.
 - **Scope:** platform hardcoded `IOS` (explicit); no phased/manual release, no
   metadata push in `--ship` (separate) — v1.2.
 
+### v1.1 code review (2026-07-21, CORRECTIONS_REQUISES → applied)
+
+An adversarial code review of the `--ship` implementation found 4 blockers +
+3 minors; all fixed (TDD, `tests/test_ship_hardening.py`):
+
+- **BUG 1 (major) — double review-submission risk.** `_submit_review` created a
+  submission but never wrote its id ahead, so a crash/retry after `create`
+  relied on the eventually-consistent `find_open_review_submission` and could
+  create a *second* submission — the one irreversible action the gate exists to
+  prevent. **Fix:** persist `submission_id` write-ahead right after `create`;
+  on resume resolve strong-consistently by id (`GET /v1/reviewSubmissions/{id}`)
+  and never create a second.
+- **BUG 2 (major) — frozen `allow_submit`.** The gate read the value captured at
+  start, so revoking `policy.allow_submit` did not stop in-flight releases.
+  **Fix:** the machine takes an `allow_submit_fn`; the service injects a *live*
+  policy read on every poll.
+- **BUG 3 (major) — approval not bound to the plan.** `plan_hash`/`approved_ts`
+  were dead. **Fix:** `approve()` stamps `approved_ts` and `plan_hash`
+  (build+version); the gate rejects `plan_changed` if the pinned build/version
+  moved since approval.
+- **BUG 4 (major) — blocking `release <ipa> --ship` silently ignored `--ship`.**
+  **Fix:** the blocking form now rejects `--ship` and points to
+  `release start --ship` (the App Store path is inherently resumable + gated,
+  not a one-shot). The blocking convenience form does NOT support `--ship`.
+- **BUG 5/6/7 (minor):** `needs_approval` + `next_action` now surface in the
+  agent view (no blind poll-loop); an absent/unknown version state is rejected
+  (`version_not_editable`, never guessed); `approve()` normalizes old state
+  files via `_FIELD_DEFAULTS`.
+
 ## Competitive positioning (research, 2026-07-21)
 
 - asc-mcp (~200 tools, 1:1 API), fastlane-mcp (CLI wrapper),

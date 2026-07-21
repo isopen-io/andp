@@ -107,6 +107,10 @@ class AppStoreManager:
 
     # -- review ----------------------------------------------------------
 
+    def get_review_submission(self, submission_id):
+        """Strong-consistent fetch of a review submission by id (for resume)."""
+        return self.client.get(f"/v1/reviewSubmissions/{submission_id}").get("data")
+
     def find_open_review_submission(self, app_id, platform="IOS"):
         """The app's open (READY_FOR_REVIEW) review submission, or None.
 

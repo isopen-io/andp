@@ -52,6 +52,13 @@ def _snapshot_view(snap):
                          "processing_state": snap.get("processing_state")}
     if snap.get("retry_after"):
         view["retry_after"] = snap["retry_after"]
+    if snap.get("needs_approval"):
+        # A human (or policy.allow_submit) must open the gate before the release
+        # can proceed — signal it explicitly so an agent stops polling blindly.
+        view["needs_approval"] = True
+        view["next_action"] = "release approve <id> (or set policy.allow_submit)"
+    if snap.get("submission_id"):
+        view["submission_id"] = snap["submission_id"]
     if snap.get("error"):
         view["error"] = snap["error"]
     return view
@@ -144,8 +151,12 @@ def release_poll(release_id_arg, account="primary", project_root=".", clock=time
                           "retryable": False,
                           "remediation": "Fill in secrets.yml (see andp verify)."}}
 
+    # Inject a LIVE policy read so revoking allow_submit in andp.yml stops an
+    # in-flight release at the gate (rather than honouring a stale start value).
+    allow_submit_fn = lambda: _load_policy(project_root)["allow_submit"]
     try:
-        machine = ReleaseMachine.load(_store(project_root), managers, release_id_arg, clock=clock)
+        machine = ReleaseMachine.load(_store(project_root), managers, release_id_arg,
+                                      clock=clock, allow_submit_fn=allow_submit_fn)
     except AndpError as err:
         return _error_result("release_poll", err)
     if machine is None:

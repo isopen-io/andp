@@ -195,6 +195,12 @@ def _cmd_release(account, managers, dry_run, args, json_mode=False):
     if args and args[0] in ("start", "poll", "status", "list", "reset", "approve"):
         return _cmd_release_sub(account, args[0], args[1:], json_mode)
 
+    if "--ship" in args:
+        # The App Store path is resumable and gated — it cannot run as a
+        # blocking one-shot. Direct the user to the agent surface.
+        print("The App Store path is resumable and gated; use `release start "
+              "--ship` then `release poll`/`release approve`.")
+        return 2
     group_name = None
     if "--group" in args:
         idx = args.index("--group")

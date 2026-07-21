@@ -63,7 +63,9 @@ rely on:
 - **Inspectable:** `andp release status <id>` reads the state without advancing;
   `andp release list` shows every release.
 
-For a simple human/CI one-shot, the blocking form still exists:
+For a simple human/CI one-shot **TestFlight** delivery, the blocking form still
+exists (it does **not** support `--ship` — the App Store path is resumable and
+gated, so use `release start --ship`):
 
 ```bash
 andp release build/App.ipa --group "Beta" --json

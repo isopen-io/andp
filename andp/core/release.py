@@ -49,11 +49,16 @@ _FIELD_DEFAULTS = {
 
 
 class ReleaseMachine:
-    def __init__(self, store, managers, state, clock=time.time):
+    def __init__(self, store, managers, state, clock=time.time, allow_submit_fn=None):
         self.store = store
         self.managers = managers
         self._state = {**_FIELD_DEFAULTS, **state}
         self._clock = clock
+        # Live submit-gate authority. The service injects a policy read so that
+        # revoking allow_submit in andp.yml stops in-flight releases; the default
+        # falls back to the value captured at start (used by tests).
+        self._allow_submit_fn = allow_submit_fn or (
+            lambda: self._state.get("allow_submit", False))
 
     # -- construction ------------------------------------------------------
 
@@ -62,16 +67,17 @@ class ReleaseMachine:
         return sha256(path)
 
     @classmethod
-    def load(cls, store, managers, release_id, clock=time.time):
+    def load(cls, store, managers, release_id, clock=time.time, allow_submit_fn=None):
         state = store.load(release_id)
         if state is None:
             return None
-        return cls(store, managers, state, clock=clock)
+        return cls(store, managers, state, clock=clock, allow_submit_fn=allow_submit_fn)
 
     @classmethod
     def start(cls, store, managers, ipa_path, *, account="primary", group=None,
               ship=False, allow_submit=False, uses_non_exempt_encryption=None,
-              clock=time.time, poll_budget=_DEFAULT_POLL_BUDGET, reset=False):
+              clock=time.time, poll_budget=_DEFAULT_POLL_BUDGET, reset=False,
+              allow_submit_fn=None):
         bundle_id, version, build_number = read_metadata(ipa_path)
         if not bundle_id:
             raise AndpError(
@@ -110,7 +116,8 @@ class ReleaseMachine:
                     retryable=False,
                     remediation=f"Start a new build number, or reset it: `release reset {rid}`",
                 )
-            return cls(store, managers, existing, clock=clock)
+            return cls(store, managers, existing, clock=clock,
+                       allow_submit_fn=allow_submit_fn)
         digest = sha256(ipa_path)
 
         state = {
@@ -142,7 +149,8 @@ class ReleaseMachine:
             "error": None,
         }
         store.save(rid, state)
-        return cls(store, managers, state, clock=clock)
+        return cls(store, managers, state, clock=clock,
+                   allow_submit_fn=allow_submit_fn)
 
     # -- introspection -----------------------------------------------------
 
@@ -324,12 +332,13 @@ class ReleaseMachine:
             self._state["version_id"] = version["id"]
             self._transition("done")
             return
-        if state is not None and state not in EDITABLE_VERSION_STATES:
+        if state not in EDITABLE_VERSION_STATES:
+            # Includes an absent/unknown state: never guess, reject defensively.
             self._fail(AndpError(
                 code="version_not_editable",
-                message=f"Version {self._state['version']} is in state {state}.",
+                message=f"Version {self._state['version']} is in state {state!r}.",
                 retryable=False,
-                remediation="Bump the marketing version; this one is published or in review.",
+                remediation="Bump the marketing version; this one is published, in review, or unknown.",
             ))
             return
         self._state["version_id"] = version["id"]
@@ -367,9 +376,19 @@ class ReleaseMachine:
         self._transition("awaiting_approval")
 
     def _do_awaiting_approval(self):
-        if not (self._state["allow_submit"] or self._state["approved"]):
+        approved = self._state["approved"]
+        if approved and self._state.get("plan_hash") not in (None, self._plan_hash()):
+            # The build/version changed since approval — the approval is stale.
+            self._fail(AndpError(
+                code="plan_changed",
+                message="The approved plan (build/version) changed; approval is invalid.",
+                retryable=False,
+                remediation="Re-approve the release with `release approve <id>`.",
+            ))
+            return
+        if not (approved or self._allow_submit_fn()):
             # The gate is closed: stay here, surface an actionable flag, do NOT
-            # cross the gate. Crossing requires policy or an explicit approval.
+            # cross the gate. Crossing requires live policy or an explicit approval.
             self._state["needs_approval"] = True
             return
         self._submit_review()
@@ -381,15 +400,26 @@ class ReleaseMachine:
         version_id = self._state["version_id"]
         appstore = self.managers.appstore
 
+        # Resume path: a submission was already created on a prior (partial)
+        # attempt. Resolve it strong-consistently by id — never create a second.
+        sub_id = self._state.get("submission_id")
+        if sub_id:
+            submission = appstore.get_review_submission(sub_id)
+            state = (submission.get("attributes") or {}).get("state")
+            if state and state != "READY_FOR_REVIEW":
+                return  # already submitted (WAITING_FOR_REVIEW / IN_REVIEW) — done
+            if version_id not in appstore.submission_version_ids(sub_id):
+                appstore.add_submission_item(sub_id, version_id)
+            appstore.mark_submitted(sub_id)      # idempotent
+            return
+
+        # Fresh path: adopt the app's open submission (if any) or create one,
+        # then PERSIST the id write-ahead before adding the item / submitting, so
+        # any later crash resumes via the id above instead of creating a second.
         open_sub = appstore.find_open_review_submission(app_id, "IOS")
         if open_sub is not None:
-            sub_id = open_sub["id"]
-            version_ids = appstore.submission_version_ids(sub_id)
-            if version_id in version_ids:
-                self._state["submission_id"] = sub_id
-                appstore.mark_submitted(sub_id)      # idempotent re-submit
-                return
-            if version_ids:
+            version_ids = appstore.submission_version_ids(open_sub["id"])
+            if version_ids and version_id not in version_ids:
                 raise AndpError(
                     code="review_submission_conflict",
                     message="An open review submission references another version.",
@@ -399,15 +429,16 @@ class ReleaseMachine:
                         "then retry."
                     ),
                 )
+            sub_id = open_sub["id"]
+            need_item = version_id not in version_ids
+        else:
+            sub_id = appstore.create_review_submission(app_id, "IOS")["id"]
+            need_item = True
+        self._state["submission_id"] = sub_id
+        self._save()  # write-ahead
+        if need_item:
             appstore.add_submission_item(sub_id, version_id)
-            self._state["submission_id"] = sub_id
-            appstore.mark_submitted(sub_id)
-            return
-
-        submission = appstore.create_review_submission(app_id, "IOS")
-        appstore.add_submission_item(submission["id"], version_id)
-        self._state["submission_id"] = submission["id"]
-        appstore.mark_submitted(submission["id"])
+        appstore.mark_submitted(sub_id)
 
     def _do_submitted(self):
         self._transition("done")
@@ -415,12 +446,14 @@ class ReleaseMachine:
     # -- approval ----------------------------------------------------------
 
     def approve(self):
-        """Record an out-of-band human approval to open the submit gate."""
+        """Record an out-of-band human approval to open the submit gate. Binds
+        the approval to the current plan (build/version) and stamps the time."""
         with self.store.lock(self._state["release_id"]):
             fresh = self.store.load(self._state["release_id"])
             if fresh is not None:
-                self._state = fresh
+                self._state = {**_FIELD_DEFAULTS, **fresh}
             self._state["approved"] = True
+            self._state["approved_ts"] = self._clock()
             self._state["plan_hash"] = self._plan_hash()
             self._save()
         return self.snapshot()
