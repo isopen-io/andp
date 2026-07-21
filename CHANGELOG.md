@@ -27,6 +27,30 @@
   network-error on the TestFlight gate now yields a retryable `unverified`
   instead of an uncaught crash; 1 consistency fix + nits). 274 tests
 
+## 1.12.0 - 2026-07-21
+### deliver parity: pricing / territories / age rating (agent-native)
+- **Pricing** via the modern `appPriceSchedules`/`appPricePoints` model (the
+  deprecated tier system is gone): set an exact base-territory price or make the
+  app free. Idempotent (skips when already set; recognises a live price whether
+  its startDate is null or past), full-replace semantics documented
+- **Territory availability** via `appAvailabilities` v2 — which deliver does NOT
+  support, so this *exceeds* parity: set a territory list or `all`, preserves
+  `availableInNewTerritories`, refuses an empty set (delist guard), reads paginate
+- **Age rating** via the 2025-overhauled `ageRatingDeclaration`: full field
+  taxonomy (content descriptors + booleans + overrides incl. the 2025 additions),
+  reads/writes the EDITABLE appInfo, PATCHes only the differing fields; unknown
+  keys error, unknown enum values pass through with a warning (forward-compat)
+- Declarative single source in `andp.yml` `store:`; one `configure_store` verb
+  applies every block (best-effort, each block idempotent so a re-run heals)
+- Surfaces: CLI `andp store <pricing|availability|age-rating|apply>`, 4 MCP tools
+  (`store_configure_pricing/availability`, `store_set_age_rating`, `store_apply`;
+  availability annotated destructive), all library-first via the service layer
+- Precheck gains advisory store checks (no price / zero territories / unset age
+  rating), best-effort so they never brick the hard checks
+- Design-reviewed AND code-reviewed before commit (3 blockers/should-fixes found
+  and fixed: past-start-date idempotency, non-dict config leak, malformed-yaml
+  leak). 298 tests
+
 ## 1.11.1 - 2026-07-21
 ### v1.3 hardening (pre-release code review)
 - BUG 1 (major): a non-retryable API error DURING the precheck reads no longer

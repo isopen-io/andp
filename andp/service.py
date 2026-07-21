@@ -286,6 +286,323 @@ def precheck(bundle_id, version, account="primary"):
     return {"command": "precheck", **report}
 
 
+_FREE_TOKENS = {"free", "0", "0.0", "0.00", "0.000"}
+
+
+def _is_free(price):
+    if price is None:
+        return False
+    token = str(price).strip().lower()
+    if token in _FREE_TOKENS:
+        return True
+    from decimal import Decimal, InvalidOperation
+    try:
+        return Decimal(token) == 0
+    except (InvalidOperation, ValueError):
+        return False
+
+
+def _read_store(project_root, section=None):
+    """Read store config from andp.yml, converting a malformed file into an
+    AndpError (never a raw YAMLError leaking out of the {ok,error} envelope)."""
+    import yaml
+    try:
+        store = _load_policy(project_root)["store"]
+    except yaml.YAMLError as exc:
+        raise AndpError(code="bad_config", message=f"andp.yml is not valid YAML: {exc}",
+                        retryable=False, remediation="Fix the YAML syntax in andp.yml.")
+    if section is None:
+        return store
+    return store.get(section) or {}
+
+
+def configure_pricing(bundle_id, account="primary", base_territory=None, price=None,
+                      price_point_id=None, project_root="."):
+    """Set the app's price (or make it free) via the modern appPriceSchedules.
+
+    Reconciles to a desired price: idempotent (changed=false when already set),
+    dry-run aware, all API errors wrapped."""
+    try:
+        managers, _account_cfg, dry_run = _managers_for(account)
+    except AndpError as err:
+        return _error_result("configure_pricing", err)
+
+    try:
+        cfg = _read_store(project_root, "pricing")
+    except AndpError as err:
+        return _error_result("configure_pricing", err)
+    base_territory = base_territory or cfg.get("base_territory") or "USA"
+    if price is None:
+        price = cfg.get("price")
+    price_point_id = price_point_id or cfg.get("price_point_id")
+    if price is None and price_point_id is None:
+        return {"command": "configure_pricing", "ok": False,
+                "error": {"code": "not_configured",
+                          "message": "No price or price_point_id configured.",
+                          "retryable": False,
+                          "remediation": "Set store.pricing.price in andp.yml or pass --price."}}
+
+    if dry_run:
+        return {"command": "configure_pricing", "ok": True, "dry_run": True,
+                "changed": None, "base_territory": base_territory,
+                "price": price, "price_point_id": price_point_id}
+
+    from .asc.client import ASCAPIError
+    from .core.errors import from_asc_error, from_unexpected
+    try:
+        app = managers.apps.find_app(bundle_id)
+        if app is None:
+            return _app_not_found("configure_pricing", bundle_id)
+        app_id = app["id"]
+
+        if price_point_id is None:
+            point = (managers.pricing.find_free_price_point(app_id, base_territory)
+                     if _is_free(price)
+                     else managers.pricing.find_price_point(app_id, base_territory, price))
+            if point is None:
+                return {"command": "configure_pricing", "ok": False,
+                        "error": {"code": "price_point_not_found",
+                                  "message": f"No price point for {price!r} in {base_territory}.",
+                                  "retryable": False,
+                                  "remediation": "Use an exact base-territory customerPrice, "
+                                                 "or 'free'."}}
+            price_point_id = point["id"]
+
+        if managers.pricing.current_base_price_point_id(app_id, base_territory) == price_point_id:
+            return {"command": "configure_pricing", "ok": True, "dry_run": False,
+                    "changed": False, "base_territory": base_territory,
+                    "price_point_id": price_point_id, "detail": "already set"}
+
+        managers.pricing.set_schedule(app_id, base_territory, price_point_id)
+    except AndpError as err:
+        return _error_result("configure_pricing", err)
+    except ASCAPIError as err:
+        return _error_result("configure_pricing", from_asc_error(err))
+    except Exception as err:
+        return _error_result("configure_pricing", from_unexpected(err))
+    return {"command": "configure_pricing", "ok": True, "dry_run": False,
+            "changed": True, "base_territory": base_territory,
+            "price_point_id": price_point_id}
+
+
+def configure_availability(bundle_id, account="primary", territories=None,
+                           available_in_new_territories=None, project_root="."):
+    """Set (replace) the territories the app is available in — exceeds deliver.
+
+    Refuses an empty set (would delist). Preserves availableInNewTerritories when
+    unspecified. Idempotent, dry-run aware, errors wrapped."""
+    try:
+        managers, _account_cfg, dry_run = _managers_for(account)
+    except AndpError as err:
+        return _error_result("configure_availability", err)
+
+    try:
+        cfg = _read_store(project_root, "availability")
+    except AndpError as err:
+        return _error_result("configure_availability", err)
+    if territories is None:
+        territories = cfg.get("territories")
+    if available_in_new_territories is None:
+        available_in_new_territories = cfg.get("available_in_new_territories")
+    if territories is None:
+        return {"command": "configure_availability", "ok": False,
+                "error": {"code": "not_configured",
+                          "message": "No territories configured.",
+                          "retryable": False,
+                          "remediation": "Set store.availability.territories in andp.yml "
+                                         "or pass --territories/--all."}}
+
+    if dry_run:
+        return {"command": "configure_availability", "ok": True, "dry_run": True,
+                "changed": None, "territories": territories,
+                "available_in_new_territories": available_in_new_territories}
+
+    from .asc.client import ASCAPIError
+    from .core.errors import from_asc_error, from_unexpected
+    try:
+        app = managers.apps.find_app(bundle_id)
+        if app is None:
+            return _app_not_found("configure_availability", bundle_id)
+        app_id = app["id"]
+
+        all_territories = managers.availability.list_all_territories()
+        if _is_all(territories):
+            target = set(all_territories)
+        else:
+            target = {str(t).strip().upper() for t in territories}
+            unknown = target - all_territories
+            if unknown:
+                sample = ", ".join(sorted(all_territories)[:8])
+                return {"command": "configure_availability", "ok": False,
+                        "error": {"code": "unknown_territory",
+                                  "message": f"Unknown territory codes: {sorted(unknown)}.",
+                                  "retryable": False,
+                                  "remediation": f"Use ISO territory ids (e.g. {sample}…)."}}
+        if not target:
+            return {"command": "configure_availability", "ok": False,
+                    "error": {"code": "empty_territories",
+                              "message": "Refusing to set zero territories (would delist the app).",
+                              "retryable": False,
+                              "remediation": "List at least one territory, or delist in the ASC UI."}}
+
+        snapshot = managers.availability.availability_snapshot(app_id)
+        if available_in_new_territories is None:
+            available_in_new_territories = bool(
+                snapshot["available_in_new_territories"]) if snapshot else False
+        else:
+            available_in_new_territories = bool(available_in_new_territories)
+
+        if (snapshot and snapshot["territories"] == target
+                and snapshot["available_in_new_territories"] == available_in_new_territories):
+            return {"command": "configure_availability", "ok": True, "dry_run": False,
+                    "changed": False, "territory_count": len(target),
+                    "available_in_new_territories": available_in_new_territories,
+                    "detail": "already set"}
+
+        managers.availability.set_availability(app_id, target, available_in_new_territories)
+    except AndpError as err:
+        return _error_result("configure_availability", err)
+    except ASCAPIError as err:
+        return _error_result("configure_availability", from_asc_error(err))
+    except Exception as err:
+        return _error_result("configure_availability", from_unexpected(err))
+    return {"command": "configure_availability", "ok": True, "dry_run": False,
+            "changed": True, "territory_count": len(target),
+            "available_in_new_territories": available_in_new_territories}
+
+
+def configure_age_rating(bundle_id, account="primary", declaration=None, project_root="."):
+    """Set the app's age rating declaration (2025 model). PATCHes only the keys
+    that differ from the live declaration; validates the taxonomy first."""
+    from .asc.agerating import validate_declaration
+    try:
+        managers, _account_cfg, dry_run = _managers_for(account)
+    except AndpError as err:
+        return _error_result("configure_age_rating", err)
+
+    if declaration is None:
+        try:
+            declaration = _read_store(project_root, "age_rating")
+        except AndpError as err:
+            return _error_result("configure_age_rating", err)
+    try:
+        config = _resolve_age_rating_config(declaration, project_root)
+    except (OSError, ValueError) as err:
+        return {"command": "configure_age_rating", "ok": False,
+                "error": {"code": "bad_config",
+                          "message": f"Cannot read age rating config: {err}",
+                          "retryable": False, "remediation": "Fix the config_path file."}}
+    if not config:
+        return {"command": "configure_age_rating", "ok": False,
+                "error": {"code": "not_configured",
+                          "message": "No age rating declaration configured.",
+                          "retryable": False,
+                          "remediation": "Set store.age_rating in andp.yml or pass a config."}}
+
+    attributes, errors, warnings = validate_declaration(config)
+    if errors:
+        return {"command": "configure_age_rating", "ok": False,
+                "error": {"code": "invalid_age_rating", "message": "; ".join(errors),
+                          "retryable": False,
+                          "remediation": "Fix the age rating field names/values."}}
+
+    if dry_run:
+        return {"command": "configure_age_rating", "ok": True, "dry_run": True,
+                "changed": None, "fields": sorted(attributes), "warnings": warnings}
+
+    from .asc.client import ASCAPIError
+    from .core.errors import from_asc_error, from_unexpected
+    try:
+        app = managers.apps.find_app(bundle_id)
+        if app is None:
+            return _app_not_found("configure_age_rating", bundle_id)
+        declaration_res = managers.age_rating.get_declaration(app["id"])
+        if declaration_res is None:
+            return {"command": "configure_age_rating", "ok": False,
+                    "error": {"code": "no_declaration",
+                              "message": "No editable age rating declaration found.",
+                              "retryable": False,
+                              "remediation": "Ensure the app has an editable version/appInfo."}}
+        current = declaration_res.get("attributes", {}) or {}
+        diff = {k: v for k, v in attributes.items() if current.get(k) != v}
+        if not diff:
+            return {"command": "configure_age_rating", "ok": True, "dry_run": False,
+                    "changed": False, "warnings": warnings, "detail": "already set"}
+        managers.age_rating.update_declaration(declaration_res["id"], diff)
+    except AndpError as err:
+        return _error_result("configure_age_rating", err)
+    except ASCAPIError as err:
+        return _error_result("configure_age_rating", from_asc_error(err))
+    except Exception as err:
+        return _error_result("configure_age_rating", from_unexpected(err))
+    return {"command": "configure_age_rating", "ok": True, "dry_run": False,
+            "changed": True, "updated_fields": sorted(diff), "warnings": warnings}
+
+
+def configure_store(bundle_id, account="primary", project_root="."):
+    """Apply every configured store block (pricing/availability/age_rating) from
+    andp.yml. Best-effort: independent, idempotent blocks; a re-run heals a
+    partially-applied state. ok=false if any configured block failed."""
+    try:
+        store = _read_store(project_root)
+    except AndpError as err:
+        return _error_result("configure_store", err)
+    blocks, any_fail, dry_run = {}, False, None
+    plan = [
+        ("pricing", lambda: configure_pricing(bundle_id, account, project_root=project_root)),
+        ("availability", lambda: configure_availability(bundle_id, account, project_root=project_root)),
+        ("age_rating", lambda: configure_age_rating(bundle_id, account, project_root=project_root)),
+    ]
+    for name, run in plan:
+        if not store.get(name):
+            blocks[name] = {"skipped": "not configured"}
+            continue
+        try:
+            result = run()
+        except Exception as exc:  # a block must never abort the others (S4 best-effort)
+            from .core.errors import from_unexpected
+            result = _error_result(f"configure_{name}", from_unexpected(exc))
+        blocks[name] = result
+        if result.get("dry_run"):
+            dry_run = True
+        if not result.get("ok"):
+            any_fail = True
+    return {"command": "configure_store", "ok": not any_fail, "dry_run": bool(dry_run),
+            "blocks": blocks}
+
+
+def _is_all(territories):
+    if isinstance(territories, str):
+        return territories.strip().lower() == "all"
+    if isinstance(territories, (list, tuple, set)) and len(territories) == 1:
+        return str(next(iter(territories))).strip().lower() == "all"
+    return False
+
+
+def _resolve_age_rating_config(declaration, project_root):
+    """Merge a config_path JSON file (if any) with inline keys (inline wins)."""
+    cfg = dict(declaration or {})
+    path = cfg.pop("config_path", None)
+    merged = {}
+    if path:
+        import json
+        full = path if os.path.isabs(path) else os.path.join(project_root, path)
+        with open(full, "r", encoding="utf-8") as f:
+            loaded = json.load(f)
+        if not isinstance(loaded, dict):
+            raise ValueError(
+                f"age rating config must be a JSON object, got {type(loaded).__name__}")
+        merged.update(loaded)
+    merged.update(cfg)
+    return merged
+
+
+def _app_not_found(command, bundle_id):
+    return {"command": command, "ok": False,
+            "error": {"code": "app_not_found", "message": f"App {bundle_id} not found.",
+                      "retryable": False, "remediation": "Create the app record in ASC."}}
+
+
 def release_approve(release_id_arg, account="primary", project_root=".", clock=time.time):
     """Record an out-of-band human approval opening the submit gate."""
     try:

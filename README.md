@@ -111,7 +111,10 @@ Point `ANDP_APP_DIR` at any XcodeGen-based app directory to drive another projec
 ## Documentation
 
 - [`Documentation/PublishReadiness.md`](Documentation/PublishReadiness.md) — the CI entry point: TestFlight & App Store readiness gates (GitHub Actions + reusable workflow + `andp readiness` CLI, tri-state verdict)
+- [`Documentation/AgentGuide.md`](Documentation/AgentGuide.md) — **the end-to-end agent playbook**: from code to a live App Store submission (state machine, full CLI/MCP/service surface, error taxonomy, worked example)
 - [`Documentation/Agents.md`](Documentation/Agents.md) — why ANDP is agent-native (the three primitives, guardrails, threat model)
+- [`Documentation/StoreConfig.md`](Documentation/StoreConfig.md) — pricing, territory availability, and age rating via `andp.yml`
+- [`Documentation/Metadata.md`](Documentation/Metadata.md) — the `deliver`-style metadata/media folder convention
 - [`Documentation/ASC-API.md`](Documentation/ASC-API.md) — the App Store Connect API layer (auth, DRY-RUN convention, API limits, verify preflight)
 - [The Build Upload API contract you'll actually hit](Documentation/articles/build-upload-api-observed-contract.md) — the three undocumented requirements, with verbatim errors
 - [Publishing a Capacitor app without Appflow](Documentation/articles/capacitor-without-appflow.md) — the migration path, proven in production
