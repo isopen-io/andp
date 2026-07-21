@@ -108,6 +108,21 @@ TOOLS = [
                         **_ann(read_only=True, idempotent=True, open_world=False)},
     },
     {
+        "name": "precheck",
+        "description": (
+            "Read-only pre-submission validation: catches what Apple rejects "
+            "(non-editable version, no build, empty description, no screenshots) "
+            "before submitting. Returns a report; never mutates."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {"bundle_id": {"type": "string"}, "version": {"type": "string"}},
+            "required": ["bundle_id", "version"],
+        },
+        "annotations": {"title": "Precheck for submission",
+                        **_ann(read_only=True, idempotent=True)},
+    },
+    {
         "name": "upload",
         "description": "Upload a signed .ipa via Apple's Build Upload API (no processing wait).",
         "inputSchema": {
@@ -195,6 +210,8 @@ def _call_release_tool(name, args):
 def _cli_argv(name, args):
     if name == "verify":
         argv = ["verify"] + ([args["bundle_id"]] if args.get("bundle_id") else []) + ["--json"]
+    elif name == "precheck":
+        argv = ["precheck", args["bundle_id"], str(args["version"]), "--json"]
     elif name == "upload":
         argv = ["upload", args["ipa_path"], "--json"]
     elif name == "status":

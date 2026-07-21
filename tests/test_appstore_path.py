@@ -82,7 +82,7 @@ def test_full_ship_with_allow_submit(tmp_path, store):
     )
     m = ReleaseMachine.start(store, make_test_managers(session), ipa,
                              ship=True, allow_submit=True,
-                             uses_non_exempt_encryption=False)
+                             uses_non_exempt_encryption=False, skip_precheck=True)
     final = _drive(m)
     assert final["state"] == "done"
     assert final["version_id"] == "ver-1"
@@ -107,7 +107,7 @@ def test_gate_blocks_without_approval_then_proceeds(tmp_path, store):
     )
     m = ReleaseMachine.start(store, make_test_managers(session), ipa,
                              ship=True, allow_submit=False,
-                             uses_non_exempt_encryption=False)
+                             uses_non_exempt_encryption=False, skip_precheck=True)
     snap = _drive(m)
     # stops at the gate — no submission created, poll never crosses it
     assert snap["state"] == "awaiting_approval"
@@ -157,7 +157,7 @@ def test_ready_for_review_is_editable(tmp_path, store):
     )
     m = ReleaseMachine.start(store, make_test_managers(session), ipa,
                              ship=True, allow_submit=True,
-                             uses_non_exempt_encryption=False)
+                             uses_non_exempt_encryption=False, skip_precheck=True)
     assert _drive(m)["state"] == "done"
 
 
@@ -172,7 +172,7 @@ def test_compliance_undeclared_fails_early(tmp_path, store):
                   FakeResponse(204, None, content=b""))  # attach_build
     m = ReleaseMachine.start(store, make_test_managers(session), ipa,
                              ship=True, allow_submit=True,
-                             uses_non_exempt_encryption=None)
+                             uses_non_exempt_encryption=None, skip_precheck=True)
     final = _drive(m)
     assert final["state"] == "failed"
     assert final["error"]["code"] == "compliance_undeclared"
@@ -193,7 +193,7 @@ def test_compliance_from_info_plist_skips_api(tmp_path, store):
     )
     m = ReleaseMachine.start(store, make_test_managers(session), ipa,
                              ship=True, allow_submit=True,
-                             uses_non_exempt_encryption=None)
+                             uses_non_exempt_encryption=None, skip_precheck=True)
     final = _drive(m)
     assert final["state"] == "done"
     # no PATCH to /v1/builds/ for compliance (plist already declares it)
@@ -280,7 +280,97 @@ def test_ship_with_metadata_pushes_before_approval(tmp_path, store):
     )
     m = ReleaseMachine.start(store, make_test_managers(session), ipa,
                              ship=True, allow_submit=True,
-                             uses_non_exempt_encryption=False, metadata_dir=root)
+                             uses_non_exempt_encryption=False, metadata_dir=root,
+                             skip_precheck=True)
     final = _drive(m)
     assert final["state"] == "done"
     assert "metadata_pending" in final["history"]
+
+
+def _get_version(state="PREPARE_FOR_SUBMISSION"):
+    return FakeResponse(200, {"data": {"id": "ver-1", "type": "appStoreVersions",
+                                       "attributes": {"appVersionState": state}}})
+
+
+def _precheck_ok_responses():
+    return [
+        _get_version("PREPARE_FOR_SUBMISSION"),                      # get_version (dict form)
+        FakeResponse(200, {"data": {"id": "build-77"}}),            # get_version_build
+        FakeResponse(200, {"data": [{"id": "loc-en", "attributes": {
+            "locale": "en-US", "description": "Great.", "keywords": "k",
+            "supportUrl": "https://x"}}]}),                          # localizations
+        FakeResponse(200, {"data": [{"id": "set-1"}]}),             # screenshot sets
+        FakeResponse(200, {"data": [{"id": "s1"}]}),               # count -> 1
+    ]
+
+
+def test_ship_runs_precheck_before_gate_and_passes(tmp_path, store):
+    ipa = _make_ipa(tmp_path)
+    session = FakeSession()
+    session.queue(
+        _app_found(), *_upload_flow(), _build_valid(),
+        _version("PREPARE_FOR_SUBMISSION"),                 # ensure_version
+        FakeResponse(204, None, content=b""),                # attach_build
+        FakeResponse(200, {"data": {"id": "build-77"}}),     # compliance
+        *_precheck_ok_responses(),
+        # submit
+        FakeResponse(200, {"data": []}),
+        FakeResponse(201, {"data": {"id": "sub-1"}}),
+        FakeResponse(201, {"data": {"id": "it-1"}}),
+        FakeResponse(200, {"data": {"id": "sub-1"}}),
+    )
+    m = ReleaseMachine.start(store, make_test_managers(session), ipa,
+                             ship=True, allow_submit=True, uses_non_exempt_encryption=False)
+    final = _drive(m)
+    assert final["state"] == "done"
+    assert "prechecked" in final["history"]
+
+
+def test_ship_precheck_error_blocks_without_terminal_failure(tmp_path, store):
+    ipa = _make_ipa(tmp_path)
+    session = FakeSession()
+    session.queue(
+        _app_found(), *_upload_flow(), _build_valid(),
+        _version("PREPARE_FOR_SUBMISSION"),
+        FakeResponse(204, None, content=b""),
+        FakeResponse(200, {"data": {"id": "build-77"}}),
+        # precheck: no build attached -> error
+        _get_version("PREPARE_FOR_SUBMISSION"),              # get_version (dict form)
+        FakeResponse(200, {"data": None}),                   # get_version_build -> none
+        FakeResponse(200, {"data": [{"id": "loc-en", "attributes": {
+            "locale": "en-US", "description": "Great."}}]}),
+        FakeResponse(200, {"data": [{"id": "set-1"}]}),
+        FakeResponse(200, {"data": [{"id": "s1"}]}),
+    )
+    m = ReleaseMachine.start(store, make_test_managers(session), ipa,
+                             ship=True, allow_submit=True, uses_non_exempt_encryption=False)
+    for _ in range(20):
+        m.step()
+        if m.snapshot().get("needs_precheck_fix"):
+            break
+    snap = m.snapshot()
+    assert snap["state"] == "prechecked"          # NOT terminal — recoverable
+    assert snap["needs_precheck_fix"] is True
+    assert snap["precheck_report"]["errors"] >= 1
+
+
+def test_no_precheck_flag_skips_it(tmp_path, store):
+    ipa = _make_ipa(tmp_path)
+    session = FakeSession()
+    session.queue(
+        _app_found(), *_upload_flow(), _build_valid(),
+        _version("PREPARE_FOR_SUBMISSION"),
+        FakeResponse(204, None, content=b""),
+        FakeResponse(200, {"data": {"id": "build-77"}}),
+        # no precheck GETs — straight to submit
+        FakeResponse(200, {"data": []}),
+        FakeResponse(201, {"data": {"id": "sub-1"}}),
+        FakeResponse(201, {"data": {"id": "it-1"}}),
+        FakeResponse(200, {"data": {"id": "sub-1"}}),
+    )
+    m = ReleaseMachine.start(store, make_test_managers(session), ipa,
+                             ship=True, allow_submit=True, uses_non_exempt_encryption=False,
+                             skip_precheck=True)
+    final = _drive(m)
+    assert final["state"] == "done"
+    assert "prechecked" not in final["history"]

@@ -299,13 +299,19 @@ def _cmd_release_sub(account, sub, args, json_mode):
         idx = args.index("--metadata")
         metadata_dir = args[idx + 1]
         del args[idx:idx + 2]
+    skip_precheck = False
+    if "--no-precheck" in args:
+        skip_precheck = True
+        args.remove("--no-precheck")
 
     if sub == "start":
         if not args:
-            print("Usage: release start <ipa_path> [--group <name>] [--ship] [--metadata <dir>]")
+            print("Usage: release start <ipa_path> [--group <name>] [--ship] "
+                  "[--metadata <dir>] [--no-precheck]")
             return 2
         result = service.release_start(args[0], account=account.account_id,
-                                       group=group, ship=ship, metadata_dir=metadata_dir)
+                                       group=group, ship=ship, metadata_dir=metadata_dir,
+                                       skip_precheck=skip_precheck)
     elif sub == "poll":
         if not args:
             print("Usage: release poll <release_id>")
@@ -462,6 +468,26 @@ def _cmd_publish(account, managers, dry_run, args, json_mode=False):
     return 0 if result.get("ok") else 1
 
 
+def _cmd_precheck(account, managers, dry_run, args, json_mode=False):
+    """Read-only pre-submission validation."""
+    from .. import service
+    if len(args) < 2:
+        print("Usage: precheck <bundle_id> <version>")
+        return 2
+    result = service.precheck(args[0], args[1], account=account.account_id)
+    if json_mode:
+        print(json.dumps(result))
+    elif result.get("error"):
+        print(f"❌ precheck: {result['error']['message']}")
+    else:
+        for c in result.get("checks", []):
+            mark = "❌" if c["level"] == "error" else "⚠️ "
+            print(f"  {mark} {c['id']}: {c['message']}")
+        verdict = "PASSED" if result["ok"] else "FAILED"
+        print(f"PRECHECK {verdict} — {result['errors']} errors, {result['warnings']} warnings")
+    return 0 if result.get("ok") else 1
+
+
 COMMANDS = {
     "verify": _cmd_verify,
     "upload": _cmd_upload,
@@ -470,6 +496,7 @@ COMMANDS = {
     "testflight": _cmd_testflight,
     "submit": _cmd_submit,
     "publish": _cmd_publish,
+    "precheck": _cmd_precheck,
 }
 
 

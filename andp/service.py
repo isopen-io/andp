@@ -57,6 +57,10 @@ def _snapshot_view(snap):
         # can proceed — signal it explicitly so an agent stops polling blindly.
         view["needs_approval"] = True
         view["next_action"] = "release approve <id> (or set policy.allow_submit)"
+    if snap.get("needs_precheck_fix"):
+        view["needs_precheck_fix"] = True
+        view["precheck_report"] = snap.get("precheck_report")
+        view["next_action"] = "fix the precheck errors (andp publish / ASC UI), then poll again"
     if snap.get("submission_id"):
         view["submission_id"] = snap["submission_id"]
     if snap.get("error"):
@@ -65,7 +69,8 @@ def _snapshot_view(snap):
 
 
 def release_start(ipa_path, account="primary", group=None, ship=False,
-                  metadata_dir=None, project_root=".", clock=time.time, reset=False):
+                  metadata_dir=None, skip_precheck=False,
+                  project_root=".", clock=time.time, reset=False):
     if not os.path.exists(ipa_path):
         return {"command": "release_start", "ok": False,
                 "error": {"code": "ipa_not_found", "message": f"IPA not found: {ipa_path}",
@@ -95,6 +100,7 @@ def release_start(ipa_path, account="primary", group=None, ship=False,
         machine = ReleaseMachine.start(
             _store(project_root), managers, ipa_path,
             account=account, group=group, ship=ship, metadata_dir=metadata_dir,
+            skip_precheck=skip_precheck,
             allow_submit=policy["allow_submit"],
             uses_non_exempt_encryption=policy["uses_non_exempt_encryption"],
             clock=clock, reset=reset,
@@ -142,6 +148,41 @@ def publish(bundle_id, version, metadata_dir, account="primary"):
     except Exception as err:  # network / filesystem — always return a dict
         return _error_result("publish", from_unexpected(err))
     return {"command": "publish", "ok": True, "dry_run": False, **summary}
+
+
+def precheck(bundle_id, version, account="primary"):
+    """Read-only pre-submission validation. Never mutates."""
+    from .precheck import run_precheck
+    from .asc.client import ASCAPIError
+    from .core.errors import from_asc_error, from_unexpected
+    try:
+        managers, account_cfg, dry_run = _managers_for(account)
+    except AndpError as err:
+        return _error_result("precheck", err)
+    if dry_run:
+        return {"command": "precheck", "ok": False,
+                "error": {"code": "no_credentials",
+                          "message": "Precheck needs real credentials.",
+                          "retryable": False, "remediation": "Fill in secrets.yml."}}
+    try:
+        app = managers.apps.find_app(bundle_id)
+        if app is None:
+            return {"command": "precheck", "ok": False,
+                    "error": {"code": "app_not_found", "message": f"App {bundle_id} not found.",
+                              "retryable": False, "remediation": "Create the app record in ASC."}}
+        version_res = managers.appstore.find_version(app["id"], version)
+        if version_res is None:
+            return {"command": "precheck", "ok": False,
+                    "error": {"code": "version_not_found",
+                              "message": f"No version {version} for {bundle_id}.",
+                              "retryable": False,
+                              "remediation": "Create the version in App Store Connect first."}}
+        report = run_precheck(managers, app["id"], version_res["id"])
+    except ASCAPIError as err:
+        return _error_result("precheck", from_asc_error(err))
+    except Exception as err:
+        return _error_result("precheck", from_unexpected(err))
+    return {"command": "precheck", **report}
 
 
 def release_approve(release_id_arg, account="primary", project_root=".", clock=time.time):

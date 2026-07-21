@@ -197,7 +197,7 @@ def test_resume_metadata_pending_reruns_push(tmp_path):
     rid = release_id("primary", "me.demo.app", "1.0", "1")
     base = ReleaseMachine.start(store, make_test_managers(FakeSession()), str(ipa),
                                 ship=True, allow_submit=True,
-                                metadata_dir=root).snapshot()
+                                metadata_dir=root, skip_precheck=True).snapshot()
     base.update({"state": "metadata_pending", "app_id": "app-9",
                  "build_id": "build-77", "version_id": "ver-1"})
     base["history"].append("metadata_pending")

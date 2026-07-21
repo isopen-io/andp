@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "andp"
-version = "1.10.2"
+version = "1.11.0"
 description = "ANDP — API-first App Store Connect publishing: honest preflight, pure Build Upload API, provisioning and TestFlight by API."
 readme = "README.md"
 requires-python = ">=3.9"

@@ -217,7 +217,7 @@ def test_snapshot_view_exposes_needs_approval(tmp_path, monkeypatch, ec_private_
         FakeResponse(200, {"data": {"id": "build-77"}}),
     )
     monkeypatch.setattr(service, "make_managers", lambda a: make_test_managers(session))
-    rid = service.release_start(ipa, ship=True)["release_id"]
+    rid = service.release_start(ipa, ship=True, skip_precheck=True)["release_id"]
     result = None
     for _ in range(12):
         result = service.release_poll(rid)

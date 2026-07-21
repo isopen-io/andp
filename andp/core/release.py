@@ -46,6 +46,7 @@ _FIELD_DEFAULTS = {
     "version_id": None,
     "submission_id": None,
     "metadata_dir": None,
+    "skip_precheck": False,
 }
 
 
@@ -77,7 +78,7 @@ class ReleaseMachine:
     @classmethod
     def start(cls, store, managers, ipa_path, *, account="primary", group=None,
               ship=False, allow_submit=False, uses_non_exempt_encryption=None,
-              metadata_dir=None,
+              metadata_dir=None, skip_precheck=False,
               clock=time.time, poll_budget=_DEFAULT_POLL_BUDGET, reset=False,
               allow_submit_fn=None):
         bundle_id, version, build_number = read_metadata(ipa_path)
@@ -138,6 +139,7 @@ class ReleaseMachine:
             "uses_non_exempt_encryption": uses_non_exempt_encryption,
             "ipa_compliance": read_export_compliance(ipa_path),
             "metadata_dir": metadata_dir,
+            "skip_precheck": skip_precheck,
             "approved": False,
             "app_id": None,
             "upload_attempted": False,
@@ -380,19 +382,36 @@ class ReleaseMachine:
         if self._state.get("metadata_dir"):
             self._transition("metadata_pending")
         else:
-            self._transition("awaiting_approval")
+            self._transition(self._after_metadata_state())
 
     def _do_metadata_pending(self):
         # Push release notes + screenshots + previews from the folder tree, then
-        # wait for approval. Idempotent per file (skip fileNames already present),
-        # so a retryable failure re-runs the push safely. Uses the pinned
-        # version_id (no re-resolve).
+        # precheck/wait for approval. Idempotent per file (skip fileNames already
+        # present), so a retryable failure re-runs the push safely. Uses the
+        # pinned version_id (no re-resolve).
         from .. import publish
         publish.publish_metadata(
             self.managers, self._state["app_id"], self._state["version"],
             self._state["metadata_dir"], version_id=self._state["version_id"],
         )
-        self._transition("awaiting_approval")
+        self._transition(self._after_metadata_state())
+
+    def _after_metadata_state(self):
+        return "awaiting_approval" if self._state.get("skip_precheck") else "prechecked"
+
+    def _do_prechecked(self):
+        # Read-only pre-submission validation. Like awaiting_approval this is a
+        # WAITING state: on errors it stays put (recoverable — fix metadata and
+        # poll again), never a terminal failure that would force a re-upload.
+        from .. import precheck
+        report = precheck.run_precheck(
+            self.managers, self._state["app_id"], self._state["version_id"])
+        self._state["precheck_report"] = report
+        if report["ok"]:
+            self._state.pop("needs_precheck_fix", None)
+            self._transition("awaiting_approval")
+        else:
+            self._state["needs_precheck_fix"] = True
 
     def _do_awaiting_approval(self):
         approved = self._state["approved"]

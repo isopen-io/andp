@@ -1,3 +1,16 @@
+## 1.11.0 - 2026-07-21
+### v1.3: precheck (validate before submitting)
+- Read-only pre-submission validator (deliver-precheck parity): version editable,
+  build attached, description present, >=1 screenshot (counts appScreenshots, not
+  sets), plus warnings (whatsNew/keywords/supportUrl empty, cross-platform
+  mentions, placeholder text). ok:true is not a guarantee of acceptance
+- Wired into --ship as a non-terminal `prechecked` waiting state BEFORE the gate:
+  errors keep the release recoverable (fix metadata, poll again) instead of
+  bricking it; `--no-precheck` skips it
+- find_version is GET-only (standalone precheck never creates a version)
+- `andp precheck <bundle> <version>` + MCP `precheck` tool (readOnly);
+  needs_precheck_fix surfaced in the agent view. Design-reviewed. 228 tests
+
 ## 1.10.2 - 2026-07-21
 ### v1.2 loose ends closed (review coverage gaps)
 - Permanent 4xx on a CDN asset PUT is now non-retryable (upload_rejected) instead

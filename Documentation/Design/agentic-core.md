@@ -298,6 +298,79 @@ An adversarial code review of the `--ship` implementation found 4 blockers +
   (`version_not_editable`, never guessed); `approve()` normalizes old state
   files via `_FIELD_DEFAULTS`.
 
+## v1.3 — precheck (validate before submitting)
+
+A read-only pre-submission validator (deliver-`precheck` parity) that catches
+the problems Apple rejects *before* the irreversible submit. It never mutates.
+
+`run_precheck(managers, app_id, version_id, metadata_dir=None)` returns a
+structured report: `{ok, errors, warnings, checks: [{id, level, message}]}`
+where `level ∈ {error, warning}`. `ok` is False iff any `error`.
+
+**Checks (ASC-state, read-only):**
+- `version_editable` — error if the version's state ∉ editable set.
+- `build_attached` — GET `/v1/appStoreVersions/{id}/build`; error if none
+  (an unattached version cannot be reviewed).
+- Per localization (GET `/v1/appStoreVersions/{id}/appStoreVersionLocalizations`):
+  - `description` non-empty → error (Apple requires it).
+  - `whatsNew` present → warning (required for updates, not first version).
+  - `keywords` present → warning.
+  - `screenshots_present` — GET the localization's `appScreenshotSets`; error if
+    the locale has no screenshot set (heuristic: Apple requires screenshots;
+    exact per-device requirements vary and are out of scope).
+
+**Checks (content rules, on the fetched localization text and/or the metadata
+dir if provided):**
+- `cross_platform_mention` — "Android", "Google Play", "Play Store" → warning
+  (a common rejection reason).
+- `placeholder_text` — "lorem ipsum", "TODO", "FIXME", "sample text" → warning.
+
+**Wiring:**
+- Standalone: `andp precheck <bundle> <version> [--metadata <dir>]` → the report;
+  exit 1 if any error.
+- MCP tool `precheck` (readOnly).
+- In `--ship`: a `prechecked` step runs after metadata (or compliance) and
+  **before** `awaiting_approval`. Any `error` fails the release
+  (`precheck_failed`, non-retryable, the report attached to state); warnings are
+  recorded and the release proceeds. `--no-precheck` skips it (escape hatch).
+
+**Scope/limits:** heuristic screenshot check (set presence, not per-device
+counts); no age-rating / pricing / territory validation (future); content rules
+are advisory (warnings), never block.
+
+### v1.3 design review (2026-07-21, GO with adjustments — applied)
+
+- **Screenshots: count `appScreenshots`, not sets.** A set can exist empty
+  (`ensure_screenshot_set` POSTs one with no screenshots), so "set present = ok"
+  is a guaranteed false-negative. Fix: sum `count_screenshots` over the
+  localization's sets; `error` only if the total is 0.
+- **precheck failure must NOT be terminal.** `failed` is only recoverable via
+  `release reset`, which restarts from `created` → re-uploads the IPA with the
+  same build number → Apple INVALID. So a typo in a description would brick the
+  release. Fix: `prechecked` is a **waiting state** like `awaiting_approval`. On
+  error it stays put, attaches `precheck_report`, sets `needs_precheck_fix`, and
+  does **not** raise/transition; the next poll re-runs it (read-only, idempotent)
+  and advances only when `ok`. `--no-precheck` skips it.
+- **Standalone must stay read-only.** `ensure_version` POSTs/creates — a
+  read-only precheck must not. Add `find_version` (GET-only); report
+  `version_not_found` if absent. In `--ship`, use the pinned `version_id`.
+- **whatsNew warning without a bad proxy:** warn only when the attribute is a
+  settable empty string (`""`), not `null` — `null` means "first version, not
+  applicable", so no false positive. (No version-string heuristic.)
+- **Errors are STRICTLY the hard, reliably-detectable requirements:**
+  `version_editable`, `build_attached`, empty `description`, `screenshots == 0`,
+  and zero localizations. Everything else (`keywords`, `supportUrl`,
+  `cross_platform_mention`, `placeholder_text`) is a **warning** — substring
+  content rules have real false-positive rates, and Apple stays the final
+  authority at submit.
+- **Cut `metadata_dir` from `run_precheck`:** content rules run only on the text
+  fetched from ASC (the source of truth the reviewer sees). Confirmed endpoints:
+  `GET /v1/appStoreVersions/{id}/build` (→ data or null),
+  `GET /v1/appStoreVersions/{id}/appStoreVersionLocalizations` (description,
+  whatsNew, keywords, supportUrl, locale…). The report states explicitly that
+  `ok:true` is not a guarantee of acceptance (age rating, name/subtitle on
+  appInfoLocalizations, pricing, per-device screenshot sizes are not checked).
+
 ## Competitive positioning (research, 2026-07-21)
 
 - asc-mcp (~200 tools, 1:1 API), fastlane-mcp (CLI wrapper),

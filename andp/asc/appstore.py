@@ -58,6 +58,30 @@ class AppStoreManager:
         }
         return self.client.post("/v1/appStoreVersions", payload)["data"]
 
+    def find_version(self, app_id, version_string, platform="IOS"):
+        """GET-only version lookup (never creates). Returns the resource or None."""
+        response = self.client.get(
+            f"/v1/apps/{app_id}/appStoreVersions",
+            params={"filter[versionString]": version_string, "filter[platform]": platform},
+        )
+        data = response.get("data", [])
+        return data[0] if data else None
+
+    def get_version(self, version_id):
+        return self.client.get(f"/v1/appStoreVersions/{version_id}").get("data")
+
+    def get_version_build(self, version_id):
+        """The build attached to the version, or None."""
+        return self.client.get(f"/v1/appStoreVersions/{version_id}/build").get("data")
+
+    def list_version_localizations(self, version_id):
+        return self.client.get_all(
+            f"/v1/appStoreVersions/{version_id}/appStoreVersionLocalizations")
+
+    def localization_screenshot_sets(self, localization_id):
+        return self.client.get_all(
+            f"/v1/appStoreVersionLocalizations/{localization_id}/appScreenshotSets")
+
     def update_version_localization(self, version_id, locale, attributes):
         return self.upsert_version_localization(version_id, locale, attributes)[0]
 
