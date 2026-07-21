@@ -1,3 +1,10 @@
+## 1.13.1 - 2026-07-21
+### GitHub Marketplace readiness
+- Shorten the root Action's `description` to 115 chars (GitHub Marketplace
+  requires < 125); no behavior change
+- README pins every Action/reusable-workflow snippet to `@v1` (the stable major
+  tag) instead of `@main`, and points to the unified `ios-publish-readiness@v1`
+
 ## 1.13.0 - 2026-07-21
 ### Publish-readiness GitHub Actions (the CI entry point)
 - Two Actions gate every PR/push: **testflight-readiness** (can the app go to

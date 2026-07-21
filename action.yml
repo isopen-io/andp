@@ -1,9 +1,5 @@
 name: 'ANDP Verify — App Store Connect publish preflight'
-description: >-
-  Honest preflight for App Store Connect publishing: proves your credentials
-  sign, authenticate against the live API, and that the app record exists —
-  before you spend 30 minutes building. Fails the job when publishing cannot
-  work, and names the exact reason.
+description: 'App Store Connect publish preflight: proves your API key authenticates and the app record exists, before you build.'
 author: 'Sylorion'
 branding:
   icon: 'check-circle'
