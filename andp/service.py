@@ -65,7 +65,7 @@ def _snapshot_view(snap):
 
 
 def release_start(ipa_path, account="primary", group=None, ship=False,
-                  project_root=".", clock=time.time, reset=False):
+                  metadata_dir=None, project_root=".", clock=time.time, reset=False):
     if not os.path.exists(ipa_path):
         return {"command": "release_start", "ok": False,
                 "error": {"code": "ipa_not_found", "message": f"IPA not found: {ipa_path}",
@@ -83,7 +83,10 @@ def release_start(ipa_path, account="primary", group=None, ship=False,
         if group:
             plan.append("testflight_group")
         if ship:
-            plan += ["version", "build_attached", "compliance", "submit"]
+            plan += ["version", "build_attached", "compliance"]
+            if metadata_dir:
+                plan.append("metadata")
+            plan.append("submit")
         return {"command": "release_start", "ok": True, "dry_run": True,
                 "release_id": rid, "bundle_id": bundle_id, "plan": plan}
 
@@ -91,7 +94,7 @@ def release_start(ipa_path, account="primary", group=None, ship=False,
     try:
         machine = ReleaseMachine.start(
             _store(project_root), managers, ipa_path,
-            account=account, group=group, ship=ship,
+            account=account, group=group, ship=ship, metadata_dir=metadata_dir,
             allow_submit=policy["allow_submit"],
             uses_non_exempt_encryption=policy["uses_non_exempt_encryption"],
             clock=clock, reset=reset,
@@ -107,6 +110,32 @@ def release_start(ipa_path, account="primary", group=None, ship=False,
 def _load_policy(project_root):
     from .policy import load_policy
     return load_policy(os.path.join(project_root, "andp.yml"))
+
+
+def publish(bundle_id, version, metadata_dir, account="primary"):
+    """Push release notes + screenshots + previews from a folder to a version."""
+    from .publish import publish_metadata
+    try:
+        managers, account_cfg, dry_run = _managers_for(account)
+    except AndpError as err:
+        return _error_result("publish", err)
+    if not os.path.isdir(metadata_dir):
+        return {"command": "publish", "ok": False,
+                "error": {"code": "not_found", "message": f"No metadata dir: {metadata_dir}",
+                          "retryable": False, "remediation": "Create the folder tree."}}
+    if dry_run:
+        return {"command": "publish", "ok": True, "dry_run": True,
+                "bundle_id": bundle_id, "version": version, "metadata_dir": metadata_dir}
+    app = managers.apps.find_app(bundle_id)
+    if app is None:
+        return {"command": "publish", "ok": False,
+                "error": {"code": "app_not_found", "message": f"App {bundle_id} not found.",
+                          "retryable": False, "remediation": "Create the app record in ASC."}}
+    try:
+        summary = publish_metadata(managers, app["id"], version, metadata_dir)
+    except AndpError as err:
+        return _error_result("publish", err)
+    return {"command": "publish", "ok": True, "dry_run": False, **summary}
 
 
 def release_approve(release_id_arg, account="primary", project_root=".", clock=time.time):

@@ -254,3 +254,34 @@ def test_recovery_open_submission_other_version_escalates(tmp_path, store):
     final = _drive(m)
     assert final["state"] == "failed"
     assert final["error"]["code"] == "review_submission_conflict"
+
+
+def test_ship_with_metadata_pushes_before_approval(tmp_path, store):
+    import os as _os
+    ipa = _make_ipa(tmp_path)
+    root = str(tmp_path / "meta")
+    _os.makedirs(_os.path.join(root, "en-US"))
+    with open(_os.path.join(root, "en-US", "whatsNew.txt"), "w") as f:
+        f.write("Notes.\n")
+    session = FakeSession()
+    session.queue(
+        _app_found(), *_upload_flow(), _build_valid(),
+        _version("PREPARE_FOR_SUBMISSION"),           # ensure_version
+        FakeResponse(204, None, content=b""),          # attach_build
+        FakeResponse(200, {"data": {"id": "build-77"}}),   # compliance
+        # metadata push: ensure_version (again), loc GET+PATCH
+        _version("PREPARE_FOR_SUBMISSION"),
+        FakeResponse(200, {"data": [{"id": "loc-en", "attributes": {"locale": "en-US"}}]}),
+        FakeResponse(200, {"data": {"id": "loc-en"}}),
+        # submit
+        FakeResponse(200, {"data": []}),
+        FakeResponse(201, {"data": {"id": "sub-1"}}),
+        FakeResponse(201, {"data": {"id": "it-1"}}),
+        FakeResponse(200, {"data": {"id": "sub-1"}}),
+    )
+    m = ReleaseMachine.start(store, make_test_managers(session), ipa,
+                             ship=True, allow_submit=True,
+                             uses_non_exempt_encryption=False, metadata_dir=root)
+    final = _drive(m)
+    assert final["state"] == "done"
+    assert "metadata_pushed" in final["history"]

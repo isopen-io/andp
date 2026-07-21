@@ -145,4 +145,6 @@ def make_test_managers(session):
     managers = Managers(client)
     managers.builds.upload_transport = lambda *a, **k: None
     managers.builds._sleep = lambda s: None
+    managers.screenshots.upload_transport = lambda *a, **k: None
+    managers.previews.upload_transport = lambda *a, **k: None
     return managers

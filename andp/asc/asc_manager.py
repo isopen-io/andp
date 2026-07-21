@@ -294,13 +294,18 @@ def _cmd_release_sub(account, sub, args, json_mode):
     if "--ship" in args:
         ship = True
         args.remove("--ship")
+    metadata_dir = None
+    if "--metadata" in args:
+        idx = args.index("--metadata")
+        metadata_dir = args[idx + 1]
+        del args[idx:idx + 2]
 
     if sub == "start":
         if not args:
-            print("Usage: release start <ipa_path> [--group <name>] [--ship]")
+            print("Usage: release start <ipa_path> [--group <name>] [--ship] [--metadata <dir>]")
             return 2
         result = service.release_start(args[0], account=account.account_id,
-                                       group=group, ship=ship)
+                                       group=group, ship=ship, metadata_dir=metadata_dir)
     elif sub == "poll":
         if not args:
             print("Usage: release poll <release_id>")
@@ -435,6 +440,28 @@ def _cmd_submit(account, managers, dry_run, args, json_mode=False):
     return 0
 
 
+def _cmd_publish(account, managers, dry_run, args, json_mode=False):
+    """Push release notes + screenshots + previews from a folder tree."""
+    from .. import service
+    if len(args) < 3:
+        print("Usage: publish <bundle_id> <version> <metadata_dir>")
+        return 2
+    result = service.publish(args[0], args[1], args[2], account=account.account_id)
+    if json_mode:
+        print(json.dumps(result))
+    elif result.get("ok"):
+        if result.get("dry_run"):
+            print(f"[DRY-RUN] Would publish metadata from {args[2]} for {args[0]} {args[1]}.")
+        else:
+            for locale, s in result.get("locales", {}).items():
+                print(f"  {locale}: metadata {s['metadata']}, "
+                      f"{s['screenshots']} screenshots, {s['previews']} previews")
+    else:
+        err = result.get("error", {})
+        print(f"❌ publish: {err.get('message', 'failed')}")
+    return 0 if result.get("ok") else 1
+
+
 COMMANDS = {
     "verify": _cmd_verify,
     "upload": _cmd_upload,
@@ -442,6 +469,7 @@ COMMANDS = {
     "status": _cmd_status,
     "testflight": _cmd_testflight,
     "submit": _cmd_submit,
+    "publish": _cmd_publish,
 }
 
 

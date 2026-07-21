@@ -5,6 +5,7 @@ auth -> client -> managers pipeline.
 """
 from .apps import AppsManager
 from .appstore import AppStoreManager
+from .assets import PreviewManager, ScreenshotManager
 from .auth import ASCAuth
 from .builds import BuildsManager
 from .client import ASCClient
@@ -18,6 +19,8 @@ class Managers:
         self.builds = BuildsManager(client)
         self.testflight = TestFlightManager(client)
         self.appstore = AppStoreManager(client)
+        self.screenshots = ScreenshotManager(client)
+        self.previews = PreviewManager(client)
 
 
 def make_managers(account):

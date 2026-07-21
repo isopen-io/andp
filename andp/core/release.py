@@ -45,6 +45,7 @@ _FIELD_DEFAULTS = {
     "approved": False,
     "version_id": None,
     "submission_id": None,
+    "metadata_dir": None,
 }
 
 
@@ -76,6 +77,7 @@ class ReleaseMachine:
     @classmethod
     def start(cls, store, managers, ipa_path, *, account="primary", group=None,
               ship=False, allow_submit=False, uses_non_exempt_encryption=None,
+              metadata_dir=None,
               clock=time.time, poll_budget=_DEFAULT_POLL_BUDGET, reset=False,
               allow_submit_fn=None):
         bundle_id, version, build_number = read_metadata(ipa_path)
@@ -135,6 +137,7 @@ class ReleaseMachine:
             "allow_submit": allow_submit,
             "uses_non_exempt_encryption": uses_non_exempt_encryption,
             "ipa_compliance": read_export_compliance(ipa_path),
+            "metadata_dir": metadata_dir,
             "approved": False,
             "app_id": None,
             "upload_attempted": False,
@@ -372,7 +375,20 @@ class ReleaseMachine:
             ))
 
     def _do_compliance_set(self):
-        # A pure gate marker — no external effect.
+        if self._state.get("metadata_dir"):
+            self._transition("metadata_pushed")
+        else:
+            self._transition("awaiting_approval")
+
+    def _do_metadata_pushed(self):
+        # Push release notes + screenshots + previews from the folder tree, then
+        # wait for approval. Idempotent (upsert metadata, skip populated sets),
+        # so a retry re-runs the whole push safely.
+        from .. import publish
+        publish.publish_metadata(
+            self.managers, self._state["app_id"], self._state["version"],
+            self._state["metadata_dir"],
+        )
         self._transition("awaiting_approval")
 
     def _do_awaiting_approval(self):

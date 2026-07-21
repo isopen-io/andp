@@ -65,6 +65,9 @@ TOOLS = [
                          "description": "Also run the App Store path (version -> attach -> "
                                         "compliance -> submit); the submit stage is gated by "
                                         "andp.yml policy or an out-of-band `release approve`."},
+                "metadata_dir": {"type": "string",
+                                 "description": "With ship: a folder tree of release notes + "
+                                                "screenshots + previews to push before submission."},
                 "account": {"type": "string"},
             },
             "required": ["ipa_path"],
@@ -175,7 +178,8 @@ def _call_release_tool(name, args):
     if name == "release_start":
         return _release_result(service.release_start(
             args["ipa_path"], account=args.get("account", "primary"),
-            group=args.get("group"), ship=bool(args.get("ship", False))))
+            group=args.get("group"), ship=bool(args.get("ship", False)),
+            metadata_dir=args.get("metadata_dir")))
     if name == "release_poll":
         return _release_result(service.release_poll(
             args["release_id"], account=args.get("account", "primary")))

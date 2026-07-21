@@ -1,3 +1,13 @@
+## 1.10.0 - 2026-07-21
+### v1.2: release notes, screenshots & preview videos
+- New: preview VIDEO upload (appPreviewSets/appPreviews) alongside screenshots
+- Folder-convention publisher (deliver-style): release notes per locale +
+  screenshots + previews per device, idempotent (skips populated media sets)
+- `andp publish <bundle> <version> <dir>` standalone command
+- `release start --ship --metadata <dir>`: pushes notes + media as a resumable
+  machine step BEFORE the approval gate (also via MCP release_start metadata_dir)
+- Documentation/Metadata.md: the folder convention. 197 tests.
+
 ## 1.9.1 - 2026-07-21
 ### v1.1 hardening (pre-release code review)
 - BUG 1: write-ahead submission_id + strong-consistent resume by id — the App
