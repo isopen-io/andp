@@ -30,6 +30,7 @@ Commands (all accept --json for a structured, agent-friendly envelope):
   status <bundle_id> <build_number>              Poll build processing state
   testflight <bundle_id> <group> add [emails...] Manage TestFlight group testers
   submit <bundle_id> <version>                   Submit a version for App Review
+  store <pricing|availability|age-rating|apply>  Configure price, territories, age rating
 """
 
 
@@ -488,6 +489,108 @@ def _cmd_precheck(account, managers, dry_run, args, json_mode=False):
     return 0 if result.get("ok") else 1
 
 
+def _take_opt(args, name):
+    """Pop `--name value` from args (mutating) and return value, or None."""
+    if name in args:
+        idx = args.index(name)
+        value = args[idx + 1] if idx + 1 < len(args) else None
+        del args[idx:idx + 2]
+        return value
+    return None
+
+
+def _take_flag(args, name):
+    if name in args:
+        args.remove(name)
+        return True
+    return False
+
+
+_STORE_USAGE = ("Usage: store <pricing|availability|age-rating|apply> <bundle_id> "
+                "[--territory USA] [--price 0.00|free] [--territories USA,FRA|--all] "
+                "[--new-territories] [--config <json>]")
+
+
+def _cmd_store(account, managers, dry_run, args, json_mode=False):
+    """Declarative store configuration: pricing, territory availability and age
+    rating. Reconciles to a desired state; `apply` reads it all from andp.yml."""
+    from .. import service
+    args = list(args)
+    if not args:
+        print(_STORE_USAGE)
+        return 2
+    sub, rest = args[0], list(args[1:])
+    acct = account.account_id
+
+    if sub == "pricing":
+        territory = _take_opt(rest, "--territory")
+        price = _take_opt(rest, "--price")
+        if not rest:
+            print("Usage: store pricing <bundle_id> [--territory USA] [--price 0.00|free]")
+            return 2
+        result = service.configure_pricing(rest[0], account=acct,
+                                           base_territory=territory, price=price)
+    elif sub == "availability":
+        all_flag = _take_flag(rest, "--all")
+        new_terr = True if _take_flag(rest, "--new-territories") else None
+        terr_opt = _take_opt(rest, "--territories")
+        if not rest:
+            print("Usage: store availability <bundle_id> [--territories USA,FRA|--all] "
+                  "[--new-territories]")
+            return 2
+        territories = ("all" if all_flag
+                       else [t for t in terr_opt.split(",") if t] if terr_opt else None)
+        result = service.configure_availability(
+            rest[0], account=acct, territories=territories,
+            available_in_new_territories=new_terr)
+    elif sub in ("age-rating", "age_rating"):
+        config = _take_opt(rest, "--config")
+        if not rest:
+            print("Usage: store age-rating <bundle_id> [--config <json>]")
+            return 2
+        declaration = {"config_path": config} if config else None
+        result = service.configure_age_rating(rest[0], account=acct, declaration=declaration)
+    elif sub == "apply":
+        if not rest:
+            print("Usage: store apply <bundle_id>")
+            return 2
+        result = service.configure_store(rest[0], account=acct)
+    else:
+        print(_STORE_USAGE)
+        return 2
+
+    if json_mode:
+        print(json.dumps(result))
+    else:
+        _print_store_human(result)
+    return 0 if result.get("ok", True) else 1
+
+
+def _print_store_human(result):
+    cmd = result.get("command", "store")
+    if not result.get("ok", True):
+        err = result.get("error", {})
+        print(f"❌ {cmd}: {err.get('message', 'failed')}")
+        if err.get("remediation"):
+            print(f"   → {err['remediation']}")
+        return
+    if cmd == "configure_store":
+        for name, block in result.get("blocks", {}).items():
+            if "skipped" in block:
+                print(f"  {name}: skipped (not configured)")
+            elif block.get("ok"):
+                print(f"  {name}: {'changed' if block.get('changed') else 'unchanged'}")
+            else:
+                print(f"  {name}: ❌ {block.get('error', {}).get('message', 'failed')}")
+        return
+    prefix = "[DRY-RUN] " if result.get("dry_run") else ""
+    state = "would set" if result.get("dry_run") else (
+        "changed" if result.get("changed") else "unchanged")
+    print(f"{prefix}{cmd}: {state}")
+    for w in result.get("warnings", []):
+        print(f"  ⚠️  {w}")
+
+
 COMMANDS = {
     "verify": _cmd_verify,
     "upload": _cmd_upload,
@@ -497,6 +600,7 @@ COMMANDS = {
     "submit": _cmd_submit,
     "publish": _cmd_publish,
     "precheck": _cmd_precheck,
+    "store": _cmd_store,
 }
 
 

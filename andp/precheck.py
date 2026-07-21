@@ -94,4 +94,44 @@ def run_precheck(managers, app_id, version_id):
         for w in _content_warnings(text):
             checks.append({**w, "message": f"[{locale}] {w['message']}"})
 
+    checks.extend(_store_checks(managers, app_id))
     return _summary(checks)
+
+
+def _age_rating_unset(declaration):
+    """True if no age rating declaration exists, or every content descriptor is
+    still unanswered (null) — the real submission blocker, vs. mere existence."""
+    if not declaration:
+        return True
+    from .asc.agerating import TERNARY_FIELDS
+    attrs = declaration.get("attributes", {}) or {}
+    return all(attrs.get(field) is None for field in TERNARY_FIELDS)
+
+
+def _store_checks(managers, app_id):
+    """Advisory store-configuration checks (pricing / availability / age rating).
+
+    Each is best-effort: an advisory read must never turn a precheck into a hard
+    error, so a failed read simply skips that one check (the hard checks above
+    still stand). All warnings — Apple stays the final authority at submit."""
+    checks = []
+    try:
+        if managers.pricing.get_schedule(app_id) is None:
+            checks.append({"id": "pricing", "level": "warning",
+                           "message": "No price schedule set (Apple requires a price "
+                                      "or Free selection before submission)."})
+    except Exception:
+        pass
+    try:
+        if not managers.availability.list_available_territories(app_id):
+            checks.append({"id": "availability", "level": "warning",
+                           "message": "App is available in zero territories."})
+    except Exception:
+        pass
+    try:
+        if _age_rating_unset(managers.age_rating.get_declaration(app_id)):
+            checks.append({"id": "age_rating", "level": "warning",
+                           "message": "Age rating declaration appears unset/incomplete."})
+    except Exception:
+        pass
+    return checks
