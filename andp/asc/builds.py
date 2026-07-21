@@ -130,6 +130,20 @@ class BuildsManager:
                 )
             self._sleep(poll_interval)
 
+    def latest_valid_build(self, app_id):
+        """Most recently uploaded build in VALID state, or None."""
+        response = self.client.get(
+            "/v1/builds",
+            params={
+                "filter[app]": app_id,
+                "filter[processingState]": "VALID",
+                "sort": "-uploadedDate",
+                "limit": 1,
+            },
+        )
+        data = response.get("data", [])
+        return data[0] if data else None
+
     # -- attributes ----------------------------------------------------------
 
     def set_uses_non_exempt_encryption(self, build_id, value):

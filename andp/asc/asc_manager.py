@@ -344,6 +344,17 @@ def _cmd_submit(account, managers, dry_run, args, json_mode=False):
         print(f"Error: App {bundle_id} not found in App Store Connect.")
         return 1
     app_store_version = managers.appstore.ensure_version(app["id"], version)
+
+    # Apple rejects a review submission whose version has no build attached.
+    build = managers.builds.latest_valid_build(app["id"])
+    if build is None:
+        print(
+            f"Error: No VALID build found for {bundle_id}. Upload a build and wait "
+            "for it to finish processing before submitting for review."
+        )
+        return 1
+    managers.appstore.attach_build(app_store_version["id"], build["id"])
+
     submission = managers.appstore.submit_for_review(app["id"], app_store_version["id"])
     print(f"Review submission {submission['id']}: {submission['attributes'].get('state')}")
     return 0
