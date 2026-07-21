@@ -1,0 +1,93 @@
+name: ANDP Publish readiness
+
+# Reusable gate: is an iOS app publishable? Answers two questions as two
+# independent checks, each with a readable job-summary report:
+#   - TestFlight readiness (credentials authenticate + app record exists)
+#   - App Store readiness  (version editable + build attached + metadata present)
+#
+# Call it from your app repo:
+#   jobs:
+#     readiness:
+#       uses: isopen-io/andp/.github/workflows/publish-readiness.yml@main
+#       with:
+#         bundle-id: me.your.app
+#         version: "1.2.0"          # omit to run only the TestFlight gate
+#       secrets:
+#         key-id:      ${{ secrets.ASC_KEY_ID }}
+#         issuer-id:   ${{ secrets.ASC_ISSUER_ID }}
+#         private-key: ${{ secrets.ASC_PRIVATE_KEY }}
+
+on:
+  workflow_call:
+    inputs:
+      bundle-id:
+        description: 'The app bundle id to check'
+        required: true
+        type: string
+      version:
+        description: 'Marketing version for the App Store gate (omit to skip it)'
+        required: false
+        type: string
+        default: ''
+      andp-ref:
+        description: 'Ref of isopen-io/andp providing the actions'
+        required: false
+        type: string
+        default: main
+      fail-on:
+        description: "'errors' (fail when not ready) or 'never' (report only)"
+        required: false
+        type: string
+        default: errors
+      require-credentials:
+        description: "'false' (fork PRs skip green as Unverified) or 'true'"
+        required: false
+        type: string
+        default: 'false'
+    secrets:
+      key-id:
+        required: true
+      issuer-id:
+        required: true
+      private-key:
+        required: true
+
+jobs:
+  testflight-readiness:
+    name: TestFlight readiness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out ANDP (provides the actions)
+        uses: actions/checkout@v4
+        with:
+          repository: isopen-io/andp
+          ref: ${{ inputs.andp-ref }}
+      - uses: ./.github/actions/testflight-readiness
+        with:
+          key-id: ${{ secrets.key-id }}
+          issuer-id: ${{ secrets.issuer-id }}
+          private-key: ${{ secrets.private-key }}
+          bundle-id: ${{ inputs.bundle-id }}
+          fail-on: ${{ inputs.fail-on }}
+          require-credentials: ${{ inputs.require-credentials }}
+
+  appstore-readiness:
+    name: App Store readiness
+    # A version is required to validate an App Store submission.
+    if: inputs.version != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out ANDP (provides the actions)
+        uses: actions/checkout@v4
+        with:
+          repository: isopen-io/andp
+          ref: ${{ inputs.andp-ref }}
+      - uses: ./.github/actions/appstore-readiness
+        with:
+          key-id: ${{ secrets.key-id }}
+          issuer-id: ${{ secrets.issuer-id }}
+          private-key: ${{ secrets.private-key }}
+          bundle-id: ${{ inputs.bundle-id }}
+          version: ${{ inputs.version }}
+          fail-on: ${{ inputs.fail-on }}
+          require-credentials: ${{ inputs.require-credentials }}

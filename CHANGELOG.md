@@ -1,3 +1,32 @@
+## 1.13.0 - 2026-07-21
+### Publish-readiness GitHub Actions (the CI entry point)
+- Two Actions gate every PR/push: **testflight-readiness** (can the app go to
+  TestFlight cleanly? — credentials authenticate + app record exists, over
+  `verify`) and **appstore-readiness** (can this version be submitted cleanly? —
+  version editable + build attached + description + >=1 screenshot, over
+  `precheck`). Read-only; no build, no upload, no ASC mutation
+- **Tri-state verdict** so a gate never lies: ✅ ready / ❌ not_ready / ⚪
+  unverified (no/placeholder creds, config error, or a transient 429/5xx/network
+  error). A fork PR with no secrets reports ⚪ and skips green (`ready=unknown`),
+  never a false ✅; `require-credentials: true` fails instead
+- Each gate publishes a readable **job-summary report**, sets step outputs
+  (`ready`/`status`/`reason`/`credentials-ready`/`blockers`/`warnings`, written
+  heredoc-safe to `$GITHUB_OUTPUT`), and emits `::error::/::warning::` annotations
+- Reusable workflow `publish-readiness.yml` runs both as separate jobs (a red
+  TestFlight gate still lets the App Store gate report); App Store job auto-skips
+  without a `version`
+- Library-first: verify logic extracted into `service.verify_checks`/`verify`
+  (the CLI `verify` now delegates to it — same output, pinned by the existing
+  tests); new pure `andp/readiness.py` normalizer/renderer; `service.readiness_*`;
+  CLI `andp readiness <testflight|appstore> …` (exit 0/1/3/2, `--soft`,
+  `--allow-unverified`)
+- Fixed a latent crash: any `--json` command with empty/placeholder credentials
+  (e.g. a fork PR with unset secrets) no longer builds managers and raises —
+  `main()` now runs DRY-RUN with `managers=None` in JSON mode too
+- Design-reviewed AND code-reviewed before commit (1 blocker fixed:
+  network-error on the TestFlight gate now yields a retryable `unverified`
+  instead of an uncaught crash; 1 consistency fix + nits). 274 tests
+
 ## 1.12.0 - 2026-07-21
 ### deliver parity: pricing / territories / age rating (agent-native)
 - **Pricing** via the modern `appPriceSchedules`/`appPricePoints` model (the
