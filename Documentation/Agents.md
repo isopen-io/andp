@@ -138,14 +138,45 @@ Set `ANDP_AUDIT_LOG=/path/audit.jsonl` and every API **mutation**
 `status`). Reads are not logged. When an agent publishes, you can always
 answer "what exactly did it do?".
 
+## Ship all the way to App Store review: `release start --ship`
+
+`--ship` extends the same resumable machine past TestFlight to an App Store
+review submission:
+
+```
+processing → valid → [testflight_group] → version → build_attached
+           → compliance → awaiting_approval → submitted → done
+```
+
+The submit is **gated**. `release poll` stops at `awaiting_approval` with
+`needs_approval: true` and **never crosses the gate**. It opens only when:
+- `policy.allow_submit: true` in `andp.yml` (a repo pre-authorises CI to submit), **or**
+- a human runs `release approve <release_id>` (recorded with a timestamp).
+
+```bash
+andp release start build/App.ipa --ship --group Beta --json   # -> release_id
+andp release poll <id> --json   # ... advances; stops at awaiting_approval
+# {"state":"awaiting_approval","needs_approval":true, ...}
+andp release approve <id>       # human opens the gate (out of band)
+andp release poll <id> --json   # ... -> submitted -> done
+```
+
+Guardrails on the App Store path: a non-editable version (already published /
+in review) fails `version_not_editable`; export compliance must be declared in
+`andp.yml` or the IPA's Info.plist (`compliance_undeclared` otherwise); a crash
+mid-submit is recovered idempotently, and an unrelated open submission escalates
+`review_submission_conflict` rather than submitting the wrong thing. Required
+App Store metadata (screenshots, description, age rating) is **not** prechecked
+— Apple validates it synchronously and its 409 detail is surfaced in the error.
+
 ## The full loop an agent can run today
 
 1. `verify <bundle-id>` — act only if `ok`
 2. build + sign (xcodebuild, or your own pipeline)
-3. `release start <ipa> --group Beta` → `release_id`
+3. `release start <ipa> --group Beta [--ship]` → `release_id`
 4. `release poll <id>` in a loop — resumable, non-blocking, until `terminal`
-5. `testflight_add` — manage testers
-6. `submit` — only if the human enabled `allow_submit`
+5. `release approve <id>` — human opens the submit gate (only with `--ship`)
+6. `testflight_add` — manage testers
 
 Every step: machine-readable output, typed/honest failure, resumable state,
 audit trail.

@@ -1,3 +1,19 @@
+## 1.9.0 - 2026-07-21
+### v1.1: App Store distribution path (--ship)
+- The release machine now ships to App Store review, not just TestFlight:
+  version -> attach build -> compliance -> awaiting_approval -> submitted -> done
+- Approval gate: `release poll` stops at awaiting_approval (needs_approval) and
+  never crosses it; opened by `policy.allow_submit` (andp.yml) or the out-of-band
+  `release approve <id>` — keeps the destructive submit explicit and auditable
+- Correctness (design-reviewed): version editability via appVersionState with
+  appStoreState fallback (READY_FOR_REVIEW accepted); idempotent 3-branch
+  submission recovery with review_submission_conflict escalation; export
+  compliance from andp.yml or the IPA Info.plist (compliance_undeclared else)
+- CLI `release start --ship` / `release approve`; MCP release_start `ship` arg
+  (no approve tool — approval is a human action); andp/policy.py
+- Forward-compatible state loading (older state files gain new fields as
+  defaults). 179 tests.
+
 ## 1.8.0 - 2026-07-21
 ### Agentic core: resumable, library-first, hardened
 - New `andp/core`: typed error taxonomy (code/retryable/remediation), crash-safe
