@@ -4,6 +4,11 @@ ANDP is built so an AI agent can drive App Store Connect publishing end to end
 — safely. Three primitives make that possible; no other release tool has them
 together.
 
+> **Looking for the full operational playbook** (every state, the complete
+> CLI/MCP/service surface, error taxonomy, and a repo→submitted worked example)?
+> See **[AgentGuide.md](AgentGuide.md)**. This page explains *why* the design is
+> agent-native; AgentGuide is the *how*.
+
 ## 1. Act only when provable: `verify`
 
 An agent should never start a 30-minute build on credentials that cannot
