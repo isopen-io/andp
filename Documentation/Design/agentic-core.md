@@ -259,10 +259,15 @@ important minors fixed (TDD, `tests/test_publish_hardening.py`):
 - Minor: hidden/tooling dirs (`.git`, `__MACOSX`, `.DS_Store`) skipped;
   screenshot upload reuses the shared `_transfer_bytes`.
 
-Residual (documented): a reserved-but-not-committed asset (crash mid-upload of a
-single file) is matched by fileName and skipped — the rare stuck reservation
-needs manual cleanup; a permanent 4xx on the CDN PUT is labelled retryable
-(the agent/human sees no progress rather than looping in code).
+Coverage closed (v1.2 follow-up): preview skip idempotency, multi-locale,
+hidden/tooling dirs, multi-chunk transfer MD5, `existing_filenames` pagination,
+resume of `metadata_pending`. Two more fixes: a **permanent 4xx on the CDN PUT
+is now non-retryable** (`upload_rejected`) instead of looping, and an **empty
+locale dir is skipped** (no phantom localization / no-op PATCH).
+
+Residual (documented, rare): a reserved-but-not-committed asset (crash mid-upload
+of a single file) is matched by fileName and skipped — a genuinely stuck
+reservation needs manual cleanup in App Store Connect.
 
 ### v1.1 code review (2026-07-21, CORRECTIONS_REQUISES → applied)
 

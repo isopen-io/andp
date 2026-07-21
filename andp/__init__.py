@@ -1,3 +1,3 @@
 """ANDP — Apple Native Delivery Platform: API-first App Store Connect publishing."""
 
-__version__ = "1.10.1"
+__version__ = "1.10.2"

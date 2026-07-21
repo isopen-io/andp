@@ -98,6 +98,11 @@ def publish_metadata(managers, app_id, version_string, root_dir, version_id=None
             continue
 
         attributes = _read_text_fields(locale_dir)
+        has_assets = any(True for _ in _asset_dirs(
+            os.path.join(locale_dir, "screenshots"), _IMAGE_EXT)) or any(
+            True for _ in _asset_dirs(os.path.join(locale_dir, "previews"), _VIDEO_EXT))
+        if not attributes and not has_assets:
+            continue  # nothing to push for this locale — don't create a phantom localization
         localization, created = managers.appstore.upsert_version_localization(
             version_id, locale, attributes
         )

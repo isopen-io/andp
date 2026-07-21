@@ -74,6 +74,17 @@ def from_unexpected(exc):
             retryable=False,
             remediation="The IPA is no longer at its path; rebuild, then reset the release.",
         )
+    # A permanent 4xx on an asset CDN PUT (requests.HTTPError) must NOT be
+    # retried — otherwise the caller polls forever on a rejected upload.
+    response = getattr(exc, "response", None)
+    status = getattr(response, "status_code", None)
+    if type(exc).__name__ == "HTTPError" and status is not None and 400 <= status < 500:
+        return AndpError(
+            code="upload_rejected",
+            message=f"Asset upload rejected by the CDN ({status}): {exc}",
+            retryable=False,
+            remediation="Check the asset meets Apple's format/size requirements.",
+        )
     if type(exc).__name__ in _NETWORK_EXC_NAMES:
         return AndpError(
             code="network_error",

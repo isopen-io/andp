@@ -1,3 +1,12 @@
+## 1.10.2 - 2026-07-21
+### v1.2 loose ends closed (review coverage gaps)
+- Permanent 4xx on a CDN asset PUT is now non-retryable (upload_rejected) instead
+  of being labelled retryable; 5xx stays retryable
+- An empty locale dir is skipped (no phantom localization / no-op PATCH)
+- Added coverage: preview skip idempotency, multi-locale, hidden/tooling dirs,
+  multi-chunk transfer MD5, existing_filenames pagination, resume of
+  metadata_pending. 210 tests
+
 ## 1.10.1 - 2026-07-21
 ### v1.2 hardening (pre-release code review)
 - BUG 1 (critical): per-FILE idempotency for screenshots/previews (a partial set
