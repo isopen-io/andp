@@ -192,7 +192,7 @@ def _cmd_release(account, managers, dry_run, args, json_mode=False):
       release list                      list all releases
     """
     args = list(args)
-    if args and args[0] in ("start", "poll", "status", "list", "reset"):
+    if args and args[0] in ("start", "poll", "status", "list", "reset", "approve"):
         return _cmd_release_sub(account, args[0], args[1:], json_mode)
 
     group_name = None
@@ -284,12 +284,17 @@ def _cmd_release_sub(account, sub, args, json_mode):
         idx = args.index("--group")
         group = args[idx + 1]
         del args[idx:idx + 2]
+    ship = False
+    if "--ship" in args:
+        ship = True
+        args.remove("--ship")
 
     if sub == "start":
         if not args:
-            print("Usage: release start <ipa_path> [--group <name>]")
+            print("Usage: release start <ipa_path> [--group <name>] [--ship]")
             return 2
-        result = service.release_start(args[0], account=account.account_id, group=group)
+        result = service.release_start(args[0], account=account.account_id,
+                                       group=group, ship=ship)
     elif sub == "poll":
         if not args:
             print("Usage: release poll <release_id>")
@@ -300,6 +305,11 @@ def _cmd_release_sub(account, sub, args, json_mode):
             print("Usage: release status <release_id>")
             return 2
         result = service.release_status(args[0])
+    elif sub == "approve":
+        if not args:
+            print("Usage: release approve <release_id>")
+            return 2
+        result = service.release_approve(args[0], account=account.account_id)
     elif sub == "reset":
         if not args:
             print("Usage: release reset <release_id>")

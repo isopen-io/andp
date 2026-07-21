@@ -57,8 +57,8 @@ def _snapshot_view(snap):
     return view
 
 
-def release_start(ipa_path, account="primary", group=None, project_root=".",
-                  clock=time.time, reset=False):
+def release_start(ipa_path, account="primary", group=None, ship=False,
+                  project_root=".", clock=time.time, reset=False):
     if not os.path.exists(ipa_path):
         return {"command": "release_start", "ok": False,
                 "error": {"code": "ipa_not_found", "message": f"IPA not found: {ipa_path}",
@@ -72,14 +72,22 @@ def release_start(ipa_path, account="primary", group=None, project_root=".",
 
     if dry_run:
         rid = release_id(account, bundle_id, version, build_number)
-        plan = ["app_record", "upload", "processing"] + (["testflight_group"] if group else [])
+        plan = ["app_record", "upload", "processing"]
+        if group:
+            plan.append("testflight_group")
+        if ship:
+            plan += ["version", "build_attached", "compliance", "submit"]
         return {"command": "release_start", "ok": True, "dry_run": True,
                 "release_id": rid, "bundle_id": bundle_id, "plan": plan}
 
+    policy = _load_policy(project_root)
     try:
         machine = ReleaseMachine.start(
             _store(project_root), managers, ipa_path,
-            account=account, group=group, clock=clock, reset=reset,
+            account=account, group=group, ship=ship,
+            allow_submit=policy["allow_submit"],
+            uses_non_exempt_encryption=policy["uses_non_exempt_encryption"],
+            clock=clock, reset=reset,
         )
     except AndpError as err:
         return {"command": "release_start", "ok": False, "dry_run": False,
@@ -87,6 +95,33 @@ def release_start(ipa_path, account="primary", group=None, project_root=".",
 
     return {"command": "release_start", "ok": True, "dry_run": False,
             "release_id": machine.release_id, "state": machine.state, "next": "poll"}
+
+
+def _load_policy(project_root):
+    from .policy import load_policy
+    return load_policy(os.path.join(project_root, "andp.yml"))
+
+
+def release_approve(release_id_arg, account="primary", project_root=".", clock=time.time):
+    """Record an out-of-band human approval opening the submit gate."""
+    try:
+        managers, account_cfg, dry_run = _managers_for(account)
+    except AndpError as err:
+        return _error_result("release_approve", err)
+    try:
+        machine = ReleaseMachine.load(
+            _store(project_root), managers if not dry_run else None,
+            release_id_arg, clock=clock)
+    except AndpError as err:
+        return _error_result("release_approve", err)
+    if machine is None:
+        return {"command": "release_approve", "ok": False,
+                "error": {"code": "not_found", "message": f"No release '{release_id_arg}'.",
+                          "retryable": False, "remediation": "Check the id with release_list."}}
+    snap = machine.approve()
+    view = _snapshot_view(snap)
+    view.update({"command": "release_approve", "ok": True})
+    return view
 
 
 def _error_result(command, err):

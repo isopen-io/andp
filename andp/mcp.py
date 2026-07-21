@@ -18,10 +18,7 @@ like Claude Code and Cursor can reason about risk. `submit` is refused unless
 import contextlib
 import io
 import json
-import os
 import sys
-
-import yaml
 
 from . import service
 from .asc.asc_manager import main as cli_main
@@ -64,6 +61,10 @@ TOOLS = [
             "properties": {
                 "ipa_path": {"type": "string"},
                 "group": {"type": "string", "description": "TestFlight group to link the build to"},
+                "ship": {"type": "boolean",
+                         "description": "Also run the App Store path (version -> attach -> "
+                                        "compliance -> submit); the submit stage is gated by "
+                                        "andp.yml policy or an out-of-band `release approve`."},
                 "account": {"type": "string"},
             },
             "required": ["ipa_path"],
@@ -154,15 +155,7 @@ TOOLS = [
 
 _CLI_JSON_TOOLS = {"upload"}
 
-
-def load_policy(path="andp.yml"):
-    policy = {"allow_submit": False}
-    if os.path.exists(path):
-        with open(path, "r") as f:
-            loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
-            data = yaml.load(f, Loader=loader) or {}
-        policy.update((data.get("policy") or {}))
-    return policy
+from .policy import load_policy  # noqa: E402  (shared allow_submit / compliance loader)
 
 
 # -- library-first release tools --------------------------------------------
@@ -182,7 +175,7 @@ def _call_release_tool(name, args):
     if name == "release_start":
         return _release_result(service.release_start(
             args["ipa_path"], account=args.get("account", "primary"),
-            group=args.get("group")))
+            group=args.get("group"), ship=bool(args.get("ship", False))))
     if name == "release_poll":
         return _release_result(service.release_poll(
             args["release_id"], account=args.get("account", "primary")))
