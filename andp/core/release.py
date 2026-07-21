@@ -14,9 +14,12 @@ Design contract (see Documentation/Design/agentic-core.md):
 import re
 import time
 
+from ..asc.appstore import (
+    EDITABLE_VERSION_STATES, IN_REVIEW_VERSION_STATES, version_state,
+)
 from ..asc.client import ASCAPIError
 from .errors import AndpError, from_asc_error, from_unexpected
-from .ipa import read_metadata, sha256
+from .ipa import read_export_compliance, read_metadata, sha256
 
 SCHEMA_VERSION = 1
 TERMINAL = ("done", "failed")
@@ -31,11 +34,25 @@ def release_id(account, bundle_id, version, build_number):
     return re.sub(r"[^a-zA-Z0-9]+", "-", raw).strip("-").lower()
 
 
+# Fields introduced after schema v1; filled with defaults when an older state
+# file (or a partial one) is loaded, so the machine stays forward-compatible.
+_FIELD_DEFAULTS = {
+    "want_group": None,
+    "want_ship": False,
+    "allow_submit": False,
+    "uses_non_exempt_encryption": None,
+    "ipa_compliance": None,
+    "approved": False,
+    "version_id": None,
+    "submission_id": None,
+}
+
+
 class ReleaseMachine:
     def __init__(self, store, managers, state, clock=time.time):
         self.store = store
         self.managers = managers
-        self._state = state
+        self._state = {**_FIELD_DEFAULTS, **state}
         self._clock = clock
 
     # -- construction ------------------------------------------------------
@@ -53,6 +70,7 @@ class ReleaseMachine:
 
     @classmethod
     def start(cls, store, managers, ipa_path, *, account="primary", group=None,
+              ship=False, allow_submit=False, uses_non_exempt_encryption=None,
               clock=time.time, poll_budget=_DEFAULT_POLL_BUDGET, reset=False):
         bundle_id, version, build_number = read_metadata(ipa_path)
         if not bundle_id:
@@ -106,11 +124,18 @@ class ReleaseMachine:
             "ipa_sha256": digest,
             "state": "created",
             "want_group": group,
+            "want_ship": ship,
+            "allow_submit": allow_submit,
+            "uses_non_exempt_encryption": uses_non_exempt_encryption,
+            "ipa_compliance": read_export_compliance(ipa_path),
+            "approved": False,
             "app_id": None,
             "upload_attempted": False,
             "upload_id": None,
             "build_id": None,
             "processing_state": None,
+            "version_id": None,
+            "submission_id": None,
             "poll_count": 0,
             "poll_budget": poll_budget,
             "history": ["created"],
@@ -159,7 +184,7 @@ class ReleaseMachine:
             # a snapshot taken before another driver advanced the release.
             fresh = self.store.load(self._state["release_id"])
             if fresh is not None:
-                self._state = fresh
+                self._state = {**_FIELD_DEFAULTS, **fresh}
             if self.is_terminal():
                 return self.snapshot()
             try:
@@ -276,11 +301,132 @@ class ReleaseMachine:
                     raise
             self._state["group_id"] = group["id"]
             self._transition("group_linked")
+        elif self._state["want_ship"]:
+            self._ensure_version_step()
         else:
             self._transition("done")
 
     def _do_group_linked(self):
+        if self._state["want_ship"]:
+            self._ensure_version_step()
+        else:
+            self._transition("done")
+
+    # -- App Store path (--ship) -------------------------------------------
+
+    def _ensure_version_step(self):
+        version = self.managers.appstore.ensure_version(
+            self._state["app_id"], self._state["version"]
+        )
+        state = version_state(version)
+        if state in IN_REVIEW_VERSION_STATES:
+            # This version was already submitted on a previous run — nothing to do.
+            self._state["version_id"] = version["id"]
+            self._transition("done")
+            return
+        if state is not None and state not in EDITABLE_VERSION_STATES:
+            self._fail(AndpError(
+                code="version_not_editable",
+                message=f"Version {self._state['version']} is in state {state}.",
+                retryable=False,
+                remediation="Bump the marketing version; this one is published or in review.",
+            ))
+            return
+        self._state["version_id"] = version["id"]
+        self._transition("version_ensured")
+
+    def _do_version_ensured(self):
+        self.managers.appstore.attach_build(
+            self._state["version_id"], self._state["build_id"]
+        )
+        self._transition("build_attached")
+
+    def _do_build_attached(self):
+        configured = self._state["uses_non_exempt_encryption"]
+        if configured is not None:
+            self.managers.builds.set_uses_non_exempt_encryption(
+                self._state["build_id"], configured
+            )
+            self._transition("compliance_set")
+        elif self._state["ipa_compliance"] is not None:
+            # The IPA's Info.plist already declares it — nothing to set.
+            self._transition("compliance_set")
+        else:
+            self._fail(AndpError(
+                code="compliance_undeclared",
+                message="Export compliance is not declared.",
+                retryable=False,
+                remediation=(
+                    "Set compliance.uses_non_exempt_encryption in andp.yml, or add "
+                    "ITSAppUsesNonExemptEncryption to the app's Info.plist."
+                ),
+            ))
+
+    def _do_compliance_set(self):
+        # A pure gate marker — no external effect.
+        self._transition("awaiting_approval")
+
+    def _do_awaiting_approval(self):
+        if not (self._state["allow_submit"] or self._state["approved"]):
+            # The gate is closed: stay here, surface an actionable flag, do NOT
+            # cross the gate. Crossing requires policy or an explicit approval.
+            self._state["needs_approval"] = True
+            return
+        self._submit_review()
+        self._state.pop("needs_approval", None)
+        self._transition("submitted")
+
+    def _submit_review(self):
+        app_id = self._state["app_id"]
+        version_id = self._state["version_id"]
+        appstore = self.managers.appstore
+
+        open_sub = appstore.find_open_review_submission(app_id, "IOS")
+        if open_sub is not None:
+            sub_id = open_sub["id"]
+            version_ids = appstore.submission_version_ids(sub_id)
+            if version_id in version_ids:
+                self._state["submission_id"] = sub_id
+                appstore.mark_submitted(sub_id)      # idempotent re-submit
+                return
+            if version_ids:
+                raise AndpError(
+                    code="review_submission_conflict",
+                    message="An open review submission references another version.",
+                    retryable=False,
+                    remediation=(
+                        "Resolve the open submission in the App Store Connect UI, "
+                        "then retry."
+                    ),
+                )
+            appstore.add_submission_item(sub_id, version_id)
+            self._state["submission_id"] = sub_id
+            appstore.mark_submitted(sub_id)
+            return
+
+        submission = appstore.create_review_submission(app_id, "IOS")
+        appstore.add_submission_item(submission["id"], version_id)
+        self._state["submission_id"] = submission["id"]
+        appstore.mark_submitted(submission["id"])
+
+    def _do_submitted(self):
         self._transition("done")
+
+    # -- approval ----------------------------------------------------------
+
+    def approve(self):
+        """Record an out-of-band human approval to open the submit gate."""
+        with self.store.lock(self._state["release_id"]):
+            fresh = self.store.load(self._state["release_id"])
+            if fresh is not None:
+                self._state = fresh
+            self._state["approved"] = True
+            self._state["plan_hash"] = self._plan_hash()
+            self._save()
+        return self.snapshot()
+
+    def _plan_hash(self):
+        return f"{self._state.get('build_id')}:{self._state.get('version_id')}"
 
     # -- helpers -----------------------------------------------------------
 

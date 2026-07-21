@@ -6,6 +6,27 @@ appStoreVersionSubmissions endpoint was removed in ASC API 4.0.
 """
 
 
+# appStoreState is deprecated in favour of appVersionState; a version in one of
+# these states can still accept a build and be submitted. READY_FOR_REVIEW is
+# included: a pre-filled app auto-advances there before submission.
+EDITABLE_VERSION_STATES = frozenset({
+    "PREPARE_FOR_SUBMISSION", "READY_FOR_REVIEW", "DEVELOPER_REJECTED",
+    "REJECTED", "METADATA_REJECTED", "INVALID_BINARY",
+})
+# States meaning "already submitted / in review" — a submission for this version
+# already exists; do not create another.
+IN_REVIEW_VERSION_STATES = frozenset({
+    "WAITING_FOR_REVIEW", "IN_REVIEW", "PENDING_APPLE_RELEASE",
+    "PENDING_DEVELOPER_RELEASE", "PROCESSING_FOR_APP_STORE",
+})
+
+
+def version_state(version):
+    """Read a version's state, preferring the current attribute name."""
+    attrs = version.get("attributes", {}) or {}
+    return attrs.get("appVersionState") or attrs.get("appStoreState")
+
+
 class AppStoreManager:
     def __init__(self, client):
         self.client = client
@@ -86,9 +107,30 @@ class AppStoreManager:
 
     # -- review ----------------------------------------------------------
 
-    def submit_for_review(self, app_id, version_id, platform="IOS"):
-        """Create a review submission, add the version to it, then submit."""
-        submission = self.client.post(
+    def find_open_review_submission(self, app_id, platform="IOS"):
+        """The app's open (READY_FOR_REVIEW) review submission, or None.
+
+        Apple allows only one open submission per app/platform at a time."""
+        response = self.client.get(
+            f"/v1/apps/{app_id}/reviewSubmissions",
+            params={"filter[state]": "READY_FOR_REVIEW", "filter[platform]": platform},
+        )
+        data = response.get("data", [])
+        return data[0] if data else None
+
+    def submission_version_ids(self, submission_id):
+        """The appStoreVersion ids referenced by a submission's items."""
+        items = self.client.get_all(f"/v1/reviewSubmissions/{submission_id}/items")
+        ids = []
+        for item in items:
+            rel = (item.get("relationships") or {}).get("appStoreVersion") or {}
+            data = rel.get("data")
+            if data:
+                ids.append(data["id"])
+        return ids
+
+    def create_review_submission(self, app_id, platform="IOS"):
+        return self.client.post(
             "/v1/reviewSubmissions",
             {
                 "data": {
@@ -101,14 +143,15 @@ class AppStoreManager:
             },
         )["data"]
 
-        self.client.post(
+    def add_submission_item(self, submission_id, version_id):
+        return self.client.post(
             "/v1/reviewSubmissionItems",
             {
                 "data": {
                     "type": "reviewSubmissionItems",
                     "relationships": {
                         "reviewSubmission": {
-                            "data": {"type": "reviewSubmissions", "id": submission["id"]}
+                            "data": {"type": "reviewSubmissions", "id": submission_id}
                         },
                         "appStoreVersion": {
                             "data": {"type": "appStoreVersions", "id": version_id}
@@ -116,18 +159,26 @@ class AppStoreManager:
                     },
                 }
             },
-        )
+        )["data"]
 
+    def mark_submitted(self, submission_id):
         return self.client.patch(
-            f"/v1/reviewSubmissions/{submission['id']}",
+            f"/v1/reviewSubmissions/{submission_id}",
             {
                 "data": {
                     "type": "reviewSubmissions",
-                    "id": submission["id"],
+                    "id": submission_id,
                     "attributes": {"submitted": True},
                 }
             },
         )["data"]
+
+    def submit_for_review(self, app_id, version_id, platform="IOS"):
+        """Create a review submission, add the version, then submit
+        (non-idempotent convenience; the machine uses the granular methods)."""
+        submission = self.create_review_submission(app_id, platform)
+        self.add_submission_item(submission["id"], version_id)
+        return self.mark_submitted(submission["id"])
 
     # -- release ---------------------------------------------------------
 

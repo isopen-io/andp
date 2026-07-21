@@ -160,6 +160,81 @@ annotations per the 2025-03-26 spec (conservative defaults made explicit):
 `submit` stays gated by policy; `release_poll` respects the gate through the
 machine itself (single enforcement point — adapters cannot bypass it).
 
+## v1.1 — the App Store path (`--ship`) + approval gate
+
+Extends the machine past `valid`/`group_linked` when `--ship` is set. States
+(each named by the milestone completed):
+
+```
+valid ─┬─(--group)→ group_linked ─┐
+       └───────────────────────────┴─(--ship)→ version_ensured
+   → build_attached → compliance_set → awaiting_approval → submitted → done
+```
+
+Ordering when both flags: TestFlight group first, then the App Store path.
+
+- **`version_ensured`** — `ensure_version`, then **reject a non-editable
+  version** (adjustment 9): if `appStoreState` ∉ the editable set
+  (`PREPARE_FOR_SUBMISSION`, `DEVELOPER_REJECTED`, `REJECTED`,
+  `METADATA_REJECTED`, `INVALID_BINARY`), fail `version_not_editable`
+  ("version already published / in review — bump the version").
+- **`build_attached`** — `attach_build(version_id, pinned build_id)`. This is
+  the fix for the old submit-without-build bug, now enforced by ordering.
+- **`compliance_set`** — export compliance is a **legal declaration**: set
+  `usesNonExemptEncryption` via API **only if** explicitly configured
+  (`andp.yml → compliance.uses_non_exempt_encryption`); otherwise skip and
+  trust the binary's `ITSAppUsesNonExemptEncryption` (never guess).
+- **`awaiting_approval`** — a *waiting* state, like `processing`. `poll` here
+  **never crosses the gate**: it returns `needs_approval: true` and stops. The
+  gate opens only if `policy.allow_submit: true` (trusted/CI) **or** a recorded
+  approval exists (`release approve <id>` — an out-of-band human action that
+  stamps a timestamp and the plan hash). This keeps `release_poll`'s
+  `destructive:false` annotation honest: the destructive submit is reached only
+  by an explicit gate opening, never silently by a poll.
+- **`submitted`** — idempotent recovery (adjustment 8): before creating a new
+  `reviewSubmission`, look for an OPEN one on the app; adopt it **only if its
+  items reference this version**, else create fresh. Prevents a crash mid-submit
+  from double-submitting or submitting the wrong version.
+
+New state fields: `want_ship`, `allow_submit`, `approved`, `approved_ts`,
+`plan_hash`, `uses_non_exempt_encryption`, `version_id`, `submission_id`.
+
+Threat model unchanged: the gate is real for MCP-only agents; a shell-wielding
+agent can run `release approve` itself — enforcement is the host's permission
+prompt. ANDP makes the action explicit, gated, annotated and audited.
+
+### v1.1 design review (2026-07-21, GO with adjustments — applied)
+
+- **Version state (would break every ship):** `appStoreState` is **deprecated**;
+  read **`appVersionState`** first, fall back to `appStoreState`. Editable set
+  **must include `READY_FOR_REVIEW`** (a pre-filled CI app auto-advances there
+  before submission — the common happy path). Final editable set:
+  `PREPARE_FOR_SUBMISSION, READY_FOR_REVIEW, DEVELOPER_REJECTED, REJECTED,
+  METADATA_REJECTED, INVALID_BINARY`. Unknown state → reject defensively.
+- **Submission recovery is 3-branch, not "adopt-or-create":** Apple allows only
+  **one open review submission per app/platform**. `find_open_review_submission`
+  via `GET /v1/apps/{id}/reviewSubmissions?filter[state]=READY_FOR_REVIEW&
+  filter[platform]=IOS`; inspect items' `relationships.appStoreVersion` client-
+  side (no `filter[appStoreVersion]`). (a) open+our version → re-submit
+  (idempotent), adding the item if missing; (b) in-review+our version → already
+  done; (c) open referencing another version → escalate
+  `review_submission_conflict` (resolve in UI). `submit_for_review` is
+  decomposed accordingly.
+- **Compliance:** also read `ITSAppUsesNonExemptEncryption` from the IPA's
+  Info.plist. If neither `andp.yml` nor the plist declares it → fail early
+  `compliance_undeclared` (else the submit fails late). `usesNonExemptEncryption`
+  is a **build** attribute (`PATCH /v1/builds/{id}`, already correct).
+- **`awaiting_approval` is a waiting state, not a retryable error:**
+  `_do_awaiting_approval` checks the gate (`allow_submit` OR valid `approved`);
+  if open → submit → `submitted`; else set `needs_approval: true` and return
+  (no transition, no raise). Poll crosses the gate only when it is *already*
+  open by policy/approval — never by the act of polling.
+- **Submit 409 detail:** preserve Apple's message (missing screenshots / age
+  rating / support URL …) in the remediation — no client-side precheck (the API
+  validates synchronously).
+- **Scope:** platform hardcoded `IOS` (explicit); no phased/manual release, no
+  metadata push in `--ship` (separate) — v1.2.
+
 ## Competitive positioning (research, 2026-07-21)
 
 - asc-mcp (~200 tools, 1:1 API), fastlane-mcp (CLI wrapper),
