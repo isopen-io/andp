@@ -45,11 +45,11 @@ Without real credentials every command (except `verify`) runs in DRY-RUN mode �
 ## Gate your PRs with the preflight (GitHub Action)
 
 ```yaml
-- uses: isopen-io/andp@main
+- uses: isopen-io/andp@v1
   with:
     key-id: ${{ secrets.ASC_KEY_ID }}
     issuer-id: ${{ secrets.ASC_ISSUER_ID }}
-    private-key: ${{ secrets.ASC_PRIVATE_KEY }}
+    private-key: ${{ secrets.ASC_PRIVATE_KEY }}   # the raw .p8 contents
     bundle-id: me.your.app     # optional: also checks the app record exists
 ```
 
@@ -60,24 +60,24 @@ The job fails — with the exact reason — whenever publishing cannot work: pla
 Two richer checks answer, on every PR, *can this app go to TestFlight cleanly?* and *can this version go to the App Store cleanly?* — each with a readable job-summary report and a tri-state verdict (✅ ready / ❌ not_ready / ⚪ unverified, so a fork PR never goes falsely green):
 
 ```yaml
-- uses: isopen-io/andp/.github/actions/testflight-readiness@main
+- uses: isopen-io/andp/.github/actions/testflight-readiness@v1
   with: { key-id: ${{ secrets.ASC_KEY_ID }}, issuer-id: ${{ secrets.ASC_ISSUER_ID }},
           private-key: ${{ secrets.ASC_PRIVATE_KEY }}, bundle-id: me.your.app }
 
-- uses: isopen-io/andp/.github/actions/appstore-readiness@main
+- uses: isopen-io/andp/.github/actions/appstore-readiness@v1
   with: { key-id: ${{ secrets.ASC_KEY_ID }}, issuer-id: ${{ secrets.ASC_ISSUER_ID }},
           private-key: ${{ secrets.ASC_PRIVATE_KEY }}, bundle-id: me.your.app, version: "1.2.0" }
 ```
 
-Or both at once via the reusable workflow `isopen-io/andp/.github/workflows/publish-readiness.yml`. See [`Documentation/PublishReadiness.md`](Documentation/PublishReadiness.md). The same logic is a CLI: `andp readiness testflight <bundle>` / `andp readiness appstore <bundle> <version>`.
+Or both at once via the reusable workflow `isopen-io/andp/.github/workflows/publish-readiness.yml@v1`. See [`Documentation/PublishReadiness.md`](Documentation/PublishReadiness.md). The same logic is a CLI: `andp readiness testflight <bundle>` / `andp readiness appstore <bundle> <version>`. A single unified action is also published: [`isopen-io/ios-publish-readiness@v1`](https://github.com/isopen-io/ios-publish-readiness).
 
 Full pipeline as a reusable workflow instead:
 
 ```yaml
 jobs:
   release:
-    uses: isopen-io/andp/.github/workflows/andp-release.yml@main
-    with: { scheme: MyApp, app-dir: ., andp-ref: main }
+    uses: isopen-io/andp/.github/workflows/andp-release.yml@v1
+    with: { scheme: MyApp, app-dir: ., andp-ref: v1 }
     secrets: inherit
 ```
 
