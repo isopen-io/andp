@@ -269,8 +269,7 @@ def test_ship_with_metadata_pushes_before_approval(tmp_path, store):
         _version("PREPARE_FOR_SUBMISSION"),           # ensure_version
         FakeResponse(204, None, content=b""),          # attach_build
         FakeResponse(200, {"data": {"id": "build-77"}}),   # compliance
-        # metadata push: ensure_version (again), loc GET+PATCH
-        _version("PREPARE_FOR_SUBMISSION"),
+        # metadata push: pinned version_id -> no ensure_version; loc GET+PATCH
         FakeResponse(200, {"data": [{"id": "loc-en", "attributes": {"locale": "en-US"}}]}),
         FakeResponse(200, {"data": {"id": "loc-en"}}),
         # submit
@@ -284,4 +283,4 @@ def test_ship_with_metadata_pushes_before_approval(tmp_path, store):
                              uses_non_exempt_encryption=False, metadata_dir=root)
     final = _drive(m)
     assert final["state"] == "done"
-    assert "metadata_pushed" in final["history"]
+    assert "metadata_pending" in final["history"]

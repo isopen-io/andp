@@ -1,3 +1,13 @@
+## 1.10.1 - 2026-07-21
+### v1.2 hardening (pre-release code review)
+- BUG 1 (critical): per-FILE idempotency for screenshots/previews (a partial set
+  no longer drops the missing media on retry, which previously shipped silently)
+- BUG 2: service.publish always returns a dict (wraps ASCAPIError/network errors)
+- i18n: text read as UTF-8; an empty .txt no longer overwrites the field with ""
+- machine passes the pinned version_id (no re-resolve); standalone publish checks
+  version editability; metadata_pushed state renamed metadata_pending
+- hidden/tooling dirs skipped; shared byte-transfer helper. 201 tests
+
 ## 1.10.0 - 2026-07-21
 ### v1.2: release notes, screenshots & preview videos
 - New: preview VIDEO upload (appPreviewSets/appPreviews) alongside screenshots

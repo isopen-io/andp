@@ -375,19 +375,22 @@ class ReleaseMachine:
             ))
 
     def _do_compliance_set(self):
+        # 'metadata_pending' names work still TO DO (like 'processing'): the push
+        # happens when this state is processed, not when it is entered.
         if self._state.get("metadata_dir"):
-            self._transition("metadata_pushed")
+            self._transition("metadata_pending")
         else:
             self._transition("awaiting_approval")
 
-    def _do_metadata_pushed(self):
+    def _do_metadata_pending(self):
         # Push release notes + screenshots + previews from the folder tree, then
-        # wait for approval. Idempotent (upsert metadata, skip populated sets),
-        # so a retry re-runs the whole push safely.
+        # wait for approval. Idempotent per file (skip fileNames already present),
+        # so a retryable failure re-runs the push safely. Uses the pinned
+        # version_id (no re-resolve).
         from .. import publish
         publish.publish_metadata(
             self.managers, self._state["app_id"], self._state["version"],
-            self._state["metadata_dir"],
+            self._state["metadata_dir"], version_id=self._state["version_id"],
         )
         self._transition("awaiting_approval")
 

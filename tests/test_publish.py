@@ -76,9 +76,9 @@ def test_publish_skips_screenshot_set_that_already_has_assets(tmp_path):
         FakeResponse(200, {"data": [{"id": "ver-1", "attributes": {"appVersionState": "PREPARE_FOR_SUBMISSION"}}]}),
         FakeResponse(200, {"data": [{"id": "loc-en", "attributes": {"locale": "en-US"}}]}),
         FakeResponse(200, {"data": {"id": "loc-en"}}),
-        # screenshots: ensure set -> found, count -> already 1 -> SKIP upload
+        # screenshots: ensure set -> found, existing filenames already has 01.png -> SKIP
         FakeResponse(200, {"data": [{"id": "sset-1", "type": "appScreenshotSets"}]}),
-        FakeResponse(200, {"data": [{"id": "existing"}]}),  # count_screenshots -> 1
+        FakeResponse(200, {"data": [{"id": "existing", "attributes": {"fileName": "01.png"}}]}),
     )
     managers = make_test_managers(session)
 

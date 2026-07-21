@@ -126,15 +126,21 @@ def publish(bundle_id, version, metadata_dir, account="primary"):
     if dry_run:
         return {"command": "publish", "ok": True, "dry_run": True,
                 "bundle_id": bundle_id, "version": version, "metadata_dir": metadata_dir}
-    app = managers.apps.find_app(bundle_id)
-    if app is None:
-        return {"command": "publish", "ok": False,
-                "error": {"code": "app_not_found", "message": f"App {bundle_id} not found.",
-                          "retryable": False, "remediation": "Create the app record in ASC."}}
+    from .asc.client import ASCAPIError
+    from .core.errors import from_asc_error, from_unexpected
     try:
+        app = managers.apps.find_app(bundle_id)
+        if app is None:
+            return {"command": "publish", "ok": False,
+                    "error": {"code": "app_not_found", "message": f"App {bundle_id} not found.",
+                              "retryable": False, "remediation": "Create the app record in ASC."}}
         summary = publish_metadata(managers, app["id"], version, metadata_dir)
     except AndpError as err:
         return _error_result("publish", err)
+    except ASCAPIError as err:
+        return _error_result("publish", from_asc_error(err))
+    except Exception as err:  # network / filesystem — always return a dict
+        return _error_result("publish", from_unexpected(err))
     return {"command": "publish", "ok": True, "dry_run": False, **summary}
 
 

@@ -235,6 +235,35 @@ prompt. ANDP makes the action explicit, gated, annotated and audited.
 - **Scope:** platform hardcoded `IOS` (explicit); no phased/manual release, no
   metadata push in `--ship` (separate) — v1.2.
 
+### v1.2 code review (2026-07-21, CORRECTIONS_REQUISES → applied)
+
+The folder-convention publisher (`andp/publish.py`) was reviewed; blockers +
+important minors fixed (TDD, `tests/test_publish_hardening.py`):
+
+- **BUG 1 (critical) — silent screenshot loss.** Idempotency was per-SET
+  (`count>0 → skip`), so a retry after a partial upload skipped the whole set
+  and the missing screenshot was never uploaded — shipping an amputated listing
+  silently. **Fix:** per-FILE idempotency via `existing_filenames(set_id)`;
+  only files whose `fileName` is absent are uploaded (`screenshots_skipped`
+  reported).
+- **BUG 2 (major) — `service.publish` leaked exceptions.** `ASCAPIError`/network
+  errors aren't `AndpError`, so they escaped and crashed `andp publish`. **Fix:**
+  wrap with `from_asc_error`/`from_unexpected` — always returns a dict.
+- **BUG 4 — misleading state name.** `metadata_pushed` was entered before the
+  push ran. **Renamed** to `metadata_pending` (names work TO DO, like
+  `processing`).
+- **BUG 5/6 — i18n footguns.** Text files are now read `encoding="utf-8"`, and
+  an empty/whitespace `.txt` no longer overwrites the App Store field with `""`.
+- **BUG 8 — re-resolve on push.** The machine passes the pinned `version_id`;
+  standalone `publish_metadata` checks version editability before pushing.
+- Minor: hidden/tooling dirs (`.git`, `__MACOSX`, `.DS_Store`) skipped;
+  screenshot upload reuses the shared `_transfer_bytes`.
+
+Residual (documented): a reserved-but-not-committed asset (crash mid-upload of a
+single file) is matched by fileName and skipped — the rare stuck reservation
+needs manual cleanup; a permanent 4xx on the CDN PUT is labelled retryable
+(the agent/human sees no progress rather than looping in code).
+
 ### v1.1 code review (2026-07-21, CORRECTIONS_REQUISES → applied)
 
 An adversarial code review of the `--ship` implementation found 4 blockers +

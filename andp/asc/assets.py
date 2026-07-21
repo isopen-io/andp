@@ -98,27 +98,16 @@ class ScreenshotManager:
             },
         )["data"]
 
-        checksum = hashlib.md5()
-        with open(file_path, "rb") as f:
-            for operation in screenshot["attributes"]["uploadOperations"]:
-                f.seek(operation["offset"])
-                chunk = f.read(operation["length"])
-                checksum.update(chunk)
-                headers = {
-                    h["name"]: h["value"] for h in operation.get("requestHeaders", [])
-                }
-                self.upload_transport(operation["method"], operation["url"], chunk, headers)
-
+        checksum = _transfer_bytes(
+            file_path, screenshot["attributes"]["uploadOperations"], self.upload_transport
+        )
         return self.client.patch(
             f"/v1/appScreenshots/{screenshot['id']}",
             {
                 "data": {
                     "type": "appScreenshots",
                     "id": screenshot["id"],
-                    "attributes": {
-                        "uploaded": True,
-                        "sourceFileChecksum": checksum.hexdigest(),
-                    },
+                    "attributes": {"uploaded": True, "sourceFileChecksum": checksum},
                 }
             },
         )["data"]
@@ -126,6 +115,12 @@ class ScreenshotManager:
     def count_screenshots(self, screenshot_set_id):
         """How many screenshots the set already holds (for idempotent skips)."""
         return len(self.client.get_all(f"/v1/appScreenshotSets/{screenshot_set_id}/appScreenshots"))
+
+    def existing_filenames(self, screenshot_set_id):
+        """The set of fileNames already in the set — for per-file idempotency."""
+        items = self.client.get_all(f"/v1/appScreenshotSets/{screenshot_set_id}/appScreenshots")
+        return {i.get("attributes", {}).get("fileName")
+                for i in items if i.get("attributes", {}).get("fileName")}
 
 
 class PreviewManager:
@@ -198,3 +193,8 @@ class PreviewManager:
 
     def count_previews(self, preview_set_id):
         return len(self.client.get_all(f"/v1/appPreviewSets/{preview_set_id}/appPreviews"))
+
+    def existing_filenames(self, preview_set_id):
+        items = self.client.get_all(f"/v1/appPreviewSets/{preview_set_id}/appPreviews")
+        return {i.get("attributes", {}).get("fileName")
+                for i in items if i.get("attributes", {}).get("fileName")}
