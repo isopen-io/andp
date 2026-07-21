@@ -1,3 +1,21 @@
+## 1.8.0 - 2026-07-21
+### Agentic core: resumable, library-first, hardened
+- New `andp/core`: typed error taxonomy (code/retryable/remediation), crash-safe
+  state store (atomic writes + locking), and a resumable release **state machine**
+- Releases are now stateful resources: `andp release start|poll|status|list|reset`
+  advance a single persisted, non-blocking step at a time — crash-safe (write-ahead
+  reserve, pinned build id), with retry_after on processing and typed failures
+- `andp/service.py`: library layer both CLI and MCP call — MCP is now truly
+  library-first (release tools drive the machine directly, not captured stdout)
+- MCP v2: protocol 2025-03-26, honest tool annotations
+  (readOnly/destructive/idempotent), structuredContent, submit policy-gated
+- Fixed a real bug: `submit` now attaches a VALID build before review submission
+- Pre-release code review found and fixed 7 blockers (no upload brick, typed
+  transport/fs errors, MCP DoS-resilience, resume without the IPA, terminal
+  reset, dropped an unverified API filter, reload-under-lock) — TDD
+- Design + review logs: Documentation/Design/agentic-core.md; agent guide:
+  Documentation/Agents.md. 164 tests.
+
 ## 1.7.0 - 2026-07-20
 ### H3: agent-native publishing
 - `--json` on every command: structured envelopes (checks, stages, app/build ids) an agent can reason about — no prose parsing
