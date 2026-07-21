@@ -251,6 +251,97 @@ def readiness_appstore(bundle_id, version, account="primary"):
                             bundle_id=bundle_id, version=version)
 
 
+def build_number(strategy, bundle_id=None, floor=0, fmt=None, sha=None,
+                 digits=7, account="primary", clock=None):
+    """Compute the next iOS build number (CFBundleVersion) via a strategy:
+
+      fastlane  = max(floor, latest ASC build) + 1  (monotonic; needs creds)
+      timestamp = utc-now, formatted                (monotonic; no creds)
+      commit    = int(git short sha, 16)            (unique, NOT monotonic; no creds)
+
+    Returns a typed envelope; never raises. Only `fastlane` touches App Store
+    Connect — `timestamp`/`commit` run with zero credentials."""
+    from .buildnum import commit_build, timestamp_build
+
+    # Coerce here too (not just in the CLI) so an MCP/library caller passing
+    # floor/digits as a JSON string or float gets an envelope, never an exception.
+    try:
+        floor = int(floor)
+        digits = int(digits)
+    except (TypeError, ValueError):
+        return _error_result("build_number", AndpError(
+            code="bad_input", message="floor and digits must be integers",
+            retryable=False, remediation="Pass integer floor and digits."))
+
+    if strategy == "timestamp":
+        try:
+            value, monotonic = timestamp_build(clock=clock, fmt=fmt)
+        except ValueError as exc:
+            return _error_result("build_number", AndpError(
+                code="bad_input", message=str(exc), retryable=False,
+                remediation="Use a digit-only --format of <= 18 chars."))
+        return {"command": "build_number", "ok": True, "strategy": "timestamp",
+                "build_number": value, "monotonic": monotonic}
+
+    if strategy == "commit":
+        if sha is None:
+            sha = os.environ.get("GITHUB_SHA")
+        try:
+            value = commit_build(sha, digits=digits)
+        except ValueError as exc:
+            return _error_result("build_number", AndpError(
+                code="bad_input", message=str(exc), retryable=False,
+                remediation="Pass a hex --sha or set $GITHUB_SHA."))
+        return {"command": "build_number", "ok": True, "strategy": "commit",
+                "build_number": value, "monotonic": False}
+
+    if strategy == "fastlane":
+        if not bundle_id:
+            return _error_result("build_number", AndpError(
+                code="bad_input", message="the fastlane strategy needs a bundle_id",
+                retryable=False, remediation="Pass the app bundle id."))
+        from .asc.client import ASCAPIError
+        from .core.errors import from_asc_error, from_unexpected
+        try:
+            managers, _account_cfg, dry_run = _managers_for(account)
+        except AndpError as err:
+            return _error_result("build_number", err)
+        if dry_run:
+            return {"command": "build_number", "ok": False,
+                    "error": {"code": "no_credentials",
+                              "message": "The fastlane strategy needs real credentials to query App Store Connect.",
+                              "retryable": False,
+                              "remediation": "Fill in secrets.yml, or use --strategy timestamp/commit."}}
+        try:
+            app = managers.apps.find_app(bundle_id)
+            if app is None:
+                return {"command": "build_number", "ok": False,
+                        "error": {"code": "app_not_found",
+                                  "message": f"App {bundle_id} not found.",
+                                  "retryable": False,
+                                  "remediation": "Create the app record in ASC."}}
+            latest, skipped = managers.builds.latest_build_number(app["id"])
+        except ASCAPIError as err:
+            return _error_result("build_number", from_asc_error(err))
+        except Exception as err:
+            return _error_result("build_number", from_unexpected(err))
+        value = max(floor, latest) + 1
+        result = {"command": "build_number", "ok": True, "strategy": "fastlane",
+                  "build_number": str(value), "monotonic": True,
+                  "source": {"floor": floor, "latest_asc": latest, "skipped": skipped}}
+        if skipped:
+            result["warning"] = (
+                f"{skipped} build(s) on App Store Connect have non-integer "
+                "versions and were ignored — the fastlane strategy assumes "
+                "integer build numbers; the computed number may be too low. "
+                "Verify, or pass --floor.")
+        return result
+
+    return _error_result("build_number", AndpError(
+        code="bad_strategy", message=f"unknown build-number strategy '{strategy}'",
+        retryable=False, remediation="Use fastlane, timestamp or commit."))
+
+
 def precheck(bundle_id, version, account="primary"):
     """Read-only pre-submission validation. Never mutates."""
     from .precheck import run_precheck

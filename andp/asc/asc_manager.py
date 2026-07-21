@@ -16,7 +16,7 @@ from .appstore import AppStoreManager
 from .auth import ASCAuth, ASCAuthError
 from .builds import BuildProcessingError, BuildsManager
 from .client import ASCAPIError, ASCClient
-from .config import ConfigError, load_account
+from .config import AccountConfig, ConfigError, load_account
 from .managers import Managers, make_managers
 from .testflight import TestFlightManager
 
@@ -34,6 +34,7 @@ Commands (all accept --json for a structured, agent-friendly envelope):
   readiness testflight <bundle_id>               Can this app go to TestFlight cleanly? (0/1/3)
   readiness appstore <bundle_id> <version>       Can this version go to the App Store cleanly?
   store <pricing|availability|age-rating|apply>  Configure price, territories, age rating
+  build-number [bundle] --strategy S             Next build number (fastlane|timestamp|commit)
 """
 
 
@@ -645,6 +646,58 @@ def _print_store_human(result):
         print(f"  ⚠️  {w}")
 
 
+_BUILDNUM_USAGE = ("Usage: build-number [bundle_id] --strategy <fastlane|timestamp|commit> "
+                   "[--floor N] [--format FMT] [--sha SHA] [--digits N]")
+
+
+def _cmd_build_number(account, managers, dry_run, args, json_mode=False):
+    """Compute the next iOS build number (CFBundleVersion) via a strategy.
+    Prints ONLY the number on stdout (banners/warnings go to stderr) so it drops
+    straight into a build step:
+      agvtool new-version -all "$(andp build-number me.app --strategy fastlane --floor 1254)"
+    """
+    from .. import service
+
+    args = list(args)
+    strategy = _take_opt(args, "--strategy")
+    floor_s = _take_opt(args, "--floor")
+    fmt = _take_opt(args, "--format")
+    sha = _take_opt(args, "--sha")
+    digits_s = _take_opt(args, "--digits")
+
+    if strategy not in ("fastlane", "timestamp", "commit"):
+        print(_BUILDNUM_USAGE, file=sys.stderr)
+        return 2
+    bundle_id = args[0] if args else None
+    if strategy == "fastlane" and not bundle_id:
+        print("Usage: build-number <bundle_id> --strategy fastlane [--floor N]", file=sys.stderr)
+        return 2
+    try:
+        floor = int(floor_s) if floor_s is not None else 0
+        digits = int(digits_s) if digits_s is not None else 7
+    except ValueError:
+        print("Error: --floor and --digits must be integers", file=sys.stderr)
+        return 2
+
+    result = service.build_number(
+        strategy, bundle_id=bundle_id, floor=floor, fmt=fmt, sha=sha,
+        digits=digits, account=account.account_id)
+
+    if json_mode:
+        print(json.dumps(result))
+        return 0 if result.get("ok") else 1
+    if result.get("error"):
+        print(f"❌ build-number: {result['error']['message']}", file=sys.stderr)
+        return 1
+    if result.get("warning"):
+        print(f"[andp] warning: {result['warning']}", file=sys.stderr)
+    if not result.get("monotonic", True):
+        print("[andp] warning: this build number is NOT monotonic — unsafe for "
+              "sequential App Store builds within a marketing version.", file=sys.stderr)
+    print(result["build_number"])   # stdout carries ONLY the number
+    return 0
+
+
 COMMANDS = {
     "verify": _cmd_verify,
     "upload": _cmd_upload,
@@ -656,6 +709,7 @@ COMMANDS = {
     "precheck": _cmd_precheck,
     "readiness": _cmd_readiness,
     "store": _cmd_store,
+    "build-number": _cmd_build_number,
 }
 
 
@@ -674,6 +728,10 @@ def main(argv):
     if json_mode:
         args.remove("--json")
 
+    if not args:                       # e.g. `andp --json` / `andp --account x`
+        print(USAGE)
+        return 2
+
     command, command_args = args[0], args[1:]
     handler = COMMANDS.get(command)
     if handler is None:
@@ -684,18 +742,25 @@ def main(argv):
     try:
         account = load_account(account_id)
     except ConfigError as exc:
-        print(f"Error: {exc}")
-        return 1
+        # `build-number` (timestamp/commit) needs no credentials at all — let it
+        # run in a repo with no secrets file. Every other command still fails.
+        if command == "build-number":
+            account = AccountConfig(account_id, None, None, None)
+        else:
+            print(f"Error: {exc}")
+            return 1
 
     dry_run = not account.is_configured()
     if dry_run:
         # No usable credentials: never build managers (empty/placeholder creds
         # make ASCAuth raise — e.g. a fork PR with unset secrets). Handlers know
-        # to run in DRY-RUN from the flag; the banner is human-mode only.
+        # to run in DRY-RUN from the flag; the banner is human-mode only and goes
+        # to stderr so a command whose stdout is captured (build-number) is clean.
         if not json_mode:
             print(
                 f"No real App Store Connect credentials for account '{account_id}' "
-                "(placeholders detected) — running in DRY-RUN mode."
+                "(placeholders detected) — running in DRY-RUN mode.",
+                file=sys.stderr,
             )
         managers = None
     else:

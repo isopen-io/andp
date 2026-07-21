@@ -174,6 +174,29 @@ class BuildsManager:
         data = response.get("data", [])
         return data[0] if data else None
 
+    def latest_build_number(self, app_id):
+        """Return (best, skipped): the numeric GLOBAL max CFBundleVersion across
+        ALL builds (any processing state), and how many non-integer versions were
+        skipped. Full pagination (get_all follows links.next) and a NUMERIC max —
+        never the API's lexicographic `sort=-version`, which ranks "9" above
+        "1000". A global max is >= any per-marketing-version max, so
+        `max(floor, best) + 1` is always accepted by App Store Connect.
+
+        The fastlane strategy assumes integer build numbers; a *dotted*/
+        alphanumeric version is skipped AND counted (so the caller can warn that
+        `best` may be incomplete). An empty/not-yet-populated version is skipped
+        but NOT counted (nothing actionable — a build still ingesting)."""
+        builds = self.client.get_all("/v1/builds", params={"filter[app]": app_id, "limit": 200})
+        best = 0
+        skipped = 0
+        for build in builds:
+            version = ((build.get("attributes") or {}).get("version") or "").strip()
+            if version.isascii() and version.isdigit():
+                best = max(best, int(version))
+            elif version:                       # non-empty but not an integer
+                skipped += 1
+        return best, skipped
+
     # -- attributes ----------------------------------------------------------
 
     def set_uses_non_exempt_encryption(self, build_id, value):
