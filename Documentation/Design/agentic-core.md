@@ -84,15 +84,23 @@ client `_parse`).
 machine (resume semantics by default). The IPA's sha256 is recorded; if the
 file changed for the same triple, `step()` refuses with `ipa_changed`.
 
-**States** (stored, linear):
+**States** (stored, linear) — **v1 (TestFlight path):**
 
 ```
-created -> app_resolved -> uploaded -> processing -> valid
-        [-> group_linked]                       (TestFlight path, --group)
-        [-> version_ensured -> build_attached -> compliance_set -> submitted]
-                                                (App Store path, --ship)
+created -> app_resolved -> uploading -> uploaded -> processing -> valid
+        [-> group_linked]                                    (--group)
+        -> done
 terminal: done | failed(error)
 ```
+
+`uploading` persists the `buildUploads` reservation id write-ahead (adjustment
+1). The App Store path (`version_ensured → build_attached → compliance_set →
+submitted`) and plan/approve are **v1.1** — see the review log.
+
+**Local error codes** (beyond the transport taxonomy in §1): `state_locked`
+(retryable), `state_corrupted`, `ipa_changed`, `upload_incomplete` (resume hit
+an inconclusive reservation — refuse to re-upload), and in v1.1
+`approval_required`, `plan_changed`.
 
 **`step()` advances exactly one state and persists before returning.** The
 `processing` state is special: each step performs ONE poll (`GET /v1/builds`);
@@ -165,9 +173,91 @@ machine itself (single enforcement point — adapters cannot bypass it).
 
 ## Review log
 
-- 2026-07-21 — design reviewed by independent agent before implementation;
-  adjustments recorded here:
-  - (pending review)
+### 2026-07-21 — independent architectural review (verdict: GO with adjustments)
+
+The design was reviewed against the real code before implementation. The
+review caught two factual errors and led to a disciplined scope cut. Decisions
+taken, all folded into the spec above:
+
+**Corrected (were wrong / unsafe as written):**
+
+1. **Upload idempotency by "absence in `GET /v1/builds`" is false and unsafe.**
+   The repo's own `wait_for_processing` loops precisely because a committed
+   build does *not* appear immediately in `/v1/builds` (Apple ingestion window
+   of minutes). So "empty list ⇒ not uploaded ⇒ re-upload" would double-upload
+   inside that window; the duplicate (same `cfBundleVersion`) ends INVALID and,
+   because polling uses `sort=-uploadedDate&limit=1`, the machine could lock
+   onto the INVALID duplicate. **Decision:** write-ahead persistence — persist
+   the `buildUploads` reservation id *before* the file transfer (new
+   `uploading` state); on resume, an inconclusive result is treated as
+   inconclusive: the machine **refuses to re-upload** and surfaces
+   `upload_incomplete` (actionable) rather than guessing.
+
+2. **Skip-by-`filter[version]` can match the wrong build.** `filter[version]`
+   is `CFBundleVersion` only; a build number reused across marketing versions
+   (1.2 build 7 vs 1.3 build 7) matches an older VALID build. **Decision:**
+   once a build is resolved, **pin its id in the state file**; never
+   re-resolve by filter. The `processing` step resolves + pins `build_id`, and
+   every later step uses the pinned id.
+
+3. **MCP annotation honesty.** `release_poll` is **not** idempotent — each call
+   advances the machine with a new external effect ⇒ `idempotentHint: false`.
+   To keep the destructive-action boundary honest, `release_poll` **never
+   crosses a gate**: on hitting an approval gate it stops in
+   `awaiting_approval` and returns; crossing the gate is a separate explicit
+   action. `upload`'s idempotent hint is only claimed after adjustment 1.
+   Protocol version bumps to `2025-03-26` (annotations + `structuredContent`).
+
+**Specified (were missing):**
+
+4. **Failure semantics.** A *retryable* `AndpError` does **not** transition to
+   `failed`: the state is unchanged, the error resurfaced, the next poll
+   retries. `failed` is reserved for non-retryable errors. `start` on a
+   terminal state (`done`/`failed`) refuses with remediation unless `--reset`.
+5. **DRY-RUN.** `start`/`release` without real credentials returns a plan only,
+   writes **no** state file, and sets `dry_run: true`. Keeps CI green, no
+   phantom state.
+6. **Backward-compat mapping** (state → legacy stage name), so
+   `tests/test_release.py` passes **unmodified**: `app_resolved`→`app_record`,
+   `uploading|uploaded`→`upload`, `processing|valid`→`processing`,
+   `group_linked`→`testflight_group`. State file carries `upload_id`,
+   `build_id`, `processing_state`, and `schema_version`.
+7. **release_id includes the account** (`--account` exists ⇒ same triple on two
+   accounts must not collide). `status`/`list` read without taking the lock.
+
+**Scope cut for v1 (ship fast, lower risk):**
+
+- **v1 = TestFlight path only:** `created → app_resolved → uploading →
+  uploaded → processing → valid → [group_linked] → done`, terminal `failed`.
+  This is 100% of the resumability value at ~40% of the risk.
+- **App Store path** (`version_ensured → build_attached → compliance_set →
+  submitted`) and **plan/approve** move to **v1.1**, where `awaiting_approval`
+  and submission-recovery get designed properly (adjustments 8–9 below).
+- The **submit "no build attached" bug** was decoupled and **shipped
+  immediately** as a 3-line fix (commit before this one), not gated on the
+  machine.
+- **Lock stale-takeover:** kept the pid-liveness check already built and
+  tested (instant same-machine crash recovery — the common case; permanent
+  lock-out on crash would defeat the whole purpose), with an explicit
+  remediation message. Deviation from the review's "cut it" recorded here with
+  justification; its limits (pid recycling, cross-machine) are listed under
+  Residual risks.
+
+**Deferred to v1.1 (documented, not lost):** submission recovery must verify an
+open reviewSubmission's items reference *this* version before adopting it (8);
+`version_ensured` must reject a version already READY_FOR_SALE / in review (9);
+`compliance_set` (`usesNonExemptEncryption`) is a legal declaration and must
+come from explicit `andp.yml`, never a default.
+
+**Residual risks (accepted for v1):** Apple ingestion is eventually-consistent
+and undocumented — rare double-upload windows remain, mitigated finally by
+Apple's INVALID rejection + pinned build id; the approval gate is advisory
+against a shell-wielding agent (real enforcement = host permission prompt);
+local state can diverge from ASC truth if a human acts in the UI mid-release;
+multi-machine concurrent drivers on the same triple stay unprotected;
+file-locking on synced dirs (iCloud/Dropbox/NFS) is unreliable; CI runners are
+ephemeral, so resumability in CI needs the state dir cached/artifacted —
+**out of scope for v1, stated explicitly.**
 
 ## Test plan (TDD, edge cases first-class)
 
