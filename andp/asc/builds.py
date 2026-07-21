@@ -34,12 +34,10 @@ class BuildsManager:
 
     # -- Build Upload API --------------------------------------------------
 
-    def upload_ipa(self, file_path, version, build_number, app_id, platform="IOS"):
-        """Upload a signed .ipa and return the buildUpload resource id.
-
-        app_id is mandatory: the API rejects reservations without the app
-        relationship (409 "must provide a value for the relationship 'app'").
-        """
+    def reserve_upload(self, app_id, version, build_number, platform="IOS"):
+        """Reserve a build upload slot (POST /v1/buildUploads). Returns the
+        reservation id. Split out from the transfer so the caller can persist
+        the reservation write-ahead before moving any bytes."""
         upload = self.client.post(
             "/v1/buildUploads",
             {
@@ -56,7 +54,11 @@ class BuildsManager:
                 }
             },
         )["data"]
+        return upload["id"]
 
+    def transfer_reserved(self, reservation_id, file_path):
+        """Reserve the file, PUT its chunks, and commit — against an existing
+        buildUploads reservation."""
         file_size = os.path.getsize(file_path)
         upload_file = self.client.post(
             "/v1/buildUploadFiles",
@@ -71,7 +73,7 @@ class BuildsManager:
                     },
                     "relationships": {
                         "buildUpload": {
-                            "data": {"type": "buildUploads", "id": upload["id"]}
+                            "data": {"type": "buildUploads", "id": reservation_id}
                         }
                     },
                 }
@@ -98,7 +100,16 @@ class BuildsManager:
                 }
             },
         )
-        return upload["id"]
+
+    def upload_ipa(self, file_path, version, build_number, app_id, platform="IOS"):
+        """Upload a signed .ipa and return the buildUpload reservation id.
+
+        app_id is mandatory: the API rejects reservations without the app
+        relationship (409 "must provide a value for the relationship 'app'").
+        """
+        reservation_id = self.reserve_upload(app_id, version, build_number, platform)
+        self.transfer_reserved(reservation_id, file_path)
+        return reservation_id
 
     # -- processing --------------------------------------------------------
 
@@ -130,12 +141,15 @@ class BuildsManager:
                 )
             self._sleep(poll_interval)
 
-    def find_build(self, app_id, build_number, marketing_version=None):
-        """Most recent build matching (app, CFBundleVersion[, marketing version]).
+    def find_build(self, app_id, build_number):
+        """Most recent build matching (app, CFBundleVersion). Returns the build
+        resource or None. Same filter set as wait_for_processing (proven).
 
-        Passing marketing_version guards against a build number reused across
-        marketing versions (e.g. 1.2 build 7 vs 1.3 build 7) resolving to the
-        wrong binary. Returns the build resource or None.
+        Note: build numbers reused across marketing versions could in theory
+        collide here; the machine mitigates by pinning the build id once
+        resolved (never re-resolving by filter afterwards). A dotted
+        `filter[preReleaseVersion.version]` was deliberately avoided — its
+        support is unverified and a 400 would break every poll.
         """
         params = {
             "filter[app]": app_id,
@@ -143,8 +157,6 @@ class BuildsManager:
             "sort": "-uploadedDate",
             "limit": 1,
         }
-        if marketing_version:
-            params["filter[preReleaseVersion.version]"] = marketing_version
         data = self.client.get("/v1/builds", params=params).get("data", [])
         return data[0] if data else None
 

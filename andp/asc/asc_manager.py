@@ -192,7 +192,7 @@ def _cmd_release(account, managers, dry_run, args, json_mode=False):
       release list                      list all releases
     """
     args = list(args)
-    if args and args[0] in ("start", "poll", "status", "list"):
+    if args and args[0] in ("start", "poll", "status", "list", "reset"):
         return _cmd_release_sub(account, args[0], args[1:], json_mode)
 
     group_name = None
@@ -300,6 +300,11 @@ def _cmd_release_sub(account, sub, args, json_mode):
             print("Usage: release status <release_id>")
             return 2
         result = service.release_status(args[0])
+    elif sub == "reset":
+        if not args:
+            print("Usage: release reset <release_id>")
+            return 2
+        result = service.release_reset_by_id(args[0])
     else:  # list
         result = service.release_list()
 

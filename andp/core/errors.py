@@ -55,3 +55,35 @@ def from_asc_error(exc):
             "Unexpected App Store Connect response; inspect the message.")
     return AndpError(code=code, message=str(exc), retryable=retryable,
                      remediation=remediation)
+
+
+# requests exception class names — matched by name to avoid importing requests here.
+_NETWORK_EXC_NAMES = {
+    "ConnectionError", "Timeout", "ConnectTimeout", "ReadTimeout", "HTTPError",
+    "RequestException", "ChunkedEncodingError", "SSLError", "ProxyError",
+}
+
+
+def from_unexpected(exc):
+    """Map a non-ASC exception (transport, filesystem, ...) to a typed AndpError
+    so nothing untyped ever escapes the machine's step()."""
+    if isinstance(exc, FileNotFoundError):
+        return AndpError(
+            code="ipa_missing",
+            message=f"A required file is missing: {exc}",
+            retryable=False,
+            remediation="The IPA is no longer at its path; rebuild, then reset the release.",
+        )
+    if type(exc).__name__ in _NETWORK_EXC_NAMES:
+        return AndpError(
+            code="network_error",
+            message=f"Network error talking to App Store Connect: {exc}",
+            retryable=True,
+            remediation="Transient connectivity issue; retry.",
+        )
+    return AndpError(
+        code="internal_error",
+        message=f"{type(exc).__name__}: {exc}",
+        retryable=False,
+        remediation="Unexpected error; please report it with the release id.",
+    )

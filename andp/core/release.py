@@ -15,12 +15,15 @@ import re
 import time
 
 from ..asc.client import ASCAPIError
-from .errors import AndpError, from_asc_error
+from .errors import AndpError, from_asc_error, from_unexpected
 from .ipa import read_metadata, sha256
 
 SCHEMA_VERSION = 1
 TERMINAL = ("done", "failed")
 _PROCESSING_RETRY_AFTER = 60
+# ~2h at 60s/poll: Apple processing rarely exceeds this. Genuinely stuck
+# releases are recovered with `release reset <id>`, not a short timeout.
+_DEFAULT_POLL_BUDGET = 120
 
 
 def release_id(account, bundle_id, version, build_number):
@@ -50,21 +53,24 @@ class ReleaseMachine:
 
     @classmethod
     def start(cls, store, managers, ipa_path, *, account="primary", group=None,
-              clock=time.time, poll_budget=30):
+              clock=time.time, poll_budget=_DEFAULT_POLL_BUDGET, reset=False):
         bundle_id, version, build_number = read_metadata(ipa_path)
         if not bundle_id:
             raise AndpError(
                 code="ipa_unreadable",
                 message=f"Could not read CFBundleIdentifier from {ipa_path}",
                 retryable=False,
-                remediation="Ensure the path points to a valid signed .ipa.",
+                remediation=(
+                    "Ensure the path points to a valid signed .ipa. To resume an "
+                    "existing release without the file, use `release poll <id>`."
+                ),
             )
         rid = release_id(account, bundle_id, version, build_number)
-        digest = sha256(ipa_path)
 
-        existing = store.load(rid)
+        # Load existing state BEFORE touching the file further, and honour reset.
+        existing = None if reset else store.load(rid)
         if existing is not None:
-            if existing.get("ipa_sha256") != digest:
+            if existing.get("ipa_sha256") != sha256(ipa_path):
                 raise AndpError(
                     code="ipa_changed",
                     message=(
@@ -73,11 +79,21 @@ class ReleaseMachine:
                     ),
                     retryable=False,
                     remediation=(
-                        "Bump the build number for the new binary, or delete the "
-                        f"state file to restart: .andp/state/{rid}.json"
+                        "Bump the build number for the new binary, or reset the "
+                        f"release: `release reset {rid}`"
                     ),
                 )
+            if existing.get("state") in TERMINAL:
+                raise AndpError(
+                    code="release_terminal",
+                    message=(
+                        f"Release {rid} is already {existing['state']}."
+                    ),
+                    retryable=False,
+                    remediation=f"Start a new build number, or reset it: `release reset {rid}`",
+                )
             return cls(store, managers, existing, clock=clock)
+        digest = sha256(ipa_path)
 
         state = {
             "schema_version": SCHEMA_VERSION,
@@ -139,6 +155,13 @@ class ReleaseMachine:
         if self.is_terminal():
             return self.snapshot()
         with self.store.lock(self._state["release_id"]):
+            # Reload under the lock so we act on the latest committed state, not
+            # a snapshot taken before another driver advanced the release.
+            fresh = self.store.load(self._state["release_id"])
+            if fresh is not None:
+                self._state = fresh
+            if self.is_terminal():
+                return self.snapshot()
             try:
                 getattr(self, f"_do_{self._state['state']}")()
             except ASCAPIError as api_err:
@@ -149,6 +172,11 @@ class ReleaseMachine:
             except AndpError as err:
                 if err.retryable:
                     raise
+                self._fail(err)
+            except Exception as exc:  # transport/filesystem/unexpected
+                err = from_unexpected(exc)
+                if err.retryable:
+                    raise err
                 self._fail(err)
             self._save()
         return self.snapshot()
@@ -173,37 +201,39 @@ class ReleaseMachine:
 
     def _do_app_resolved(self):
         if not self._state["upload_attempted"]:
-            # Write-ahead: record the intent BEFORE the external effect, so a
-            # crash here never looks like "nothing happened".
+            # Reserve first. A retryable failure of the reservation leaves the
+            # flag UNSET (nothing persisted) -> a clean retry, never a brick.
+            reservation_id = self.managers.builds.reserve_upload(
+                self._state["app_id"],
+                self._state["version"],
+                self._state["build_number"],
+            )
+            # Write-ahead: the reservation exists now, so record it before moving
+            # any bytes. A later failure can distinguish "reserved" from "not".
+            self._state["upload_id"] = reservation_id
             self._state["upload_attempted"] = True
             self._save()
-            upload_id = self.managers.builds.upload_ipa(
-                self._state["ipa_path"],
-                version=self._state["version"],
-                build_number=self._state["build_number"],
-                app_id=self._state["app_id"],
-            )
-            self._state["upload_id"] = upload_id
+            self.managers.builds.transfer_reserved(reservation_id, self._state["ipa_path"])
             self._transition("uploaded")
             return
 
-        # Resumed after an upload was attempted: never blindly re-upload.
+        # Resumed after a reservation was made: never re-reserve, never blindly
+        # re-transfer. If the build is visible, advance; otherwise report an
+        # actionable, retryable state (it may still be ingesting).
         build = self.managers.builds.find_build(
             self._state["app_id"], self._state["build_number"],
-            marketing_version=self._state["version"],
         )
         if build is None:
             raise AndpError(
                 code="upload_incomplete",
                 message=(
-                    "An upload was attempted but no build is visible yet — "
-                    "inconclusive; refusing to re-upload."
+                    "A build was reserved but is not visible yet — inconclusive; "
+                    "refusing to re-upload."
                 ),
                 retryable=True,
                 remediation=(
                     "The build may still be ingesting: poll again shortly. If it "
-                    "never appears, check App Store Connect and delete the state "
-                    f"file to restart: .andp/state/{self._state['release_id']}.json"
+                    f"never appears, restart with `release reset {self._state['release_id']}`."
                 ),
             )
         self._pin_build(build)
@@ -219,7 +249,6 @@ class ReleaseMachine:
     def _do_processing(self):
         build = self.managers.builds.find_build(
             self._state["app_id"], self._state["build_number"],
-            marketing_version=self._state["version"],
         )
         if build is None:
             self._tick_or_timeout()

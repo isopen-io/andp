@@ -249,6 +249,48 @@ open reviewSubmission's items reference *this* version before adopting it (8);
 `compliance_set` (`usesNonExemptEncryption`) is a legal declaration and must
 come from explicit `andp.yml`, never a default.
 
+### 2026-07-21 — pre-release code review (verdict: corrections required → applied)
+
+An adversarial code review of the implementation found real blockers; all were
+fixed before release (TDD, `tests/test_hardening.py`):
+
+- **BUG 1 (critical) — permanent brick on first-upload failure.** The
+  write-ahead set `upload_attempted=True` *before* the reservation, so any
+  transient error during the first upload stuck the release in
+  `upload_incomplete` forever. **Fix:** split `upload_ipa` into
+  `reserve_upload` + `transfer_reserved`; `upload_attempted`/`upload_id` are
+  persisted *only after* the reservation succeeds. A retryable reservation
+  failure now leaves state untouched (clean retry); a transfer failure
+  self-heals once the build appears, or is recovered with `release reset`.
+- **BUG 2 (critical) — untyped exceptions escaped `step()`.** Transport
+  (`requests.*`) and filesystem (`FileNotFoundError`) errors crashed the
+  machine and the `network_error` code was never produced. **Fix:**
+  `from_unexpected()` maps them to typed errors; `step()` has a catch-all that
+  keeps the "retryable → raise / terminal → fail" contract.
+- **BUG 3 (major) — a corrupted state file crashed the MCP server (DoS).**
+  **Fix:** service functions convert `state_corrupted`/`config_error` to error
+  dicts; `release_list` reports a bad file without hiding the others;
+  `mcp._call_tool` has a last-resort boundary returning a typed `isError`.
+- **BUG 4 (major) — resume re-read the IPA.** **Fix:** existing state is loaded
+  before hashing; `release poll`/`status` never touch the file, and the
+  `ipa_unreadable` remediation points to `poll`.
+- **BUG 5 (major) — terminal releases were unrecoverable.** **Fix:** `start`
+  refuses a terminal release (`release_terminal`); added `--reset` /
+  `release reset <id>`; poll budget raised to 120 (~2h) so normal Apple
+  processing never times out spuriously.
+- **BUG 6 (major) — a possibly-unsupported `filter[preReleaseVersion.version]`
+  could 400 every poll.** **Fix:** dropped it; `find_build` uses the proven
+  `filter[version]` and the machine pins the build id after first resolution.
+- **BUG 7 (major) — TOCTOU: `step()` acted on stale in-memory state.** **Fix:**
+  `step()` reloads under the lock before dispatching.
+
+Deferred as genuinely minor (documented): finer lock tokens (BUG 8),
+`get_build` by pinned id in `_do_processing` (BUG 9 — re-resolution mid-
+processing is deterministic since the build number is fixed), and small
+duplications (BUG 10). The blocking `andp release <ipa>` intentionally stays
+its own direct implementation in v1 (not machine-backed) to avoid regressing a
+tested path; unifying it is v1.1.
+
 **Residual risks (accepted for v1):** Apple ingestion is eventually-consistent
 and undocumented — rare double-upload windows remain, mitigated finally by
 Apple's INVALID rejection + pinned build id; the approval gate is advisory

@@ -228,7 +228,18 @@ def _call_cli_tool(name, args):
 
 
 def _call_tool(name, arguments):
-    args = arguments or {}
+    """Dispatch a tool call, guaranteeing a typed result — never an exception
+    that would kill the stdio server."""
+    try:
+        return _dispatch_tool(name, arguments or {})
+    except Exception as exc:  # last-resort boundary: one bad call must not crash the server
+        return {
+            "content": [{"type": "text", "text": f"Tool '{name}' failed: {exc}"}],
+            "isError": True,
+        }
+
+
+def _dispatch_tool(name, args):
     if name == "submit" and not load_policy().get("allow_submit"):
         return {
             "content": [{"type": "text", "text": (

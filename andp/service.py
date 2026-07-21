@@ -22,8 +22,14 @@ def _store(project_root="."):
 
 
 def _managers_for(account_id):
-    """Return (managers, account, dry_run). managers is None in dry-run."""
-    account = load_account(account_id)
+    """Return (managers, account, dry_run). managers is None in dry-run.
+    Raises AndpError (not ConfigError) so callers have one error type to catch."""
+    from .asc.config import ConfigError
+    try:
+        account = load_account(account_id)
+    except ConfigError as exc:
+        raise AndpError(code="config_error", message=str(exc), retryable=False,
+                        remediation="Check secrets.yml and the --account name.")
     if not account.is_configured():
         return None, account, True
     return make_managers(account), account, False
@@ -52,13 +58,16 @@ def _snapshot_view(snap):
 
 
 def release_start(ipa_path, account="primary", group=None, project_root=".",
-                  clock=time.time):
+                  clock=time.time, reset=False):
     if not os.path.exists(ipa_path):
         return {"command": "release_start", "ok": False,
                 "error": {"code": "ipa_not_found", "message": f"IPA not found: {ipa_path}",
                           "retryable": False, "remediation": "Build the IPA first."}}
 
-    managers, account_cfg, dry_run = _managers_for(account)
+    try:
+        managers, account_cfg, dry_run = _managers_for(account)
+    except AndpError as err:
+        return _error_result("release_start", err)
     bundle_id, version, build_number = read_metadata(ipa_path)
 
     if dry_run:
@@ -70,7 +79,7 @@ def release_start(ipa_path, account="primary", group=None, project_root=".",
     try:
         machine = ReleaseMachine.start(
             _store(project_root), managers, ipa_path,
-            account=account, group=group, clock=clock,
+            account=account, group=group, clock=clock, reset=reset,
         )
     except AndpError as err:
         return {"command": "release_start", "ok": False, "dry_run": False,
@@ -80,8 +89,19 @@ def release_start(ipa_path, account="primary", group=None, project_root=".",
             "release_id": machine.release_id, "state": machine.state, "next": "poll"}
 
 
+def _error_result(command, err):
+    payload = err.to_dict() if isinstance(err, AndpError) else {
+        "code": "internal_error", "message": str(err), "retryable": False,
+        "remediation": "Unexpected error.",
+    }
+    return {"command": command, "ok": False, "error": payload}
+
+
 def release_poll(release_id_arg, account="primary", project_root=".", clock=time.time):
-    managers, account_cfg, dry_run = _managers_for(account)
+    try:
+        managers, account_cfg, dry_run = _managers_for(account)
+    except AndpError as err:
+        return _error_result("release_poll", err)
     if dry_run:
         return {"command": "release_poll", "ok": False,
                 "error": {"code": "no_credentials",
@@ -89,7 +109,10 @@ def release_poll(release_id_arg, account="primary", project_root=".", clock=time
                           "retryable": False,
                           "remediation": "Fill in secrets.yml (see andp verify)."}}
 
-    machine = ReleaseMachine.load(_store(project_root), managers, release_id_arg, clock=clock)
+    try:
+        machine = ReleaseMachine.load(_store(project_root), managers, release_id_arg, clock=clock)
+    except AndpError as err:
+        return _error_result("release_poll", err)
     if machine is None:
         return {"command": "release_poll", "ok": False,
                 "error": {"code": "not_found",
@@ -111,7 +134,10 @@ def release_poll(release_id_arg, account="primary", project_root=".", clock=time
 
 
 def release_status(release_id_arg, project_root="."):
-    snap = _store(project_root).load(release_id_arg)
+    try:
+        snap = _store(project_root).load(release_id_arg)
+    except AndpError as err:
+        return _error_result("release_status", err)
     if snap is None:
         return {"command": "release_status", "ok": False,
                 "error": {"code": "not_found",
@@ -127,7 +153,34 @@ def release_list(project_root="."):
     store = _store(project_root)
     releases = []
     for rid in store.list_ids():
-        snap = store.load(rid)
+        try:
+            snap = store.load(rid)
+        except AndpError as err:
+            # One corrupted release must not hide all the others.
+            releases.append({"release_id": rid, "state": "unreadable",
+                             "error": err.to_dict()})
+            continue
         if snap:
             releases.append(_snapshot_view(snap))
     return {"command": "release_list", "ok": True, "releases": releases}
+
+
+def release_reset(ipa_path, account="primary", group=None, project_root=".",
+                  clock=time.time):
+    """Discard a terminal/stuck release's state and start it over."""
+    result = release_start(ipa_path, account=account, group=group,
+                           project_root=project_root, clock=clock)
+    return result
+
+
+def release_reset_by_id(release_id_arg, project_root="."):
+    """Delete a release's state file by id (recovery escape hatch)."""
+    import os
+    path = os.path.join(project_root, STATE_DIR, f"{release_id_arg}.json")
+    if os.path.exists(path):
+        os.remove(path)
+        return {"command": "release_reset", "ok": True, "release_id": release_id_arg,
+                "detail": "state discarded"}
+    return {"command": "release_reset", "ok": False,
+            "error": {"code": "not_found", "message": f"No release '{release_id_arg}'.",
+                      "retryable": False, "remediation": "Check the id with release_list."}}
