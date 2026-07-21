@@ -55,6 +55,22 @@ Without real credentials every command (except `verify`) runs in DRY-RUN mode �
 
 The job fails — with the exact reason — whenever publishing cannot work: placeholder or missing credentials, a key the live API rejects, or a missing app record. Cheapest release insurance you can add to a pipeline.
 
+### Publish-readiness gates (TestFlight / App Store)
+
+Two richer checks answer, on every PR, *can this app go to TestFlight cleanly?* and *can this version go to the App Store cleanly?* — each with a readable job-summary report and a tri-state verdict (✅ ready / ❌ not_ready / ⚪ unverified, so a fork PR never goes falsely green):
+
+```yaml
+- uses: isopen-io/andp/.github/actions/testflight-readiness@main
+  with: { key-id: ${{ secrets.ASC_KEY_ID }}, issuer-id: ${{ secrets.ASC_ISSUER_ID }},
+          private-key: ${{ secrets.ASC_PRIVATE_KEY }}, bundle-id: me.your.app }
+
+- uses: isopen-io/andp/.github/actions/appstore-readiness@main
+  with: { key-id: ${{ secrets.ASC_KEY_ID }}, issuer-id: ${{ secrets.ASC_ISSUER_ID }},
+          private-key: ${{ secrets.ASC_PRIVATE_KEY }}, bundle-id: me.your.app, version: "1.2.0" }
+```
+
+Or both at once via the reusable workflow `isopen-io/andp/.github/workflows/publish-readiness.yml`. See [`Documentation/PublishReadiness.md`](Documentation/PublishReadiness.md). The same logic is a CLI: `andp readiness testflight <bundle>` / `andp readiness appstore <bundle> <version>`.
+
 Full pipeline as a reusable workflow instead:
 
 ```yaml
@@ -94,6 +110,8 @@ Point `ANDP_APP_DIR` at any XcodeGen-based app directory to drive another projec
 
 ## Documentation
 
+- [`Documentation/PublishReadiness.md`](Documentation/PublishReadiness.md) — the CI entry point: TestFlight & App Store readiness gates (GitHub Actions + reusable workflow + `andp readiness` CLI, tri-state verdict)
+- [`Documentation/Agents.md`](Documentation/Agents.md) — why ANDP is agent-native (the three primitives, guardrails, threat model)
 - [`Documentation/ASC-API.md`](Documentation/ASC-API.md) — the App Store Connect API layer (auth, DRY-RUN convention, API limits, verify preflight)
 - [The Build Upload API contract you'll actually hit](Documentation/articles/build-upload-api-observed-contract.md) — the three undocumented requirements, with verbatim errors
 - [Publishing a Capacitor app without Appflow](Documentation/articles/capacitor-without-appflow.md) — the migration path, proven in production

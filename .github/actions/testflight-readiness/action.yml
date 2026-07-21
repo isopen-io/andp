@@ -1,0 +1,98 @@
+name: 'ANDP TestFlight readiness'
+description: >-
+  Can this iOS app be delivered to TestFlight without issues? Proves your App
+  Store Connect credentials sign (ES256), authenticate against the live API, and
+  that the app record exists — before you spend build minutes. Publishes a
+  readiness report to the job summary and fails the check when it cannot ship.
+author: 'Sylorion'
+branding:
+  icon: 'send'
+  color: 'blue'
+
+inputs:
+  key-id:
+    description: 'App Store Connect API Key ID'
+    required: true
+  issuer-id:
+    description: 'App Store Connect Issuer ID (UUID)'
+    required: true
+  private-key:
+    description: 'Content of the .p8 private key — pass a repository secret, never a literal'
+    required: true
+  bundle-id:
+    description: 'The app bundle id whose readiness to check'
+    required: true
+  fail-on:
+    description: "'errors' (default: fail the check when NOT ready) or 'never' (report only; green when ready or not_ready)"
+    required: false
+    default: 'errors'
+  require-credentials:
+    description: >-
+      'false' (default): if credentials are absent/placeholder (e.g. a fork PR),
+      report ⚪ Unverified and pass (ready=unknown), never a false ✅.
+      'true': treat missing credentials as a failure.
+    required: false
+    default: 'false'
+
+outputs:
+  ready:
+    description: "'true' | 'false' | 'unknown' — whether the app can go to TestFlight"
+    value: ${{ steps.gate.outputs.ready }}
+  status:
+    description: "'ready' | 'not_ready' | 'unverified'"
+    value: ${{ steps.gate.outputs.status }}
+  reason:
+    description: 'One-line human explanation of the verdict'
+    value: ${{ steps.gate.outputs.reason }}
+  credentials-ready:
+    description: "'true' if credentials were present & non-placeholder (NOT that they are valid)"
+    value: ${{ steps.gate.outputs.credentials_ready }}
+  blockers:
+    description: 'JSON array of blocking findings'
+    value: ${{ steps.gate.outputs.blockers }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install ANDP
+      shell: bash
+      run: |
+        set -euo pipefail
+        # The package root (pyproject) is three levels up from this nested action.
+        python3 -m pip install --quiet "$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+
+    - name: TestFlight readiness gate
+      id: gate
+      shell: bash
+      env:
+        ANDP_KEY_ID: ${{ inputs.key-id }}
+        ANDP_ISSUER_ID: ${{ inputs.issuer-id }}
+        ANDP_PRIVATE_KEY: ${{ inputs.private-key }}
+        ANDP_BUNDLE_ID: ${{ inputs.bundle-id }}
+        ANDP_FAIL_ON: ${{ inputs.fail-on }}
+        ANDP_REQUIRE_CREDS: ${{ inputs.require-credentials }}
+      run: |
+        set -uo pipefail
+        WORKDIR="$(mktemp -d)"
+        trap 'rm -rf "$WORKDIR"' EXIT
+        umask 077
+        {
+          echo "accounts:"
+          echo "  primary:"
+          echo "    asc_api:"
+          echo "      key_id: \"$ANDP_KEY_ID\""
+          echo "      issuer_id: \"$ANDP_ISSUER_ID\""
+          echo "      key_content: |"
+          printf '%s\n' "$ANDP_PRIVATE_KEY" | sed 's/^/        /'
+        } > "$WORKDIR/secrets.yml"
+
+        ARGS=(readiness testflight "$ANDP_BUNDLE_ID")
+        [ "$ANDP_FAIL_ON" = "never" ] && ARGS+=(--soft)
+        [ "$ANDP_REQUIRE_CREDS" != "true" ] && ARGS+=(--allow-unverified)
+
+        cd "$WORKDIR"
+        set +e
+        python3 -m andp "${ARGS[@]}"
+        code=$?
+        set -e
+        exit $code

@@ -1,0 +1,119 @@
+name: 'ANDP App Store readiness'
+description: >-
+  Can this version be submitted to the App Store without issues? Read-only
+  pre-submission validation (deliver-precheck parity): version editable, a build
+  attached, description present, at least one screenshot. Publishes a readiness
+  report to the job summary and fails the check when the version is not ready.
+author: 'Sylorion'
+branding:
+  icon: 'upload-cloud'
+  color: 'blue'
+
+inputs:
+  key-id:
+    description: 'App Store Connect API Key ID'
+    required: true
+  issuer-id:
+    description: 'App Store Connect Issuer ID (UUID)'
+    required: true
+  private-key:
+    description: 'Content of the .p8 private key — pass a repository secret, never a literal'
+    required: true
+  bundle-id:
+    description: 'The app bundle id whose version to validate'
+    required: true
+  version:
+    description: 'Marketing version to validate (e.g. 1.2.0). If empty, falls back to <working-directory>/VERSION'
+    required: false
+    default: ''
+  working-directory:
+    description: 'Directory holding a VERSION file, used only when version is empty'
+    required: false
+    default: '.'
+  fail-on:
+    description: "'errors' (default: fail the check when NOT ready) or 'never' (report only; green when ready or not_ready)"
+    required: false
+    default: 'errors'
+  require-credentials:
+    description: >-
+      'false' (default): missing/placeholder credentials report ⚪ Unverified and
+      pass (ready=unknown), never a false ✅. 'true': treat them as a failure.
+    required: false
+    default: 'false'
+
+outputs:
+  ready:
+    description: "'true' | 'false' | 'unknown' — whether the version can be submitted"
+    value: ${{ steps.gate.outputs.ready }}
+  status:
+    description: "'ready' | 'not_ready' | 'unverified'"
+    value: ${{ steps.gate.outputs.status }}
+  reason:
+    description: 'One-line human explanation of the verdict'
+    value: ${{ steps.gate.outputs.reason }}
+  credentials-ready:
+    description: "'true' if credentials were present & non-placeholder (NOT that they are valid)"
+    value: ${{ steps.gate.outputs.credentials_ready }}
+  blockers:
+    description: 'JSON array of blocking findings'
+    value: ${{ steps.gate.outputs.blockers }}
+  warnings:
+    description: 'JSON array of advisory warnings (do not block)'
+    value: ${{ steps.gate.outputs.warnings }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install ANDP
+      shell: bash
+      run: |
+        set -euo pipefail
+        python3 -m pip install --quiet "$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+
+    - name: App Store readiness gate
+      id: gate
+      shell: bash
+      env:
+        ANDP_KEY_ID: ${{ inputs.key-id }}
+        ANDP_ISSUER_ID: ${{ inputs.issuer-id }}
+        ANDP_PRIVATE_KEY: ${{ inputs.private-key }}
+        ANDP_BUNDLE_ID: ${{ inputs.bundle-id }}
+        ANDP_VERSION: ${{ inputs.version }}
+        ANDP_WORKDIR_IN: ${{ inputs.working-directory }}
+        ANDP_FAIL_ON: ${{ inputs.fail-on }}
+        ANDP_REQUIRE_CREDS: ${{ inputs.require-credentials }}
+      run: |
+        set -uo pipefail
+        # Resolve the version BEFORE we cd into the temp secrets dir, so a
+        # relative VERSION file resolves against the checkout, not the temp dir.
+        VERSION="$ANDP_VERSION"
+        if [ -z "$VERSION" ] && [ -f "$ANDP_WORKDIR_IN/VERSION" ]; then
+          VERSION="$(tr -d '[:space:]' < "$ANDP_WORKDIR_IN/VERSION")"
+        fi
+
+        WORKDIR="$(mktemp -d)"
+        trap 'rm -rf "$WORKDIR"' EXIT
+        umask 077
+        {
+          echo "accounts:"
+          echo "  primary:"
+          echo "    asc_api:"
+          echo "      key_id: \"$ANDP_KEY_ID\""
+          echo "      issuer_id: \"$ANDP_ISSUER_ID\""
+          echo "      key_content: |"
+          printf '%s\n' "$ANDP_PRIVATE_KEY" | sed 's/^/        /'
+        } > "$WORKDIR/secrets.yml"
+
+        ARGS=(readiness appstore "$ANDP_BUNDLE_ID")
+        # Omit an empty version entirely so the CLI exits 2 (usage) — a loud
+        # failure rather than validating a silent bogus version.
+        [ -n "$VERSION" ] && ARGS+=("$VERSION")
+        [ "$ANDP_FAIL_ON" = "never" ] && ARGS+=(--soft)
+        [ "$ANDP_REQUIRE_CREDS" != "true" ] && ARGS+=(--allow-unverified)
+
+        cd "$WORKDIR"
+        set +e
+        python3 -m andp "${ARGS[@]}"
+        code=$?
+        set -e
+        exit $code

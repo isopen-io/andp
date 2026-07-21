@@ -30,6 +30,9 @@ Commands (all accept --json for a structured, agent-friendly envelope):
   status <bundle_id> <build_number>              Poll build processing state
   testflight <bundle_id> <group> add [emails...] Manage TestFlight group testers
   submit <bundle_id> <version>                   Submit a version for App Review
+  precheck <bundle_id> <version>                 Read-only App Store pre-submission validation
+  readiness testflight <bundle_id>               Can this app go to TestFlight cleanly? (0/1/3)
+  readiness appstore <bundle_id> <version>       Can this version go to the App Store cleanly?
 """
 
 
@@ -61,77 +64,46 @@ def _ipa_metadata(ipa_path):
     return None, None, None
 
 
+# Failing-check name -> the human epilogue line (verify prints one FAILED reason
+# chosen by which check failed). Kept here because the failure prose is CLI-only;
+# the machine envelope lives in service.verify_checks.
+_VERIFY_EPILOGUE = {
+    "credentials": "PREFLIGHT FAILED — fill in the fields above (template: secrets.example.yml).",
+    "jwt": "PREFLIGHT FAILED — the private key is not a usable ES256 (.p8) key.",
+    "app_record": "PREFLIGHT FAILED — create the app record in the ASC UI first.",
+    "api_auth": "PREFLIGHT FAILED — check key_id/issuer_id and the key's ASC role.",
+}
+
+
 def _cmd_verify(account, managers, dry_run, args, json_mode=False):
     """Publish preflight. Unlike the other commands this one FAILS in DRY-RUN:
-    its whole point is to tell the truth about whether publishing can work."""
+    its whole point is to tell the truth about whether publishing can work.
+
+    Library-first: the checks live in service.verify_checks; this handler owns
+    only the human rendering (JSON mode prints the envelope verbatim)."""
+    from .. import service
+
     bundle_id = args[0] if args else None
-    checks = []
-    app_payload = None
+    result = service.verify_checks(account, managers, bundle_id)
 
-    def check(name, ok, text, **extra):
-        checks.append({"name": name, "ok": ok, "detail": text, **extra})
-        if not json_mode:
-            print(f"  {'✅' if ok else '❌'} {text}")
+    if json_mode:
+        print(json.dumps(result))
+        return 0 if result["ok"] else 1
 
-    def finish(ok):
-        if json_mode:
-            payload = {"command": "verify", "ok": ok, "checks": checks}
-            if app_payload:
-                payload["app"] = app_payload
-            print(json.dumps(payload))
-        else:
-            if ok:
-                print("PREFLIGHT PASSED — the tool can publish to App Store Connect.")
-        return 0 if ok else 1
-
-    if not json_mode:
-        print(f"ASC publish preflight (account '{account.account_id}'):")
-
-    missing = account.missing_fields()
-    if missing:
-        for name in missing:
-            if not json_mode:
+    print(f"ASC publish preflight (account '{account.account_id}'):")
+    for c in result["checks"]:
+        if c["name"] == "credentials" and not c["ok"]:
+            for name in c.get("missing", []):
                 print(f"  ❌ credentials — missing: {name} (absent or placeholder in secrets.yml)")
-        checks.append({"name": "credentials", "ok": False,
-                       "detail": "missing or placeholder fields", "missing": missing})
-        if not json_mode:
-            print("PREFLIGHT FAILED — fill in the fields above (template: secrets.example.yml).")
-        return finish(False)
-    check("credentials", True,
-          f"credentials — key_id {account.key_id}, issuer_id set, private key present")
-
-    try:
-        managers.client.auth.token()
-    except ASCAuthError as exc:
-        check("jwt", False, f"JWT signing failed: {exc}")
-        if not json_mode:
-            print("PREFLIGHT FAILED — the private key is not a usable ES256 (.p8) key.")
-        return finish(False)
-    check("jwt", True, "JWT signed (ES256)")
-
-    try:
-        if bundle_id:
-            app = managers.apps.find_app(bundle_id)
-            check("api_auth", True, "API authentication accepted")
-            if app is None:
-                check("app_record", False,
-                      f"app '{bundle_id}' not found on this App Store Connect account")
-                if not json_mode:
-                    print("PREFLIGHT FAILED — create the app record in the ASC UI first.")
-                return finish(False)
-            name = (app.get("attributes") or {}).get("name", "?")
-            app_payload = {"id": app["id"], "name": name, "bundle_id": bundle_id}
-            check("app_record", True, f"app found: {name} ({bundle_id}) — id {app['id']}")
         else:
-            managers.client.get("/v1/apps", params={"limit": 1})
-            check("api_auth", True, "API authentication accepted (GET /v1/apps)")
-    except ASCAPIError as exc:
-        check("api_auth", False, f"API rejected the request: {exc}")
-        if not json_mode:
-            print("PREFLIGHT FAILED — check key_id/issuer_id and the key's ASC role.")
-        return finish(False)
+            print(f"  {'✅' if c['ok'] else '❌'} {c['detail']}")
 
-    return finish(True)
+    if result["ok"]:
+        print("PREFLIGHT PASSED — the tool can publish to App Store Connect.")
+        return 0
+    failed = next((c for c in result["checks"] if not c["ok"]), None)
+    print(_VERIFY_EPILOGUE.get(failed["name"] if failed else "", "PREFLIGHT FAILED"))
+    return 1
 
 
 def _cmd_upload(account, managers, dry_run, args, json_mode=False):
@@ -488,6 +460,96 @@ def _cmd_precheck(account, managers, dry_run, args, json_mode=False):
     return 0 if result.get("ok") else 1
 
 
+_READINESS_USAGE = ("Usage: readiness <testflight|appstore> <bundle_id> [<version>] "
+                    "[--soft] [--allow-unverified]")
+
+
+def _pop_flag(args, name):
+    """Remove a boolean flag from args (mutating); return whether it was present."""
+    if name in args:
+        args.remove(name)
+        return True
+    return False
+
+
+def _print_readiness_human(verdict):
+    icon = {"ready": "✅", "not_ready": "❌", "unverified": "⚪"}.get(verdict["status"], "")
+    print(f"{icon} {verdict['reason']}")
+    for b in verdict.get("blockers", []):
+        print(f"  ❌ {b['id']}: {b['detail']}")
+        if b.get("remediation"):
+            print(f"     → {b['remediation']}")
+    for w in verdict.get("warnings", []):
+        print(f"  ⚠️  {w['id']}: {w['detail']}")
+    if verdict.get("note"):
+        print(f"  ℹ️  {verdict['note']}")
+
+
+def _cmd_readiness(account, managers, dry_run, args, json_mode=False):
+    """Publish-readiness gate for CI: verify (TestFlight) / precheck (App Store),
+    normalized to a tri-state verdict with GitHub-native output.
+
+    Exit: 0 ready, 1 not_ready, 3 unverified (no creds / transient), 2 usage.
+    --soft downgrades not_ready->0; --allow-unverified downgrades unverified->0."""
+    from .. import service
+    from ..readiness import (render_annotations, render_markdown, render_outputs,
+                             write_github_output)
+
+    args = list(args)
+    soft = _pop_flag(args, "--soft")
+    allow_unverified = _pop_flag(args, "--allow-unverified")
+
+    if not args:
+        print(_READINESS_USAGE)
+        return 2
+    target = args[0]
+    if target == "testflight":
+        if len(args) < 2:
+            print(_READINESS_USAGE)
+            return 2
+        verdict = service.readiness_testflight(args[1], account=account.account_id)
+    elif target == "appstore":
+        if len(args) < 3:
+            print("Usage: readiness appstore <bundle_id> <version> [--soft] [--allow-unverified]")
+            return 2
+        verdict = service.readiness_appstore(args[1], args[2], account=account.account_id)
+    else:
+        print(_READINESS_USAGE)
+        print(f"Unknown readiness target: {target}")
+        return 2
+
+    # GitHub Actions side-effects — inert when the env vars are absent (local runs).
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        try:
+            with open(summary_path, "a", encoding="utf-8") as fh:
+                fh.write(render_markdown(verdict) + "\n")
+        except OSError:
+            pass
+    output_path = os.environ.get("GITHUB_OUTPUT")
+    if output_path:
+        try:
+            write_github_output(output_path, render_outputs(verdict))
+        except OSError:
+            pass
+    # Annotations render reliably from stdout; suppress under --json to keep it pure.
+    if os.environ.get("GITHUB_ACTIONS") and not json_mode:
+        for line in render_annotations(verdict):
+            print(line)
+
+    if json_mode:
+        print(json.dumps(verdict))
+    else:
+        _print_readiness_human(verdict)
+
+    status = verdict["status"]
+    if status == "ready":
+        return 0
+    if status == "unverified":
+        return 0 if allow_unverified else 3
+    return 0 if soft else 1
+
+
 COMMANDS = {
     "verify": _cmd_verify,
     "upload": _cmd_upload,
@@ -497,6 +559,7 @@ COMMANDS = {
     "submit": _cmd_submit,
     "publish": _cmd_publish,
     "precheck": _cmd_precheck,
+    "readiness": _cmd_readiness,
 }
 
 
@@ -529,11 +592,15 @@ def main(argv):
         return 1
 
     dry_run = not account.is_configured()
-    if dry_run and not json_mode:
-        print(
-            f"No real App Store Connect credentials for account '{account_id}' "
-            "(placeholders detected) — running in DRY-RUN mode."
-        )
+    if dry_run:
+        # No usable credentials: never build managers (empty/placeholder creds
+        # make ASCAuth raise — e.g. a fork PR with unset secrets). Handlers know
+        # to run in DRY-RUN from the flag; the banner is human-mode only.
+        if not json_mode:
+            print(
+                f"No real App Store Connect credentials for account '{account_id}' "
+                "(placeholders detected) — running in DRY-RUN mode."
+            )
         managers = None
     else:
         managers = make_managers(account)

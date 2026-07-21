@@ -154,6 +154,103 @@ def publish(bundle_id, version, metadata_dir, account="primary"):
     return {"command": "publish", "ok": True, "dry_run": False, **summary}
 
 
+def _retryable_status(status):
+    """A 429 or any 5xx is transient — the call can be retried unchanged."""
+    return status == 429 or (isinstance(status, int) and 500 <= status < 600)
+
+
+def verify_checks(account, managers, bundle_id=None):
+    """Pure verify preflight core. Returns the verify envelope; never prints,
+    never raises. `managers` is None in dry-run (placeholder credentials).
+
+    Envelope: {command, ok, checks:[{name,ok,detail,missing?,retryable?}], app?}.
+    Both the CLI (`_cmd_verify`) and the readiness gates drive this — the human
+    rendering lives in the CLI, the shape is pinned by tests."""
+    from .asc.auth import ASCAuthError
+    from .asc.client import ASCAPIError
+
+    checks = []
+    missing = account.missing_fields()
+    if missing:
+        checks.append({"name": "credentials", "ok": False,
+                       "detail": "missing or placeholder fields", "missing": missing})
+        return {"command": "verify", "ok": False, "checks": checks}
+    checks.append({"name": "credentials", "ok": True,
+                   "detail": (f"credentials — key_id {account.key_id}, issuer_id set, "
+                              "private key present")})
+
+    try:
+        managers.client.auth.token()
+    except ASCAuthError as exc:
+        checks.append({"name": "jwt", "ok": False, "detail": f"JWT signing failed: {exc}"})
+        return {"command": "verify", "ok": False, "checks": checks}
+    checks.append({"name": "jwt", "ok": True, "detail": "JWT signed (ES256)"})
+
+    app_payload = None
+    try:
+        if bundle_id:
+            app = managers.apps.find_app(bundle_id)
+            checks.append({"name": "api_auth", "ok": True,
+                           "detail": "API authentication accepted"})
+            if app is None:
+                checks.append({"name": "app_record", "ok": False,
+                               "detail": (f"app '{bundle_id}' not found on this "
+                                          "App Store Connect account")})
+                return {"command": "verify", "ok": False, "checks": checks}
+            name = (app.get("attributes") or {}).get("name", "?")
+            app_payload = {"id": app["id"], "name": name, "bundle_id": bundle_id}
+            checks.append({"name": "app_record", "ok": True,
+                           "detail": f"app found: {name} ({bundle_id}) — id {app['id']}"})
+        else:
+            managers.client.get("/v1/apps", params={"limit": 1})
+            checks.append({"name": "api_auth", "ok": True,
+                           "detail": "API authentication accepted (GET /v1/apps)"})
+    except ASCAPIError as exc:
+        checks.append({"name": "api_auth", "ok": False,
+                       "detail": f"API rejected the request: {exc}",
+                       "retryable": _retryable_status(getattr(exc, "status", None))})
+        return {"command": "verify", "ok": False, "checks": checks}
+    except Exception as exc:  # network / unexpected — classify, never crash
+        from .core.errors import from_unexpected
+        checks.append({"name": "api_auth", "ok": False,
+                       "detail": f"could not reach App Store Connect: {exc}",
+                       "retryable": from_unexpected(exc).retryable})
+        return {"command": "verify", "ok": False, "checks": checks}
+
+    result = {"command": "verify", "ok": True, "checks": checks}
+    if app_payload:
+        result["app"] = app_payload
+    return result
+
+
+def verify(bundle_id=None, account="primary"):
+    """Publish preflight as a library call (loader over `verify_checks`).
+
+    Returns the verify envelope. A config/secrets problem is surfaced as a failed
+    `credentials` check so a caller (e.g. readiness) can classify it as
+    'unverified' rather than crashing."""
+    try:
+        managers, account_cfg, _dry_run = _managers_for(account)
+    except AndpError as err:
+        return {"command": "verify", "ok": False,
+                "checks": [{"name": "credentials", "ok": False,
+                            "detail": err.message, "missing": ["config"]}]}
+    return verify_checks(account_cfg, managers, bundle_id)
+
+
+def readiness_testflight(bundle_id, account="primary"):
+    """Can this app be delivered to TestFlight? (credentials + app record)."""
+    from .readiness import testflight_verdict
+    return testflight_verdict(verify(bundle_id, account=account), bundle_id=bundle_id)
+
+
+def readiness_appstore(bundle_id, version, account="primary"):
+    """Can this version be submitted to the App Store? (editable + build + metadata)."""
+    from .readiness import appstore_verdict
+    return appstore_verdict(precheck(bundle_id, version, account=account),
+                            bundle_id=bundle_id, version=version)
+
+
 def precheck(bundle_id, version, account="primary"):
     """Read-only pre-submission validation. Never mutates."""
     from .precheck import run_precheck
