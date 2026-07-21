@@ -130,6 +130,24 @@ class BuildsManager:
                 )
             self._sleep(poll_interval)
 
+    def find_build(self, app_id, build_number, marketing_version=None):
+        """Most recent build matching (app, CFBundleVersion[, marketing version]).
+
+        Passing marketing_version guards against a build number reused across
+        marketing versions (e.g. 1.2 build 7 vs 1.3 build 7) resolving to the
+        wrong binary. Returns the build resource or None.
+        """
+        params = {
+            "filter[app]": app_id,
+            "filter[version]": build_number,
+            "sort": "-uploadedDate",
+            "limit": 1,
+        }
+        if marketing_version:
+            params["filter[preReleaseVersion.version]"] = marketing_version
+        data = self.client.get("/v1/builds", params=params).get("data", [])
+        return data[0] if data else None
+
     def latest_valid_build(self, app_id):
         """Most recently uploaded build in VALID state, or None."""
         response = self.client.get(

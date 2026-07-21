@@ -130,3 +130,19 @@ def fake_transport(monkeypatch):
 
     monkeypatch.setattr(asc_manager, "make_managers", patched)
     return session
+
+
+def make_test_managers(session):
+    """Build the real auth->client->managers stack over a recording FakeSession."""
+    from andp.asc.asc_manager import Managers
+    from andp.asc.client import ASCClient
+
+    class _StubAuth:
+        def token(self):
+            return "stub-jwt"
+
+    client = ASCClient(auth=_StubAuth(), session=session, sleep=lambda s: None)
+    managers = Managers(client)
+    managers.builds.upload_transport = lambda *a, **k: None
+    managers.builds._sleep = lambda s: None
+    return managers
