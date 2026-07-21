@@ -40,7 +40,7 @@ def test_unknown_method_errors():
 def test_tools_list_exposes_publishing_tools():
     response = _call("tools/list")
     tools = {t["name"]: t for t in response["result"]["tools"]}
-    for name in ("verify", "upload", "release", "status", "testflight_add", "submit"):
+    for name in ("verify", "upload", "release_start", "status", "testflight_add", "submit"):
         assert name in tools, name
         assert "inputSchema" in tools[name]
     assert tools["verify"]["inputSchema"]["type"] == "object"

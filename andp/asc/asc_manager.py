@@ -17,6 +17,7 @@ from .auth import ASCAuth, ASCAuthError
 from .builds import BuildProcessingError, BuildsManager
 from .client import ASCAPIError, ASCClient
 from .config import ConfigError, load_account
+from .managers import Managers, make_managers
 from .testflight import TestFlightManager
 
 USAGE = """Usage: asc_manager.py <command> [args] [--account <account_id>]
@@ -30,24 +31,6 @@ Commands (all accept --json for a structured, agent-friendly envelope):
   testflight <bundle_id> <group> add [emails...] Manage TestFlight group testers
   submit <bundle_id> <version>                   Submit a version for App Review
 """
-
-
-class Managers:
-    def __init__(self, client):
-        self.client = client
-        self.apps = AppsManager(client)
-        self.builds = BuildsManager(client)
-        self.testflight = TestFlightManager(client)
-        self.appstore = AppStoreManager(client)
-
-
-def make_managers(account):
-    auth = ASCAuth(
-        key_id=account.key_id,
-        issuer_id=account.issuer_id,
-        private_key=account.key_content,
-    )
-    return Managers(ASCClient(auth))
 
 
 def _read_file_stripped(path, default=""):
@@ -200,9 +183,19 @@ def _cmd_upload(account, managers, dry_run, args, json_mode=False):
 
 def _cmd_release(account, managers, dry_run, args, json_mode=False):
     """One-shot automation primitive: verify app record -> upload -> wait for
-    Apple processing -> optional TestFlight group assignment."""
-    group_name = None
+    Apple processing -> optional TestFlight group assignment.
+
+    Subcommands expose the resumable machine for agents:
+      release start <ipa> [--group G]   begin (or resume) a release -> release_id
+      release poll <id>                 advance one non-blocking step
+      release status <id>               read state without advancing
+      release list                      list all releases
+    """
     args = list(args)
+    if args and args[0] in ("start", "poll", "status", "list"):
+        return _cmd_release_sub(account, args[0], args[1:], json_mode)
+
+    group_name = None
     if "--group" in args:
         idx = args.index("--group")
         group_name = args[idx + 1]
@@ -279,6 +272,67 @@ def _cmd_release(account, managers, dry_run, args, json_mode=False):
         stage("testflight_group", True, f"build linked to group '{group_name}' ({group['id']})")
 
     return finish(True, build=build, app_id=app["id"], upload_id=upload_id)
+
+
+def _cmd_release_sub(account, sub, args, json_mode):
+    """Agent-facing release subcommands, backed by the library service layer."""
+    from .. import service
+
+    group = None
+    args = list(args)
+    if "--group" in args:
+        idx = args.index("--group")
+        group = args[idx + 1]
+        del args[idx:idx + 2]
+
+    if sub == "start":
+        if not args:
+            print("Usage: release start <ipa_path> [--group <name>]")
+            return 2
+        result = service.release_start(args[0], account=account.account_id, group=group)
+    elif sub == "poll":
+        if not args:
+            print("Usage: release poll <release_id>")
+            return 2
+        result = service.release_poll(args[0], account=account.account_id)
+    elif sub == "status":
+        if not args:
+            print("Usage: release status <release_id>")
+            return 2
+        result = service.release_status(args[0])
+    else:  # list
+        result = service.release_list()
+
+    if json_mode:
+        print(json.dumps(result))
+    else:
+        _print_release_human(result)
+    return 0 if result.get("ok", True) else 1
+
+
+def _print_release_human(result):
+    cmd = result.get("command", "release")
+    if not result.get("ok", True):
+        err = result.get("error", {})
+        print(f"❌ {cmd}: {err.get('message', 'failed')}")
+        if err.get("remediation"):
+            print(f"   → {err['remediation']}")
+        return
+    if cmd == "release_list":
+        for r in result["releases"]:
+            print(f"  {r['release_id']}: {r['state']}")
+        if not result["releases"]:
+            print("  (no releases)")
+        return
+    if result.get("dry_run"):
+        print(f"[DRY-RUN] {result['release_id']}: {' -> '.join(result.get('plan', []))}")
+        return
+    line = f"{result['release_id']}: {result['state']}"
+    if result.get("retry_after"):
+        line += f" (poll again in {result['retry_after']}s)"
+    if result.get("build"):
+        line += f" — build {result['build']['id']} {result['build'].get('processing_state', '')}"
+    print(line)
 
 
 def _cmd_status(account, managers, dry_run, args, json_mode=False):
