@@ -61,6 +61,10 @@ def _snapshot_view(snap):
         view["needs_precheck_fix"] = True
         view["precheck_report"] = snap.get("precheck_report")
         view["next_action"] = "fix the precheck errors (andp publish / ASC UI), then poll again"
+    elif (snap.get("precheck_report") or {}).get("warnings"):
+        # Precheck passed but flagged advisory warnings — surface them so the
+        # agent/human sees them even on the happy path.
+        view["precheck_warnings"] = snap["precheck_report"]["warnings"]
     if snap.get("submission_id"):
         view["submission_id"] = snap["submission_id"]
     if snap.get("error"):

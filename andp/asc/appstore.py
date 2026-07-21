@@ -68,11 +68,11 @@ class AppStoreManager:
         return data[0] if data else None
 
     def get_version(self, version_id):
-        return self.client.get(f"/v1/appStoreVersions/{version_id}").get("data")
+        return (self.client.get(f"/v1/appStoreVersions/{version_id}") or {}).get("data")
 
     def get_version_build(self, version_id):
         """The build attached to the version, or None."""
-        return self.client.get(f"/v1/appStoreVersions/{version_id}/build").get("data")
+        return (self.client.get(f"/v1/appStoreVersions/{version_id}/build") or {}).get("data")
 
     def list_version_localizations(self, version_id):
         return self.client.get_all(

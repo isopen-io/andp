@@ -1,3 +1,14 @@
+## 1.11.1 - 2026-07-21
+### v1.3 hardening (pre-release code review)
+- BUG 1 (major): a non-retryable API error DURING the precheck reads no longer
+  makes the release terminal (which would force a re-upload); prechecked is now
+  never terminal — retryable errors re-raise, non-retryable become a fixable
+  report and the release stays recoverable
+- BUG 2: get_version/get_version_build tolerate an empty (204) body
+- BUG 6: passing precheck now surfaces its warnings in the --ship view too
+- Added coverage: non-retryable/retryable precheck errors, recovery after fix,
+  report overwrite, screenshot count summed across sets, empty-body GET. 234 tests
+
 ## 1.11.0 - 2026-07-21
 ### v1.3: precheck (validate before submitting)
 - Read-only pre-submission validator (deliver-precheck parity): version editable,

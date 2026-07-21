@@ -401,17 +401,44 @@ class ReleaseMachine:
 
     def _do_prechecked(self):
         # Read-only pre-submission validation. Like awaiting_approval this is a
-        # WAITING state: on errors it stays put (recoverable — fix metadata and
-        # poll again), never a terminal failure that would force a re-upload.
+        # WAITING state: it NEVER becomes terminal. Retryable API errors re-raise
+        # (poll again); any non-retryable error (API or unexpected) is turned
+        # into a fixable precheck report and the release stays recoverable —
+        # never a terminal failure that would force a re-upload.
         from .. import precheck
-        report = precheck.run_precheck(
-            self.managers, self._state["app_id"], self._state["version_id"])
+        try:
+            report = precheck.run_precheck(
+                self.managers, self._state["app_id"], self._state["version_id"])
+        except ASCAPIError as exc:
+            err = from_asc_error(exc)
+            if err.retryable:
+                raise err
+            report = self._precheck_error_report(err)
+        except AndpError as err:
+            if err.retryable:
+                raise
+            report = self._precheck_error_report(err)
+        except Exception as exc:
+            err = from_unexpected(exc)
+            if err.retryable:
+                raise err
+            report = self._precheck_error_report(err)
+
         self._state["precheck_report"] = report
         if report["ok"]:
             self._state.pop("needs_precheck_fix", None)
             self._transition("awaiting_approval")
         else:
             self._state["needs_precheck_fix"] = True
+
+    @staticmethod
+    def _precheck_error_report(err):
+        return {
+            "ok": False, "errors": 1, "warnings": 0,
+            "checks": [{"id": f"precheck_{err.code}", "level": "error",
+                        "message": err.message}],
+            "note": err.remediation,
+        }
 
     def _do_awaiting_approval(self):
         approved = self._state["approved"]

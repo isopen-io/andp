@@ -371,6 +371,27 @@ are advisory (warnings), never block.
   `ok:true` is not a guarantee of acceptance (age rating, name/subtitle on
   appInfoLocalizations, pricing, per-device screenshot sizes are not checked).
 
+### v1.3 code review (2026-07-21, CORRECTIONS_REQUISES → applied)
+
+- **BUG 1 (major) — precheck read errors could brick the release.** An
+  `ASCAPIError` *during* the precheck GETs (404 on a deleted version, 403, any
+  non-retryable 4xx) escaped `_do_prechecked` and `step()` turned it into a
+  terminal `failed` → the exact brick→re-upload the feature was built to avoid.
+  **Fix:** `_do_prechecked` confines error handling — retryable errors re-raise
+  (poll again); any non-retryable error (API or unexpected) becomes a fixable
+  `precheck_report` and the release stays in the non-terminal `prechecked`
+  waiting state. `prechecked` is now NEVER terminal.
+- **BUG 2 (minor) — empty-body GET crash.** `get_version`/`get_version_build`
+  did `None.get(...)` on a 204/empty body → `internal_error` → terminal (BUG 1
+  by another door). **Fix:** `(client.get(...) or {}).get("data")`.
+- **BUG 6 (minor) — passing precheck hid its warnings in `--ship`.** The view
+  only surfaced the report on error. **Fix:** `precheck_warnings` is now
+  surfaced on the happy path too.
+- Documented residuals: `find_version` returns `data[0]` without an explicit
+  sort (versionString is normally unique per platform); `count_screenshots`
+  counts records without checking `assetDeliveryState`, so a screenshot still
+  processing can pass — consistent with "ok is not a guarantee of acceptance".
+
 ## Competitive positioning (research, 2026-07-21)
 
 - asc-mcp (~200 tools, 1:1 API), fastlane-mcp (CLI wrapper),
