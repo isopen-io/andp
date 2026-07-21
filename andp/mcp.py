@@ -169,6 +169,82 @@ TOOLS = [
         },
         "annotations": {"title": "Submit for App Review", **_ann(destructive=True, idempotent=False)},
     },
+    {
+        "name": "store_configure_pricing",
+        "description": (
+            "Set the app's price (modern appPriceSchedules) or make it free. "
+            "Reconciles to the desired price: returns changed=false when already "
+            "set. REPLACES the price schedule. price='free' or an exact "
+            "base-territory customerPrice (e.g. '0.99')."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "bundle_id": {"type": "string"},
+                "base_territory": {"type": "string", "description": "Base territory id, e.g. USA"},
+                "price": {"type": "string", "description": "'free' or an exact customerPrice"},
+                "price_point_id": {"type": "string", "description": "Advanced: exact appPricePoint id"},
+                "account": {"type": "string"},
+            },
+            "required": ["bundle_id"],
+        },
+        "annotations": {"title": "Configure app pricing", **_ann(idempotent=True)},
+    },
+    {
+        "name": "store_configure_availability",
+        "description": (
+            "Set (REPLACE) the territories the app is available in. Pass a list of "
+            "territory ids or [\"all\"]. DESTRUCTIVE: shrinking the set delists the "
+            "app in removed territories. Refuses an empty set. Preserves "
+            "availableInNewTerritories unless you set it."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "bundle_id": {"type": "string"},
+                "territories": {"type": "array", "items": {"type": "string"},
+                                "description": "Territory ids, or [\"all\"] for every territory"},
+                "available_in_new_territories": {"type": "boolean"},
+                "account": {"type": "string"},
+            },
+            "required": ["bundle_id", "territories"],
+        },
+        "annotations": {"title": "Configure territory availability",
+                        **_ann(destructive=True, idempotent=True)},
+    },
+    {
+        "name": "store_set_age_rating",
+        "description": (
+            "Set the app's age rating declaration (2025 model). Pass a declaration "
+            "object of content descriptors (NONE|INFREQUENT_OR_MILD|FREQUENT_OR_INTENSE) "
+            "and booleans. PATCHes only the fields that differ; validates field "
+            "names/values first."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "bundle_id": {"type": "string"},
+                "declaration": {"type": "object", "description": "ageRatingDeclaration fields"},
+                "account": {"type": "string"},
+            },
+            "required": ["bundle_id", "declaration"],
+        },
+        "annotations": {"title": "Set age rating", **_ann(idempotent=True)},
+    },
+    {
+        "name": "store_apply",
+        "description": (
+            "Apply every configured store block (pricing/availability/age_rating) "
+            "from andp.yml. Best-effort: independent idempotent blocks; a re-run "
+            "heals a partially-applied state."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {"bundle_id": {"type": "string"}, "account": {"type": "string"}},
+            "required": ["bundle_id"],
+        },
+        "annotations": {"title": "Apply store config", **_ann(idempotent=True)},
+    },
 ]
 
 _CLI_JSON_TOOLS = {"upload"}
@@ -202,6 +278,24 @@ def _call_release_tool(name, args):
         return _release_result(service.release_status(args["release_id"]))
     if name == "release_list":
         return _release_result(service.release_list())
+    return None
+
+
+def _call_store_tool(name, args):
+    acct = args.get("account", "primary")
+    if name == "store_configure_pricing":
+        return _release_result(service.configure_pricing(
+            args["bundle_id"], account=acct, base_territory=args.get("base_territory"),
+            price=args.get("price"), price_point_id=args.get("price_point_id")))
+    if name == "store_configure_availability":
+        return _release_result(service.configure_availability(
+            args["bundle_id"], account=acct, territories=args.get("territories"),
+            available_in_new_territories=args.get("available_in_new_territories")))
+    if name == "store_set_age_rating":
+        return _release_result(service.configure_age_rating(
+            args["bundle_id"], account=acct, declaration=args.get("declaration")))
+    if name == "store_apply":
+        return _release_result(service.configure_store(args["bundle_id"], account=acct))
     return None
 
 
@@ -264,6 +358,10 @@ def _dispatch_tool(name, args):
         }
     if name.startswith("release_"):
         result = _call_release_tool(name, args)
+        if result is not None:
+            return result
+    if name.startswith("store_"):
+        result = _call_store_tool(name, args)
         if result is not None:
             return result
     return _call_cli_tool(name, args)

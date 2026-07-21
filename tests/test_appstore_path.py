@@ -301,6 +301,10 @@ def _precheck_ok_responses():
             "supportUrl": "https://x"}}]}),                          # localizations
         FakeResponse(200, {"data": [{"id": "set-1"}]}),             # screenshot sets
         FakeResponse(200, {"data": [{"id": "s1"}]}),               # count -> 1
+        # store-config advisories (pricing / availability / age rating)
+        FakeResponse(200, {"data": None}),                          # get_schedule
+        FakeResponse(200, {"data": None}),                          # appAvailabilityV2
+        FakeResponse(200, {"data": [], "links": {}}),              # appInfos (no declaration)
     ]
 
 
