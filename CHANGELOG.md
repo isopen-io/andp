@@ -1,3 +1,24 @@
+## 1.14.0 - 2026-07-22
+### ANDP-native build number: `andp build-number`
+- New command computes the next iOS build number (CFBundleVersion) so a pipeline
+  no longer needs fastlane just for it. Three strategies:
+  - **fastlane** `max(--floor, latest ASC build) + 1` — monotonic, needs creds;
+    new `BuildsManager.latest_build_number` does a full-pagination NUMERIC global
+    max (defeats the API's lexicographic sort where "9" > "1000")
+  - **timestamp** `utcnow().strftime` (default `%Y%m%d%H%M`) — monotonic, no creds
+  - **commit** `int(git short sha, 16)` (`--sha`/`$GITHUB_SHA`, `--digits`) —
+    unique/traceable but NOT monotonic (`monotonic:false` + a stderr warning)
+- Prints ONLY the number on stdout (banner/warnings → stderr) so it drops into
+  `agvtool new-version -all "$(andp build-number me.app --strategy fastlane --floor 1254)"`;
+  `--json` gives the full envelope. `timestamp`/`commit` need zero credentials —
+  `main()` no longer fails at account-load for `build-number` in a bare repo
+- Library-first (`service.build_number`, pure `andp/buildnum.py`); MCP-safe
+  (coerces floor/digits — never raises); dotted-version apps get a warning so a
+  wrong low number is never claimed monotonic silently
+- Design-reviewed AND code-reviewed before commit (2 design blockers: stdout
+  purity, true-global-max; 2 code should-fixes: never-raise envelope, dotted-skip
+  honesty; + a pre-existing `andp --json` crash fixed). 373 tests
+
 ## 1.13.1 - 2026-07-21
 ### GitHub Marketplace readiness
 - Shorten the root Action's `description` to 115 chars (GitHub Marketplace
