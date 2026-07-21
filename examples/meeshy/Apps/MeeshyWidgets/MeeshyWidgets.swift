@@ -30,6 +30,7 @@ struct MeeshyWidgetsEntryView : View {
             Image(systemName: "shippingbox.fill")
                 .font(.title2)
                 .foregroundStyle(.tint)
+                .accessibilityHidden(true)
 
             Text(entry.date, style: .time)
                 .font(.system(.title, design: .rounded).bold())

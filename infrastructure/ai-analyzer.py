@@ -7,7 +7,7 @@ import json
 
 # Bolt Optimization: Pre-compiled regex patterns for performance and single-pass scanning.
 TEXT_PATTERN = re.compile(r'Text\("([^"]+)"\)')
-UI_COMPONENT_PATTERN = re.compile(r"(Button\(|Image\(|Text\(|Label\(|TextField\(\))")
+UI_COMPONENT_PATTERN = re.compile(r"(Button\(|Image\(|Text\(|(?<![A-Za-z])Label\(|TextField\(\))")
 ACCESSIBILITY_MODIFIER_PATTERN = re.compile(
     r"(accessibilityLabel|accessibilityIdentifier|accessibilityHint|accessibilityValue|accessibilityAddTraits|accessibilityRemoveTraits|accessibilityHidden)"
 )

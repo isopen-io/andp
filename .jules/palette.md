@@ -12,8 +12,12 @@
 
 ## 2026-06-28 - [Semantic Buttons & Lookahead Optimization]
 **Learning:** Using SwiftUI's `Label` instead of manual `HStack` containers for buttons with icons significantly reduces vertical line count and improves semantic accessibility. This conciseness is critical for passing static analysis tools (like `ai-analyzer.py`) that use a strict line-lookahead (e.g., 10 lines) to verify `.hoverEffect()` proximity for visionOS readiness.
-**Action:** Favor `Label` for icon-text pairings and extract multi-step action logic (like haptics + state) into private methods to keep button declarations compact.
+**Action:** Favor `Label` for all icon-text pairings and extract multi-step action logic (like haptics + state) into private methods to keep button declarations compact.
 
 ## 2026-06-29 - [Idiomatic SwiftUI Buttons & Haptic Feedback]
 **Learning:** Using SwiftUI's `Label` component instead of manual `HStack` containers provides superior semantic accessibility and keeps code compact. Pairing a successful destructive action (like Logout) with haptic feedback (`UINotificationFeedbackGenerator`) significantly enhances the user's perception of system responsiveness and interaction finality.
 **Action:** Favor `Label` for all icon-text pairings and always provide tactile confirmation for major state transitions.
+
+## 2026-06-30 - [Specialized Platforms VoiceOver & Static Analysis Lookahead]
+**Learning:** For watchOS, tvOS, and Widget extensions, grouping UI elements with `.accessibilityElement(children: .combine)` and marking purely decorative icons as `.accessibilityHidden(true)` results in highly optimized VoiceOver screen reader announcements. Additionally, when using static checkers that employ reverse traversal (like `ai-analyzer.py`), we must safeguard component-matching regex patterns (such as using `(?<![A-Za-z])Label\(`) to prevent false positives triggered by modifier names containing the component name (e.g., `.accessibilityLabel`).
+**Action:** Group non-interactive elements on compact/specialized views and ensure static analysis rules use precise word boundaries or lookbehinds to prevent false positives on modifiers.
