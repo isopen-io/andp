@@ -11,12 +11,17 @@ struct MeeshyTVApp: App {
 
 struct ContentView: View {
     var body: some View {
-        VStack {
+        VStack(spacing: 20) {
             Image(systemName: "shippingbox.fill")
-                .font(.system(size: 100))
+                .font(.system(.largeTitle, design: .rounded))
+                .scaleEffect(2.5)
                 .foregroundStyle(.tint)
-            Text("welcome_message")
+                .accessibilityHidden(true)
+
+            Text(NSLocalizedString("welcome_message", comment: ""))
                 .font(.title)
+                .accessibilityLabel(NSLocalizedString("welcome_message", comment: ""))
         }
+        .accessibilityElement(children: .combine)
     }
 }

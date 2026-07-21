@@ -15,8 +15,12 @@ struct ContentView: View {
             Image(systemName: "shippingbox.fill")
                 .font(.largeTitle)
                 .foregroundStyle(.tint)
-            Text("welcome_message")
+                .accessibilityHidden(true)
+
+            Text(NSLocalizedString("welcome_message", comment: ""))
                 .padding()
+                .accessibilityLabel(NSLocalizedString("welcome_message", comment: ""))
         }
+        .accessibilityElement(children: .combine)
     }
 }
