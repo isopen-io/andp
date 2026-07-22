@@ -37,7 +37,7 @@ def test_commit_no_sha_is_error(monkeypatch):
     assert r["error"]["code"] == "bad_input"
 
 
-def test_fastlane_floor_wins(tmp_path, monkeypatch, ec_private_key_pem):
+def test_max_build_floor_wins(tmp_path, monkeypatch, ec_private_key_pem):
     (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     session = FakeSession()
@@ -46,13 +46,13 @@ def test_fastlane_floor_wins(tmp_path, monkeypatch, ec_private_key_pem):
         FakeResponse(200, {"data": [{"attributes": {"version": "1200"}}], "links": {}}),
     )
     monkeypatch.setattr(service, "make_managers", lambda a: make_test_managers(session))
-    r = service.build_number("fastlane", bundle_id="me.app", floor=1254)
+    r = service.build_number("max-build", bundle_id="me.app", floor=1254)
     assert r["ok"] is True
     assert r["build_number"] == "1255"        # max(1254, 1200) + 1
     assert r["monotonic"] is True
 
 
-def test_fastlane_asc_wins(tmp_path, monkeypatch, ec_private_key_pem):
+def test_max_build_asc_wins(tmp_path, monkeypatch, ec_private_key_pem):
     (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     session = FakeSession()
@@ -61,33 +61,33 @@ def test_fastlane_asc_wins(tmp_path, monkeypatch, ec_private_key_pem):
         FakeResponse(200, {"data": [{"attributes": {"version": "1300"}}], "links": {}}),
     )
     monkeypatch.setattr(service, "make_managers", lambda a: make_test_managers(session))
-    r = service.build_number("fastlane", bundle_id="me.app", floor=0)
+    r = service.build_number("max-build", bundle_id="me.app", floor=0)
     assert r["build_number"] == "1301"        # max(0, 1300) + 1
 
 
-def test_fastlane_dry_run_is_no_credentials(tmp_path, monkeypatch):
+def test_max_build_dry_run_is_no_credentials(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "secrets.yml").write_text(
         "accounts:\n  primary:\n    asc_api:\n"
         "      key_id: \"ABCDE12345\"\n      issuer_id: \"\"\n      key_content: \"\"\n")
-    r = service.build_number("fastlane", bundle_id="me.app")
+    r = service.build_number("max-build", bundle_id="me.app")
     assert r["ok"] is False
     assert r["error"]["code"] == "no_credentials"
 
 
-def test_fastlane_app_not_found(tmp_path, monkeypatch, ec_private_key_pem):
+def test_max_build_app_not_found(tmp_path, monkeypatch, ec_private_key_pem):
     (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     session = FakeSession()
     session.queue(FakeResponse(200, {"data": []}))
     monkeypatch.setattr(service, "make_managers", lambda a: make_test_managers(session))
-    r = service.build_number("fastlane", bundle_id="me.app")
+    r = service.build_number("max-build", bundle_id="me.app")
     assert r["ok"] is False
     assert r["error"]["code"] == "app_not_found"
 
 
-def test_fastlane_non_int_floor_is_envelope_not_crash():
-    r = service.build_number("fastlane", bundle_id="me.app", floor="oops")
+def test_max_build_non_int_floor_is_envelope_not_crash():
+    r = service.build_number("max-build", bundle_id="me.app", floor="oops")
     assert r["ok"] is False
     assert r["error"]["code"] == "bad_input"
 
@@ -104,7 +104,7 @@ def test_commit_bad_digits_is_envelope_not_crash():
     assert r["error"]["code"] == "bad_input"
 
 
-def test_fastlane_warns_when_dotted_versions_skipped(tmp_path, monkeypatch, ec_private_key_pem):
+def test_max_build_warns_when_dotted_versions_skipped(tmp_path, monkeypatch, ec_private_key_pem):
     (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     session = FakeSession()
@@ -113,7 +113,7 @@ def test_fastlane_warns_when_dotted_versions_skipped(tmp_path, monkeypatch, ec_p
         FakeResponse(200, {"data": [{"attributes": {"version": "1.0.3"}}], "links": {}}),
     )
     monkeypatch.setattr(service, "make_managers", lambda a: make_test_managers(session))
-    r = service.build_number("fastlane", bundle_id="me.app")
+    r = service.build_number("max-build", bundle_id="me.app")
     assert r["ok"] is True
     assert r["build_number"] == "1"           # all dotted skipped -> latest 0
     assert "warning" in r                     # ...but the risk is surfaced

@@ -182,7 +182,7 @@ class BuildsManager:
         "1000". A global max is >= any per-marketing-version max, so
         `max(floor, best) + 1` is always accepted by App Store Connect.
 
-        The fastlane strategy assumes integer build numbers; a *dotted*/
+        The max-build strategy assumes integer build numbers; a *dotted*/
         alphanumeric version is skipped AND counted (so the caller can warn that
         `best` may be incomplete). An empty/not-yet-populated version is skipped
         but NOT counted (nothing actionable — a build still ingesting)."""

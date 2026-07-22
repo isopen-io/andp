@@ -1,7 +1,7 @@
 """Build-number (CFBundleVersion) strategies — pure, no I/O.
 
-ANDP computes the next build number so a release pipeline no longer needs
-fastlane just for it; the build step applies the value to the Xcode project
+ANDP computes the next build number so a release pipeline no longer needs an
+external tool just for it; the build step applies the value to the Xcode project
 before archiving. Apple caps CFBundleVersion at 18 characters (up to three
 dot-separated non-negative integers) — there is no 2^32 per-component limit.
 """

@@ -255,11 +255,11 @@ def build_number(strategy, bundle_id=None, floor=0, fmt=None, sha=None,
                  digits=7, account="primary", clock=None):
     """Compute the next iOS build number (CFBundleVersion) via a strategy:
 
-      fastlane  = max(floor, latest ASC build) + 1  (monotonic; needs creds)
+      max-build  = max(floor, latest ASC build) + 1  (monotonic; needs creds)
       timestamp = utc-now, formatted                (monotonic; no creds)
       commit    = int(git short sha, 16)            (unique, NOT monotonic; no creds)
 
-    Returns a typed envelope; never raises. Only `fastlane` touches App Store
+    Returns a typed envelope; never raises. Only `max-build` touches App Store
     Connect — `timestamp`/`commit` run with zero credentials."""
     from .buildnum import commit_build, timestamp_build
 
@@ -295,10 +295,10 @@ def build_number(strategy, bundle_id=None, floor=0, fmt=None, sha=None,
         return {"command": "build_number", "ok": True, "strategy": "commit",
                 "build_number": value, "monotonic": False}
 
-    if strategy == "fastlane":
+    if strategy == "max-build":
         if not bundle_id:
             return _error_result("build_number", AndpError(
-                code="bad_input", message="the fastlane strategy needs a bundle_id",
+                code="bad_input", message="the max-build strategy needs a bundle_id",
                 retryable=False, remediation="Pass the app bundle id."))
         from .asc.client import ASCAPIError
         from .core.errors import from_asc_error, from_unexpected
@@ -309,7 +309,7 @@ def build_number(strategy, bundle_id=None, floor=0, fmt=None, sha=None,
         if dry_run:
             return {"command": "build_number", "ok": False,
                     "error": {"code": "no_credentials",
-                              "message": "The fastlane strategy needs real credentials to query App Store Connect.",
+                              "message": "The max-build strategy needs real credentials to query App Store Connect.",
                               "retryable": False,
                               "remediation": "Fill in secrets.yml, or use --strategy timestamp/commit."}}
         try:
@@ -326,20 +326,20 @@ def build_number(strategy, bundle_id=None, floor=0, fmt=None, sha=None,
         except Exception as err:
             return _error_result("build_number", from_unexpected(err))
         value = max(floor, latest) + 1
-        result = {"command": "build_number", "ok": True, "strategy": "fastlane",
+        result = {"command": "build_number", "ok": True, "strategy": "max-build",
                   "build_number": str(value), "monotonic": True,
                   "source": {"floor": floor, "latest_asc": latest, "skipped": skipped}}
         if skipped:
             result["warning"] = (
                 f"{skipped} build(s) on App Store Connect have non-integer "
-                "versions and were ignored — the fastlane strategy assumes "
+                "versions and were ignored — the max-build strategy assumes "
                 "integer build numbers; the computed number may be too low. "
                 "Verify, or pass --floor.")
         return result
 
     return _error_result("build_number", AndpError(
         code="bad_strategy", message=f"unknown build-number strategy '{strategy}'",
-        retryable=False, remediation="Use fastlane, timestamp or commit."))
+        retryable=False, remediation="Use max-build, timestamp or commit."))
 
 
 def precheck(bundle_id, version, account="primary"):

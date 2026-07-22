@@ -111,7 +111,7 @@ Point `ANDP_APP_DIR` at any XcodeGen-based app directory to drive another projec
 ## Documentation
 
 - [`Documentation/PublishReadiness.md`](Documentation/PublishReadiness.md) — the CI entry point: TestFlight & App Store readiness gates (GitHub Actions + reusable workflow + `andp readiness` CLI, tri-state verdict)
-- [`Documentation/BuildNumber.md`](Documentation/BuildNumber.md) — `andp build-number`: compute the next CFBundleVersion (fastlane / timestamp / commit strategies) so a pipeline needs no fastlane just for the build number
+- [`Documentation/BuildNumber.md`](Documentation/BuildNumber.md) — `andp build-number`: compute the next CFBundleVersion (max-build / timestamp / commit strategies) so a pipeline needs no external tool just for the build number
 - [`Documentation/AgentGuide.md`](Documentation/AgentGuide.md) — **the end-to-end agent playbook**: from code to a live App Store submission (state machine, full CLI/MCP/service surface, error taxonomy, worked example)
 - [`Documentation/Agents.md`](Documentation/Agents.md) — why ANDP is agent-native (the three primitives, guardrails, threat model)
 - [`Documentation/StoreConfig.md`](Documentation/StoreConfig.md) — pricing, territory availability, and age rating via `andp.yml`
