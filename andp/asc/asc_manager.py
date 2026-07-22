@@ -34,7 +34,7 @@ Commands (all accept --json for a structured, agent-friendly envelope):
   readiness testflight <bundle_id>               Can this app go to TestFlight cleanly? (0/1/3)
   readiness appstore <bundle_id> <version>       Can this version go to the App Store cleanly?
   store <pricing|availability|age-rating|apply>  Configure price, territories, age rating
-  build-number [bundle] --strategy S             Next build number (fastlane|timestamp|commit)
+  build-number [bundle] --strategy S             Next build number (max-build|timestamp|commit)
 """
 
 
@@ -646,7 +646,7 @@ def _print_store_human(result):
         print(f"  ⚠️  {w}")
 
 
-_BUILDNUM_USAGE = ("Usage: build-number [bundle_id] --strategy <fastlane|timestamp|commit> "
+_BUILDNUM_USAGE = ("Usage: build-number [bundle_id] --strategy <max-build|timestamp|commit> "
                    "[--floor N] [--format FMT] [--sha SHA] [--digits N]")
 
 
@@ -654,7 +654,7 @@ def _cmd_build_number(account, managers, dry_run, args, json_mode=False):
     """Compute the next iOS build number (CFBundleVersion) via a strategy.
     Prints ONLY the number on stdout (banners/warnings go to stderr) so it drops
     straight into a build step:
-      agvtool new-version -all "$(andp build-number me.app --strategy fastlane --floor 1254)"
+      agvtool new-version -all "$(andp build-number me.app --strategy max-build --floor 1254)"
     """
     from .. import service
 
@@ -665,12 +665,12 @@ def _cmd_build_number(account, managers, dry_run, args, json_mode=False):
     sha = _take_opt(args, "--sha")
     digits_s = _take_opt(args, "--digits")
 
-    if strategy not in ("fastlane", "timestamp", "commit"):
+    if strategy not in ("max-build", "timestamp", "commit"):
         print(_BUILDNUM_USAGE, file=sys.stderr)
         return 2
     bundle_id = args[0] if args else None
-    if strategy == "fastlane" and not bundle_id:
-        print("Usage: build-number <bundle_id> --strategy fastlane [--floor N]", file=sys.stderr)
+    if strategy == "max-build" and not bundle_id:
+        print("Usage: build-number <bundle_id> --strategy max-build [--floor N]", file=sys.stderr)
         return 2
     try:
         floor = int(floor_s) if floor_s is not None else 0

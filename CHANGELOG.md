@@ -1,15 +1,21 @@
+## 1.14.1 - 2026-07-22
+### build-number strategy renamed to `max-build`
+- The ASC-aware build-number strategy is now `--strategy max-build` (was named
+  after another tool). No ANDP command, strategy, or error message references an
+  external tool by name. `andp build-number me.app --strategy max-build --floor N`.
+
 ## 1.14.0 - 2026-07-22
 ### ANDP-native build number: `andp build-number`
 - New command computes the next iOS build number (CFBundleVersion) so a pipeline
-  no longer needs fastlane just for it. Three strategies:
-  - **fastlane** `max(--floor, latest ASC build) + 1` — monotonic, needs creds;
+  no longer needs an external tool just for it. Three strategies:
+  - **max-build** `max(--floor, latest ASC build) + 1` — monotonic, needs creds;
     new `BuildsManager.latest_build_number` does a full-pagination NUMERIC global
     max (defeats the API's lexicographic sort where "9" > "1000")
   - **timestamp** `utcnow().strftime` (default `%Y%m%d%H%M`) — monotonic, no creds
   - **commit** `int(git short sha, 16)` (`--sha`/`$GITHUB_SHA`, `--digits`) —
     unique/traceable but NOT monotonic (`monotonic:false` + a stderr warning)
 - Prints ONLY the number on stdout (banner/warnings → stderr) so it drops into
-  `agvtool new-version -all "$(andp build-number me.app --strategy fastlane --floor 1254)"`;
+  `agvtool new-version -all "$(andp build-number me.app --strategy max-build --floor 1254)"`;
   `--json` gives the full envelope. `timestamp`/`commit` need zero credentials —
   `main()` no longer fails at account-load for `build-number` in a bare repo
 - Library-first (`service.build_number`, pure `andp/buildnum.py`); MCP-safe

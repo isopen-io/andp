@@ -1,12 +1,12 @@
 # Build number — `andp build-number`
 
 ANDP computes the next iOS build number (`CFBundleVersion`) so a release pipeline
-no longer needs fastlane just for it. It **prints only the number on stdout**, so
+no longer needs an external tool just for it. It **prints only the number on stdout**, so
 it drops straight into a build step (apply it to the Xcode project *before*
 archiving — a signed IPA can't be re-versioned):
 
 ```bash
-agvtool new-version -all "$(andp build-number me.your.app --strategy fastlane --floor 1254)"
+agvtool new-version -all "$(andp build-number me.your.app --strategy max-build --floor 1254)"
 # or
 xcodebuild ... CURRENT_PROJECT_VERSION="$(andp build-number --strategy timestamp)"
 ```
@@ -18,14 +18,14 @@ Add `--json` for the full envelope (`build_number`, `strategy`, `monotonic`,
 
 | `--strategy` | Value | Monotonic? | Credentials? |
 |---|---|---|---|
-| **fastlane** | `max(--floor, latest ASC build) + 1` | ✅ yes | ✅ needs creds |
+| **max-build** | `max(--floor, latest ASC build) + 1` | ✅ yes | ✅ needs creds |
 | **timestamp** | `utcnow().strftime(--format)` (default `%Y%m%d%H%M`) | ✅ yes | ❌ none |
 | **commit** | `int(git short sha, 16)` | ❌ **no** | ❌ none |
 
-### fastlane — sequential, App Store-safe
+### max-build — sequential, App Store-safe
 `max(--floor, latest ASC build) + 1`. `--floor` is the local project's current
 build number (so you never go below it while ASC is still processing an upload) —
-the same guard as fastlane's `max(get_build_number, latest_testflight_build_number)+1`.
+so you never regress while ASC is still processing an upload.
 The ASC lookup takes a **full, numeric** global max across all builds (it never
 trusts the API's lexicographic sort, where `"9"` outranks `"1000"`). A global max
 is ≥ any per-version max, so `+1` is always accepted.
@@ -56,7 +56,7 @@ bare checkout:
     (cd apps/ios && agvtool new-version -all "$BUILD")
 ```
 
-`fastlane` needs the ASC credentials (a `secrets.yml`, or ANDP's usual env-based
+`max-build` needs the ASC credentials (a `secrets.yml`, or ANDP's usual env-based
 setup). Keep the **same strategy within a marketing version** — the scales differ
-wildly (commit ~1e8, fastlane ~1e3, timestamp ~2e11), so switching mid-version
+wildly (commit ~1e8, max-build ~1e3, timestamp ~2e11), so switching mid-version
 can produce a *lower* number and Apple will reject it.

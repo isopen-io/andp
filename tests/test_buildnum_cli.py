@@ -33,12 +33,12 @@ def test_no_strategy_is_usage(tmp_path, monkeypatch):
     assert asc_manager.main(["build-number"]) == 2
 
 
-def test_fastlane_without_bundle_is_usage(tmp_path, monkeypatch):
+def test_max_build_without_bundle_is_usage(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    assert asc_manager.main(["build-number", "--strategy", "fastlane"]) == 2
+    assert asc_manager.main(["build-number", "--strategy", "max-build"]) == 2
 
 
-def test_fastlane_prints_number(tmp_path, monkeypatch, ec_private_key_pem, capsys):
+def test_max_build_prints_number(tmp_path, monkeypatch, ec_private_key_pem, capsys):
     (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     session = FakeSession()
@@ -47,7 +47,7 @@ def test_fastlane_prints_number(tmp_path, monkeypatch, ec_private_key_pem, capsy
         FakeResponse(200, {"data": [{"attributes": {"version": "1200"}}], "links": {}}),
     )
     monkeypatch.setattr(service, "make_managers", lambda a: make_test_managers(session))
-    code = asc_manager.main(["build-number", "me.app", "--strategy", "fastlane", "--floor", "1254"])
+    code = asc_manager.main(["build-number", "me.app", "--strategy", "max-build", "--floor", "1254"])
     out = capsys.readouterr()
     assert code == 0
     assert out.out.strip() == "1255"
