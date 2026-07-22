@@ -46,6 +46,9 @@ class AccountConfig:
         return missing
 
 
+_YAML_CACHE = {}
+
+
 def load_account(account_id, secrets_file=None):
     path = secrets_file
     if path is None:
@@ -53,10 +56,18 @@ def load_account(account_id, secrets_file=None):
     if not os.path.exists(path):
         raise ConfigError(f"No secrets file found (looked for {path})")
 
-    with open(path, "r") as f:
-        # Bolt Optimization: Use PyYAML's LibYAML-backed CSafeLoader if available (~8x speedup)
-        loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
-        data = yaml.load(f, Loader=loader) or {}
+    # Bolt Optimization: Cache parsed secrets to avoid redundant disk I/O and CPU parsing.
+    # Uses absolute path as the cache key to prevent test isolation issues when directories change,
+    # and uses file modification time (mtime) to handle dynamic configuration changes.
+    abs_path = os.path.abspath(path)
+    mtime = os.path.getmtime(path)
+    if abs_path not in _YAML_CACHE or _YAML_CACHE[abs_path]["mtime"] < mtime:
+        with open(path, "r") as f:
+            loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+            data = yaml.load(f, Loader=loader) or {}
+        _YAML_CACHE[abs_path] = {"mtime": mtime, "data": data}
+    else:
+        data = _YAML_CACHE[abs_path]["data"]
 
     accounts = data.get("accounts", {})
     if account_id not in accounts:

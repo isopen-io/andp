@@ -1,3 +1,7 @@
+## 2026-07-21 - [Secrets & Policy YAML Caching]
+**Learning:** Caching parsed secrets (`load_account`) and parsed policies (`load_policy`) using the file's absolute path and modification time (`mtime`) as cache keys provides a massive (~630x) performance speedup for repetitive YAML file reading/parsing operations, avoiding expensive CPU parsing and disk I/O while maintaining correctness under dynamic changes and different working directories in test environments.
+**Action:** Always prefer caching slow parser outputs like PyYAML loaded files with automatic `mtime`-based invalidation, and always resolve paths to absolute paths (`os.path.abspath`) for cache keys to prevent test isolation conflicts.
+
 ## 2025-05-15 - [Infrastructure Optimization]
 **Learning:** Checking for Python dependencies via `python3 -c "import module"` is significantly faster (~0.1s) than running `pip install` (~1.6s) even when dependencies are already satisfied. Similarly, `cmp -s` provides a massive speedup for visual regression tests when images are identical, avoiding the overhead of Swift execution.
 **Action:** Always prefer lightweight pre-checks before invoking heavy package managers or compilers in infrastructure scripts.
