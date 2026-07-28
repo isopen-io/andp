@@ -19,7 +19,7 @@ fastlane, no Mac connected to an Apple ID.*
 ## Step 0 — Preflight before anything else
 
 ```bash
-cp secrets.example.yml secrets.yml   # key_id, issuer_id, key_content
+mkdir -p .andp && cp secrets.example.yml .andp/secrets.yml   # key_id, issuer_id, key_content
 andp verify your.bundle.id
 ```
 

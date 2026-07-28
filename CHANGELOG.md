@@ -1,3 +1,32 @@
+## Unreleased
+### `.andp/` configuration namespace
+- **BREAKING** — credentials are now read from `.andp/secrets.yml` (project),
+  `~/.andp/secrets.yml` (global) or `$ANDP_CONFIG_DIR/secrets.yml`, first match
+  wins, with `secrets.example.yml` still the last-resort DRY-RUN template.
+  `./secrets.yml` is no longer loaded: run `andp config migrate` to move it.
+- **BREAKING** — build artefacts, metrics and governance reports moved under
+  `.andp/` (`.andp/build/`, `.andp/metrics/`, `.andp/artifacts/`), joining the
+  release state already stored in `.andp/state/`. `andp.yml` stays at the
+  project root: it is declarative, versioned configuration.
+- New `andp config` — `path secrets|policy`, `dir`, `migrate`, plus a diagnostic
+  reporting which file was resolved and from where. It needs no credentials, so
+  it can diagnose a configuration that is missing or misplaced.
+
+### Typed configuration errors
+- `config_misplaced`, `config_not_found` and `account_not_found` join the
+  `AndpError` taxonomy, each carrying `retryable` and `remediation`. The first
+  two also carry a `context` block listing every inspected path.
+- `ConfigError` is now a subclass of `AndpError`, so a single `except AndpError`
+  covers configuration failures. `andp/core/errors.py` moved to `andp/errors.py`
+  — cross-cutting vocabulary, not core logic.
+- Fixed: in `--json` mode a configuration error printed a bare `Error: ...` line
+  on stdout, so `json.loads()` raised and an agent lost the code, `retryable`
+  and remediation. The envelope is now always valid JSON; human-readable
+  messages go to stderr.
+- Fixed: `sign.sh` read the secrets through a Python condition that was a string
+  concatenation, hence always true — its fallback was unreachable. It now
+  resolves the path through `andp config path secrets`.
+
 ## 1.14.1 - 2026-07-22
 ### build-number strategy renamed to `max-build`
 - The ASC-aware build-number strategy is now `--strategy max-build` (was named

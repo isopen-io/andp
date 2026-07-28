@@ -12,7 +12,7 @@ The platform requires:
 Use `infrastructure/prepare-remote-node.sh` to automate the setup of new CI runners.
 
 ## 2. Managing Multiple Teams
-ANDP supports multi-tenant configurations. Update `secrets.yml` with separate account blocks:
+ANDP supports multi-tenant configurations. Update `.andp/secrets.yml` with separate account blocks:
 ```yaml
 accounts:
   team_a:
@@ -34,5 +34,5 @@ Use `./infrastructure/generate-dashboard.sh` to aggregate these into a `dashboar
 
 ## 4. Maintenance Tasks
 - **Updating XcodeGen:** Periodically run `brew upgrade xcodegen`.
-- **Rotating API Keys:** Update the `key_content` in `secrets.yml` and rotate keys in App Store Connect.
+- **Rotating API Keys:** Update the `key_content` in `.andp/secrets.yml` and rotate keys in App Store Connect.
 - **Cleaning Artifacts:** The `build/` directory should be cleared between CI runs.

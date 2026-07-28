@@ -76,6 +76,7 @@ runs:
         WORKDIR="$(mktemp -d)"
         trap 'rm -rf "$WORKDIR"' EXIT
         umask 077
+        mkdir -p "$WORKDIR/.andp"
         {
           echo "accounts:"
           echo "  primary:"
@@ -84,7 +85,7 @@ runs:
           echo "      issuer_id: \"$ANDP_ISSUER_ID\""
           echo "      key_content: |"
           printf '%s\n' "$ANDP_PRIVATE_KEY" | sed 's/^/        /'
-        } > "$WORKDIR/secrets.yml"
+        } > "$WORKDIR/.andp/secrets.yml"
 
         ARGS=(readiness testflight "$ANDP_BUNDLE_ID")
         [ "$ANDP_FAIL_ON" = "never" ] && ARGS+=(--soft)

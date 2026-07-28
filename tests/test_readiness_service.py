@@ -1,11 +1,11 @@
 """service.readiness_testflight / readiness_appstore — the library glue that
 runs verify/precheck and returns a normalized verdict (over a FakeSession)."""
 from andp import service
-from conftest import FakeResponse, FakeSession, make_test_managers, real_secrets_yaml
+from conftest import FakeResponse, FakeSession, make_test_managers, real_secrets_yaml, write_secrets
 
 
 def _real(tmp_path, monkeypatch, ec_private_key_pem):
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     session = FakeSession()
     monkeypatch.setattr(service, "make_managers", lambda a: make_test_managers(session))
@@ -34,7 +34,7 @@ def test_readiness_testflight_app_not_found_is_not_ready(tmp_path, monkeypatch, 
 
 def test_readiness_testflight_dry_run_is_unverified(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "secrets.yml").write_text(
+    write_secrets(tmp_path, 
         "accounts:\n  primary:\n    asc_api:\n"
         "      key_id: \"ABCDE12345\"\n      issuer_id: \"\"\n      key_content: \"\"\n")
     v = service.readiness_testflight("me.app")
@@ -73,7 +73,7 @@ def test_readiness_appstore_version_not_found_is_not_ready(tmp_path, monkeypatch
 
 def test_readiness_appstore_dry_run_is_unverified(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "secrets.yml").write_text(
+    write_secrets(tmp_path, 
         "accounts:\n  primary:\n    asc_api:\n"
         "      key_id: \"ABCDE12345\"\n      issuer_id: \"\"\n      key_content: \"\"\n")
     v = service.readiness_appstore("me.app", "1.0")

@@ -11,10 +11,10 @@ import zipfile
 import pytest
 
 from andp import service
-from andp.core.errors import AndpError
+from andp.errors import AndpError
 from andp.core.release import ReleaseMachine, release_id
 from andp.core.state import StateStore
-from conftest import FakeResponse, FakeSession, make_test_managers
+from conftest import FakeResponse, FakeSession, make_test_managers, write_secrets
 
 
 def _make_ipa(directory, name="App.ipa"):
@@ -179,7 +179,7 @@ def test_step_reloads_state_under_lock(tmp_path, store):
 
 def test_service_status_handles_corrupted_state(tmp_path, monkeypatch, ec_private_key_pem):
     from conftest import real_secrets_yaml
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".andp" / "state").mkdir(parents=True)
     (tmp_path / ".andp" / "state" / "rel-x.json").write_text("{corrupt")

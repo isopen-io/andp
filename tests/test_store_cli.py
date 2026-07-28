@@ -9,12 +9,12 @@ import pytest
 
 from andp import service
 from andp.asc import asc_manager
-from conftest import FakeResponse, FakeSession, make_test_managers, real_secrets_yaml
+from conftest import FakeResponse, FakeSession, make_test_managers, real_secrets_yaml, write_secrets
 
 
 @pytest.fixture
 def cli(tmp_path, monkeypatch, ec_private_key_pem):
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     session = FakeSession()
     monkeypatch.setattr(service, "make_managers", lambda a: make_test_managers(session))

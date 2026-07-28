@@ -18,10 +18,10 @@ timeline within 7 days.
 
 ## Handling credentials — rules the project enforces
 
-- `secrets.yml` is **gitignored** and must never be committed. The committed
+- `.andp/secrets.yml` is **gitignored** and must never be committed. The committed
   `secrets.example.yml` contains placeholders only; `AccountConfig.is_configured()`
   detects them and forces DRY-RUN mode.
-- The `.p8` private key is only ever read from `secrets.yml` (or the path the
+- The `.p8` private key is only ever read from `.andp/secrets.yml` (or the path the
   caller provides). It is never logged, printed, or uploaded anywhere except
   as an ES256 signature.
 - CI runs must receive credentials through the platform's secret store

@@ -4,7 +4,7 @@ import plistlib
 import zipfile
 
 from andp import mcp, service
-from conftest import FakeResponse, FakeSession, make_test_managers
+from conftest import FakeResponse, FakeSession, make_test_managers, write_secrets
 
 
 def _call(method, params=None):
@@ -36,7 +36,7 @@ def test_no_approve_tool_exposed():
 
 def test_release_start_ship_via_mcp(tmp_path, monkeypatch, ec_private_key_pem):
     from conftest import real_secrets_yaml
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     (tmp_path / "andp.yml").write_text("policy:\n  allow_submit: false\n")
     monkeypatch.chdir(tmp_path)
     session = FakeSession()

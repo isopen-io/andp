@@ -41,7 +41,7 @@ The three questions an agent asks, and the primitive that answers each:
 
 ## 1. Setup an agent must ensure exists
 
-### 1.1 `secrets.yml` — credentials (never commit real ones)
+### 1.1 `.andp/secrets.yml` — credentials (never commit real ones)
 ```yaml
 accounts:
   primary:
@@ -390,13 +390,13 @@ assert s["state"] == "done", s.get("error")     # submitted to App Review
 
 | Symptom | Likely cause → action |
 |---|---|
-| `verify` `ok:false`, `missing:[…]` | fill those fields in `secrets.yml` |
+| `verify` `ok:false`, `missing:[…]` | fill those fields in `.andp/secrets.yml` |
 | stuck on `processing` | normal — Apple ingest; keep polling `retry_after` |
 | `version_not_editable` | that version is published/in review → bump version |
 | `compliance_undeclared` | set `compliance.uses_non_exempt_encryption` in andp.yml |
 | parked at `awaiting_approval` | expected gate → `release approve` or set policy |
 | `needs_precheck_fix` | read `precheck_report.checks` (missing screenshots/description) |
 | `price_point_not_found` | price must match an exact base-territory point, or `free` |
-| everything is DRY-RUN | credentials are placeholders → real `secrets.yml` |
+| everything is DRY-RUN | credentials are placeholders → real `.andp/secrets.yml` |
 
 See [Troubleshooting.md](Troubleshooting.md) for the long form.

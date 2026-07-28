@@ -8,7 +8,7 @@ import plistlib
 import zipfile
 
 from andp.asc import asc_manager
-from conftest import FakeResponse
+from conftest import FakeResponse, write_secrets
 
 
 def _make_ipa(directory, name="App.ipa", bundle_id="me.demo.app", version="1.0", build="1"):
@@ -47,7 +47,7 @@ def test_verify_json_success(configured_dir, fake_transport, capsys):
 
 
 def test_verify_json_failure_names_missing_fields(tmp_path, monkeypatch, capsys):
-    (tmp_path / "secrets.yml").write_text(
+    write_secrets(tmp_path, 
         """
 accounts:
   primary:

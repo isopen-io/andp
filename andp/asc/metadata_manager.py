@@ -65,7 +65,9 @@ def main(argv):
     try:
         account = load_account(account_id)
     except ConfigError as exc:
-        print(f"Error: {exc}")
+        print(f"❌ {exc.message}", file=sys.stderr)
+        if exc.remediation:
+            print(f"   → {exc.remediation}", file=sys.stderr)
         return 1
 
     if command == "sync":

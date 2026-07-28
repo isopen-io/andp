@@ -8,13 +8,13 @@ import json
 import pytest
 
 from andp import service
-from conftest import FakeResponse, FakeSession, make_test_managers, real_secrets_yaml
+from conftest import FakeResponse, FakeSession, make_test_managers, real_secrets_yaml, write_secrets
 
 
 @pytest.fixture
 def cfg(tmp_path, monkeypatch, ec_private_key_pem):
     """Configured dir + a recording FakeSession the test drives."""
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     session = FakeSession()
     monkeypatch.setattr(service, "make_managers", lambda account: make_test_managers(session))

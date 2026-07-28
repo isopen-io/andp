@@ -105,10 +105,21 @@ accounts:
 """
 
 
+def write_secrets(tmp_path, content):
+    """Écrit les credentials à l'emplacement qu'ANDP lit.
+
+    Un seul site à changer quand l'emplacement bouge — c'est tout l'intérêt.
+    """
+    path = tmp_path / ".andp" / "secrets.yml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content)
+    return path
+
+
 @pytest.fixture
 def configured_dir(tmp_path, monkeypatch, ec_private_key_pem):
-    """Working dir with real-looking (test-only) credentials in secrets.yml."""
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    """Working dir with real-looking (test-only) credentials."""
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     return tmp_path
 

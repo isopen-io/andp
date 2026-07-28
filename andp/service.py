@@ -9,7 +9,7 @@ import time
 
 from .asc.config import load_account
 from .asc.managers import make_managers
-from .core.errors import AndpError
+from .errors import AndpError
 from .core.ipa import read_metadata
 from .core.release import ReleaseMachine, release_id
 from .core.state import StateStore
@@ -23,13 +23,11 @@ def _store(project_root="."):
 
 def _managers_for(account_id):
     """Return (managers, account, dry_run). managers is None in dry-run.
-    Raises AndpError (not ConfigError) so callers have one error type to catch."""
-    from .asc.config import ConfigError
-    try:
-        account = load_account(account_id)
-    except ConfigError as exc:
-        raise AndpError(code="config_error", message=str(exc), retryable=False,
-                        remediation="Check secrets.yml and the --account name.")
+
+    ConfigError is an AndpError (andp/errors.py), so callers already have one
+    error type to catch — no translation needed, and the typed code survives.
+    """
+    account = load_account(account_id)
     if not account.is_configured():
         return None, account, True
     return make_managers(account), account, False
@@ -137,7 +135,7 @@ def publish(bundle_id, version, metadata_dir, account="primary"):
         return {"command": "publish", "ok": True, "dry_run": True,
                 "bundle_id": bundle_id, "version": version, "metadata_dir": metadata_dir}
     from .asc.client import ASCAPIError
-    from .core.errors import from_asc_error, from_unexpected
+    from .errors import from_asc_error, from_unexpected
     try:
         app = managers.apps.find_app(bundle_id)
         if app is None:
@@ -211,7 +209,7 @@ def verify_checks(account, managers, bundle_id=None):
                        "retryable": _retryable_status(getattr(exc, "status", None))})
         return {"command": "verify", "ok": False, "checks": checks}
     except Exception as exc:  # network / unexpected — classify, never crash
-        from .core.errors import from_unexpected
+        from .errors import from_unexpected
         checks.append({"name": "api_auth", "ok": False,
                        "detail": f"could not reach App Store Connect: {exc}",
                        "retryable": from_unexpected(exc).retryable})
@@ -301,7 +299,7 @@ def build_number(strategy, bundle_id=None, floor=0, fmt=None, sha=None,
                 code="bad_input", message="the max-build strategy needs a bundle_id",
                 retryable=False, remediation="Pass the app bundle id."))
         from .asc.client import ASCAPIError
-        from .core.errors import from_asc_error, from_unexpected
+        from .errors import from_asc_error, from_unexpected
         try:
             managers, _account_cfg, dry_run = _managers_for(account)
         except AndpError as err:
@@ -346,7 +344,7 @@ def precheck(bundle_id, version, account="primary"):
     """Read-only pre-submission validation. Never mutates."""
     from .precheck import run_precheck
     from .asc.client import ASCAPIError
-    from .core.errors import from_asc_error, from_unexpected
+    from .errors import from_asc_error, from_unexpected
     try:
         managers, account_cfg, dry_run = _managers_for(account)
     except AndpError as err:
@@ -439,7 +437,7 @@ def configure_pricing(bundle_id, account="primary", base_territory=None, price=N
                 "price": price, "price_point_id": price_point_id}
 
     from .asc.client import ASCAPIError
-    from .core.errors import from_asc_error, from_unexpected
+    from .errors import from_asc_error, from_unexpected
     try:
         app = managers.apps.find_app(bundle_id)
         if app is None:
@@ -509,7 +507,7 @@ def configure_availability(bundle_id, account="primary", territories=None,
                 "available_in_new_territories": available_in_new_territories}
 
     from .asc.client import ASCAPIError
-    from .core.errors import from_asc_error, from_unexpected
+    from .errors import from_asc_error, from_unexpected
     try:
         app = managers.apps.find_app(bundle_id)
         if app is None:
@@ -602,7 +600,7 @@ def configure_age_rating(bundle_id, account="primary", declaration=None, project
                 "changed": None, "fields": sorted(attributes), "warnings": warnings}
 
     from .asc.client import ASCAPIError
-    from .core.errors import from_asc_error, from_unexpected
+    from .errors import from_asc_error, from_unexpected
     try:
         app = managers.apps.find_app(bundle_id)
         if app is None:
@@ -651,7 +649,7 @@ def configure_store(bundle_id, account="primary", project_root="."):
         try:
             result = run()
         except Exception as exc:  # a block must never abort the others (S4 best-effort)
-            from .core.errors import from_unexpected
+            from .errors import from_unexpected
             result = _error_result(f"configure_{name}", from_unexpected(exc))
         blocks[name] = result
         if result.get("dry_run"):

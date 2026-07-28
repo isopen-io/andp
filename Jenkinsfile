@@ -28,13 +28,13 @@ pipeline {
         stage('Archive & Sign') {
             steps {
                 sh './archive.sh'
-                sh './sign.sh build/*.xcarchive'
+                sh './sign.sh .andp/build/*.xcarchive'
             }
         }
     }
     post {
         always {
-            archiveArtifacts artifacts: 'build/exported/*.ipa, TestResults.xcresult/**, governance_report.md, dashboard.html', allowEmptyArchive: true
+            archiveArtifacts artifacts: '.andp/build/exported/*.ipa, TestResults.xcresult/**, .andp/governance_report.md, .andp/dashboard.html', allowEmptyArchive: true
         }
     }
 }

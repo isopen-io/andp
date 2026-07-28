@@ -15,7 +15,7 @@ import os
 from .asc.appstore import (
     EDITABLE_VERSION_STATES, IN_REVIEW_VERSION_STATES, version_state,
 )
-from .core.errors import AndpError
+from .errors import AndpError
 
 # file name (without .txt) -> appStoreVersionLocalization attribute
 _TEXT_FIELDS = {

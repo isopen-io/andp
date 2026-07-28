@@ -8,7 +8,7 @@ ANDP is designed to be a native replacement for Fastlane and Tuist. This guide o
 | Fastlane | ANDP |
 |----------|------|
 | Fastfile | Shell scripts (`build.sh`, `test.sh`, etc.) |
-| Appfile  | `project.yml` + `secrets.yml` |
+| Appfile  | `project.yml` + `.andp/secrets.yml` |
 | Scan     | `test.sh` |
 | Gym      | `archive.sh` |
 | Match    | `infrastructure/certificate-manager.sh` |
@@ -18,7 +18,7 @@ ANDP is designed to be a native replacement for Fastlane and Tuist. This guide o
 ### Steps to Migrate
 1. **Remove Fastlane:** Delete `Fastfile`, `Appfile`, `Deliverfile`, and the `fastlane/` folder.
 2. **Define project.yml:** Use XcodeGen to define your project structure. Map your schemes and configurations.
-3. **Configure Secrets:** Copy `secrets.example.yml` to `secrets.yml` and fill in your ASC API keys and Team IDs.
+3. **Configure Secrets:** Copy `secrets.example.yml` to `.andp/secrets.yml` and fill in your ASC API keys and Team IDs.
 4. **Update CI Pipelines:** Replace `bundle exec fastlane <lane>` calls with direct script execution (e.g., `./build.sh`).
 
 ## 2. From Tuist

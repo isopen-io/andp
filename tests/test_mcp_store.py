@@ -7,7 +7,7 @@ import json
 import pytest
 
 from andp import mcp, service
-from conftest import FakeResponse, FakeSession, make_test_managers, real_secrets_yaml
+from conftest import FakeResponse, FakeSession, make_test_managers, real_secrets_yaml, write_secrets
 
 
 def _call(method, params=None, mid=1):
@@ -19,7 +19,7 @@ def _call(method, params=None, mid=1):
 
 @pytest.fixture
 def cfg(tmp_path, monkeypatch, ec_private_key_pem):
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     session = FakeSession()
     monkeypatch.setattr(service, "make_managers", lambda a: make_test_managers(session))

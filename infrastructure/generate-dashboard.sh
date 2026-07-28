@@ -5,9 +5,11 @@
 
 set -e
 
-OUTPUT_FILE="dashboard.html"
-METRICS_DIR="metrics"
+OUTPUT_FILE="${ANDP_CONFIG_DIR:-.andp}/dashboard.html"
+METRICS_DIR="${ANDP_CONFIG_DIR:-.andp}/metrics"
 VISUAL_DIR="Tests/VisualBaselines/Diffs"
+
+mkdir -p "$(dirname "$OUTPUT_FILE")"
 
 echo "Generating Developer Productivity Dashboard..."
 

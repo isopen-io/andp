@@ -140,7 +140,7 @@ result to the matching `*_verdict`, return the verdict. No printing.
 `.github/actions/appstore-readiness/action.yml` — a composite that:
 1. `pip install` the package (from `github.action_path`'s repo root, i.e. two
    levels up — see §3.2 risk).
-2. Writes a locked-down `secrets.yml` from `key-id`/`issuer-id`/`private-key`
+2. Writes a locked-down `.andp/secrets.yml` from `key-id`/`issuer-id`/`private-key`
    inputs (same `umask 077` + `mktemp -d` pattern as the existing root action).
 3. Runs `python3 -m andp readiness <target> <bundle> [version]` with `--soft`
    iff `fail-on: never`. The CLI writes the summary + outputs itself.

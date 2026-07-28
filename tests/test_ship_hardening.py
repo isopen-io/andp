@@ -12,10 +12,10 @@ import zipfile
 
 import pytest
 
-from andp.core.errors import AndpError
+from andp.errors import AndpError
 from andp.core.release import ReleaseMachine, release_id
 from andp.core.state import StateStore
-from conftest import FakeResponse, FakeSession, make_test_managers
+from conftest import FakeResponse, FakeSession, make_test_managers, write_secrets
 
 
 def _make_ipa(directory, encryption=False):
@@ -187,7 +187,7 @@ def test_absent_version_state_is_rejected(store, tmp_path):
 def test_blocking_release_ship_is_rejected(tmp_path, monkeypatch, ec_private_key_pem, capsys):
     from conftest import real_secrets_yaml
     from andp.asc import asc_manager
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     ipa = _make_ipa(tmp_path)
     code = asc_manager.main(["release", ipa, "--ship"])
@@ -201,7 +201,7 @@ def test_blocking_release_ship_is_rejected(tmp_path, monkeypatch, ec_private_key
 def test_snapshot_view_exposes_needs_approval(tmp_path, monkeypatch, ec_private_key_pem):
     from conftest import real_secrets_yaml, FakeSession, make_test_managers
     from andp import service
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     (tmp_path / "andp.yml").write_text("policy:\n  allow_submit: false\n")
     monkeypatch.chdir(tmp_path)
     ipa = _make_ipa(tmp_path)

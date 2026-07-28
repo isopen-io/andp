@@ -108,7 +108,7 @@ sequenceDiagram
 ```mermaid
 graph TD
     subgraph Secret_Storage
-        SecretsFile[secrets.yml]
+        SecretsFile[.andp/secrets.yml]
         EnvVars[Environment Variables]
     end
 
@@ -138,7 +138,7 @@ graph TD
 graph LR
     Code[Source Code] -->|Input| Build[Build System]
     Config[project.yml] -->|Input| Build
-    Secrets[secrets.yml] -->|Credentials| Build
+    Secrets[.andp/secrets.yml] -->|Credentials| Build
     Build -->|Artifacts| Sign[Signing System]
     Sign -->|Signed IPA| Dist[Distribution System]
     Build -->|Test Results| Gov[Governance System]

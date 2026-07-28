@@ -28,7 +28,7 @@ python3 -m andp verify
 ## Quickstart
 
 ```bash
-cp secrets.example.yml secrets.yml   # fill in key_id, issuer_id, key_content (never committed)
+mkdir -p .andp && cp secrets.example.yml .andp/secrets.yml   # fill in key_id, issuer_id, key_content (never committed)
 
 andp verify me.your.app              # preflight: can I publish?
 andp upload build/Your.ipa           # Build Upload API (reads version from the IPA)
@@ -111,6 +111,7 @@ Point `ANDP_APP_DIR` at any XcodeGen-based app directory to drive another projec
 ## Documentation
 
 - [`Documentation/PublishReadiness.md`](Documentation/PublishReadiness.md) — the CI entry point: TestFlight & App Store readiness gates (GitHub Actions + reusable workflow + `andp readiness` CLI, tri-state verdict)
+- [`Documentation/Configuration.md`](Documentation/Configuration.md) — where ANDP reads its configuration: the `.andp/` namespace, the resolution cascade, `andp config`, and the typed configuration errors
 - [`Documentation/BuildNumber.md`](Documentation/BuildNumber.md) — `andp build-number`: compute the next CFBundleVersion (max-build / timestamp / commit strategies) so a pipeline needs no external tool just for the build number
 - [`Documentation/AgentGuide.md`](Documentation/AgentGuide.md) — **the end-to-end agent playbook**: from code to a live App Store submission (state machine, full CLI/MCP/service surface, error taxonomy, worked example)
 - [`Documentation/Agents.md`](Documentation/Agents.md) — why ANDP is agent-native (the three primitives, guardrails, threat model)

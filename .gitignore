@@ -1,5 +1,4 @@
 # Xcode
-build/
 DerivedData/
 *.xcodeproj
 *.xcworkspace
@@ -19,8 +18,20 @@ dist/
 *.egg-info/
 .eggs/
 
-# ANDP Secrets
+# ANDP runtime namespace — secrets, state, build artefacts, metrics, reports.
+# Everything ANDP produces or reads-but-never-commits lives here, so a single
+# line covers it. `andp.yml` (declarative config) stays versioned at the root.
+.andp/
+
+# Pre-.andp/ locations. Nothing writes here any more, but existing checkouts
+# still hold these — they must never be committed just because ANDP moved on.
 secrets.yml
+build/
+metrics/
+artifacts/
+dashboard.html
+governance_report.md
+
 *.ipa
 *.xcarchive
 *.pkg
@@ -28,9 +39,3 @@ secrets.yml
 
 # GitHub
 .github/local_config.yml
-
-# ANDP Artifacts
-metrics/
-dashboard.html
-governance_report.md
-.andp/

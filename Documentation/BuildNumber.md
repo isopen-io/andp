@@ -47,7 +47,7 @@ each build strictly higher than the last).
 
 ## In CI
 
-`timestamp`/`commit` need **no credentials and no `secrets.yml`** — they run in a
+`timestamp`/`commit` need **no credentials and no `.andp/secrets.yml`** — they run in a
 bare checkout:
 
 ```yaml
@@ -56,7 +56,7 @@ bare checkout:
     (cd apps/ios && agvtool new-version -all "$BUILD")
 ```
 
-`max-build` needs the ASC credentials (a `secrets.yml`, or ANDP's usual env-based
+`max-build` needs the ASC credentials (a `.andp/secrets.yml`, or ANDP's usual env-based
 setup). Keep the **same strategy within a marketing version** — the scales differ
 wildly (commit ~1e8, max-build ~1e3, timestamp ~2e11), so switching mid-version
 can produce a *lower* number and Apple will reject it.
