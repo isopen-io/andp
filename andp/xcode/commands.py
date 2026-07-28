@@ -184,10 +184,16 @@ def cmd_targets(args, json_mode=False, project_root=".", run_process=None):
     if json_mode:
         print(json.dumps(payload))
         return 0
-    for entry in payload["targets"]:
-        print("%-16s %-10s %-10s %s" % (entry["name"], entry["scheme"],
-                                        entry["configuration"],
-                                        entry["destination_argument"]))
+    # Widths from the data, not guessed: a scheme like
+    # MeeshyNotificationExtension blows through any fixed column.
+    rows = [(e["name"], e["scheme"], e["configuration"],
+             e["destination_argument"]) for e in payload["targets"]]
+    if rows:
+        widths = [max(len(row[i]) for row in rows) for i in range(3)]
+        for row in rows:
+            print("%-*s  %-*s  %-*s  %s"
+                  % (widths[0], row[0], widths[1], row[1],
+                     widths[2], row[2], row[3]))
     return 0
 
 
