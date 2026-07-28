@@ -11,6 +11,8 @@ import json
 import os
 import sys
 
+from ..errors import AndpError
+from ..xcode import commands as xcode_commands
 from .apps import AppsManager
 from .appstore import AppStoreManager
 from .auth import ASCAuth, ASCAuthError
@@ -36,6 +38,14 @@ Commands (all accept --json for a structured, agent-friendly envelope):
   store <pricing|availability|age-rating|apply>  Configure price, territories, age rating
   build-number [bundle] --strategy S             Next build number (max-build|timestamp|commit)
   config [path <secrets|policy>|dir|migrate]     Where ANDP reads its configuration
+
+Local tooling (no App Store Connect credentials needed):
+  build [targets...] [--all] [--archive]         Compile targets declared in andp.yml
+  run <target> [--no-build] [--logs]             Build, install and launch on a simulator or device
+  test [targets...] [--all]                      Run the test suite per target
+  targets                                        List resolved targets and their destinations
+
+  Overrides for build/run/test: --scheme --configuration --platform --destination --os
 """
 
 
@@ -817,6 +827,38 @@ def _cmd_config(account, managers, dry_run, args, json_mode=False):
     return 0
 
 
+def _error_envelope(command, exc, json_mode):
+    """Failure envelope — parsable JSON, or a human message on stderr.
+
+    One failure shape for the whole tool, defined once. In --json, stdout must
+    stay parsable: an agent reads code/retryable/remediation from here, and gets
+    nothing usable from a bare error line.
+    """
+    if json_mode:
+        print(json.dumps({"command": command, "ok": False,
+                          "error": exc.to_dict()}))
+    else:
+        print(f"❌ {exc.message}", file=sys.stderr)
+        if exc.remediation:
+            print(f"   → {exc.remediation}", file=sys.stderr)
+    return 1
+
+
+def _xcode_handler(command, func):
+    """Adapt an andp.xcode command to the dispatcher's signature.
+
+    A build has neither account nor managers: ignoring them explicitly beats
+    pretending one exists.
+    """
+    def wrapper(account, managers, dry_run, args, json_mode=False):
+        try:
+            return func(args, json_mode=json_mode)
+        except AndpError as exc:
+            return _error_envelope(command, exc, json_mode)
+
+    return wrapper
+
+
 COMMANDS = {
     "verify": _cmd_verify,
     "upload": _cmd_upload,
@@ -830,7 +872,16 @@ COMMANDS = {
     "store": _cmd_store,
     "build-number": _cmd_build_number,
     "config": _cmd_config,
+    "build": _xcode_handler("build", xcode_commands.cmd_build),
+    "run": _xcode_handler("run", xcode_commands.cmd_run),
+    "test": _xcode_handler("test", xcode_commands.cmd_test),
+    "targets": _xcode_handler("targets", xcode_commands.cmd_targets),
 }
+
+# Commands that need no App Store Connect credentials. `config` exists precisely
+# to diagnose a broken configuration, `build-number` has offline strategies, and
+# the local tooling never talks to Apple at all.
+CREDENTIAL_FREE = {"build-number", "config", "build", "run", "test", "targets"}
 
 
 def main(argv):
@@ -862,22 +913,12 @@ def main(argv):
     try:
         account = load_account(account_id)
     except ConfigError as exc:
-        # `build-number` (timestamp/commit) and `config` need no credentials at
-        # all — the latter exists precisely to diagnose a broken configuration,
-        # so requiring one would defeat its purpose. Every other command fails.
-        if command in ("build-number", "config"):
+        # A missing configuration is fatal for anything that talks to Apple, and
+        # irrelevant for everything in CREDENTIAL_FREE.
+        if command in CREDENTIAL_FREE:
             account = AccountConfig(account_id, None, None, None)
-        elif json_mode:
-            # stdout must stay parsable: an agent reads code/retryable/remediation
-            # from here, and gets nothing usable from a bare error line.
-            print(json.dumps({"command": command, "ok": False,
-                              "error": exc.to_dict()}))
-            return 1
         else:
-            print(f"❌ {exc.message}", file=sys.stderr)
-            if exc.remediation:
-                print(f"   → {exc.remediation}", file=sys.stderr)
-            return 1
+            return _error_envelope(command, exc, json_mode)
 
     dry_run = not account.is_configured()
     if dry_run:
@@ -885,10 +926,11 @@ def main(argv):
         # make ASCAuth raise — e.g. a fork PR with unset secrets). Handlers know
         # to run in DRY-RUN from the flag; the banner is human-mode only and goes
         # to stderr so a command whose stdout is captured (build-number) is clean.
-        # `config` and `build-number` don't need credentials at all: announcing
+        # CREDENTIAL_FREE commands don't need credentials at all: announcing
         # DRY-RUN to them is noise, and misleading for `config`, whose whole job
-        # is to report on a configuration that may legitimately be absent.
-        if not json_mode and command not in ("build-number", "config"):
+        # is to report on a configuration that may legitimately be absent. The
+        # build layer has its own DRY-RUN, keyed on xcodebuild's absence.
+        if not json_mode and command not in CREDENTIAL_FREE:
             print(
                 f"No real App Store Connect credentials for account '{account_id}' "
                 "(placeholders detected) — running in DRY-RUN mode.",
