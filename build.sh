@@ -1,50 +1,44 @@
 #!/bin/bash
 
-# ANDP Build Script
+# ANDP Build Script — thin wrapper around `andp build`.
+#
+# The positional signature is preserved: .github/workflows/andp-release.yml
+# calls `./build.sh "$SCHEME" Release iphoneos` and must keep working.
+# Everything else — target resolution, destinations, logs, structured
+# failures — lives in `andp build`.
 
 set -e
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-APP_DIR="${ANDP_APP_DIR:-examples/meeshy}"
 
 SCHEME=${1:-"Meeshy"}
 CONFIGURATION=${2:-"Release"}
 SDK=${3:-"iphoneos"}
 
+andp_cli() { command -v andp >/dev/null 2>&1 && andp "$@" || python3 -m andp "$@"; }
+
+# -sdk and -destination overlap; -destination is the form Xcode recommends, so
+# the legacy third argument is translated here rather than exposed in the CLI.
+case "$SDK" in
+    iphoneos|appletvos|watchos|xros)  DESTINATION="generic" ;;
+    *simulator)                      DESTINATION="" ;;      # let the target decide
+    *)                               DESTINATION="generic" ;;
+esac
+
 START_TIME=$(date +%s)
 
-echo "Building scheme: $SCHEME ($CONFIGURATION) for $SDK... (app: $APP_DIR)"
+echo "Building scheme: $SCHEME ($CONFIGURATION) for $SDK..."
 
-# Iteration 11: Distributed build prep - resolve dependencies first
-if command -v xcodebuild >/dev/null 2>&1; then
-    echo "Resolving Swift Package dependencies..."
-    (cd "$APP_DIR" && xcodebuild -resolvePackageDependencies -scheme "$SCHEME" -configuration "$CONFIGURATION")
-fi
-
-# Build settings to allow compilation in CI without certificates
-BUILD_SETTINGS=""
-if [ "$CI" == "true" ] || [ "$GITHUB_ACTIONS" == "true" ]; then
-    echo "CI environment detected. Disabling code signing for build-only validation."
-    BUILD_SETTINGS="CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= CODE_SIGN_ENTITLEMENTS= CODE_SIGNING_INJECT_BASE_ENTITLEMENTS=NO"
-fi
+ARGS=(build --scheme "$SCHEME" --configuration "$CONFIGURATION")
+[ -n "$DESTINATION" ] && ARGS+=(--destination "$DESTINATION")
 
 STATUS="SUCCESS"
-if command -v xcodebuild >/dev/null 2>&1; then
-    if ! (cd "$APP_DIR" && xcodebuild -scheme "$SCHEME" \
-               -configuration "$CONFIGURATION" \
-               -sdk "$SDK" \
-               $BUILD_SETTINGS \
-               build); then
-        STATUS="FAILED"
-    fi
-else
-    echo "Warning: xcodebuild not found. Simulating build success."
-fi
+andp_cli "${ARGS[@]}" || STATUS="FAILED"
 
 END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
 
-# Record metrics
+# Repo instrumentation, not a tool responsibility — it stays here.
 if [ -x "$ROOT_DIR/infrastructure/analytics-manager.sh" ]; then
     "$ROOT_DIR/infrastructure/analytics-manager.sh" record "build" "$SCHEME" "$DURATION" "$STATUS"
 fi

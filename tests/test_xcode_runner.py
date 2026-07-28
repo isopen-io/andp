@@ -174,6 +174,31 @@ def test_test_action_uses_the_test_verb(tmp_path):
     assert "dev-test" in result.log_path
 
 
+def test_test_writes_a_result_bundle(tmp_path):
+    """test-report.sh consomme le .xcresult — le chemin est un contrat."""
+    fake = FakeProcess()
+    result = runner.test(_t(), str(tmp_path), str(tmp_path), run_process=fake)
+    argv = fake.calls[0]
+    assert argv[argv.index("-resultBundlePath") + 1] == result.result_bundle
+    assert result.result_bundle.endswith(os.path.join(".andp", "build",
+                                                      "dev.xcresult"))
+
+
+def test_a_stale_result_bundle_is_removed(tmp_path):
+    """xcodebuild refuse d'écraser un bundle existant."""
+    stale = runner.result_bundle_path(str(tmp_path), "dev")
+    os.makedirs(stale)
+    (open(os.path.join(stale, "old"), "w")).close()
+    runner.test(_t(), str(tmp_path), str(tmp_path), run_process=FakeProcess())
+    assert not os.path.exists(os.path.join(stale, "old"))
+
+
+def test_build_has_no_result_bundle(tmp_path):
+    result = runner.build(_t(), str(tmp_path), str(tmp_path),
+                          run_process=FakeProcess())
+    assert result.result_bundle is None
+
+
 def test_failed_test_has_its_own_code(tmp_path):
     result = runner.test(_t(), str(tmp_path), str(tmp_path),
                          run_process=FakeProcess(65))

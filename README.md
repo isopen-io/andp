@@ -81,14 +81,31 @@ jobs:
     secrets: inherit
 ```
 
+## Building and running
+
+`andp build`, `andp run` and `andp test` drive Xcode from the `targets:` block of
+`andp.yml` — every scheme, on every platform your project declares. None of them
+need App Store Connect credentials.
+
+```bash
+andp targets                    # what can be built, with resolved destinations
+andp build --all                # every declared target, sequentially
+andp build prod --archive       # archive + export to .andp/build/exported/
+andp run dev-ios --logs         # boot, install, launch, follow the logs
+andp test --all --json          # structured result per target
+```
+
+See [Build](Documentation/Build.md) for the target model, destinations, the JSON
+envelope and the error codes.
+
 ## Pipeline scripts
 
 The shell layer drives a full delivery pipeline against the app in `$ANDP_APP_DIR` (default: `examples/meeshy`):
 
 ```bash
 ./generate.sh                        # XcodeGen project generation
-./build.sh <Scheme> Release iphoneos # build (analytics recorded)
-./test.sh <Scheme>                   # simulator tests + quality report
+./build.sh <Scheme> Release iphoneos # wrapper around `andp build`
+./test.sh <Scheme>                   # wrapper around `andp test` + quality report
 ./archive.sh <Scheme> && ./sign.sh build/<Scheme>.xcarchive
 ./asc-manager.sh upload build/exported/<Scheme>.ipa
 ./infrastructure/governance-report.sh --full   # SBOM + security + AI quality

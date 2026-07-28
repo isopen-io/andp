@@ -13,7 +13,9 @@ Welcome to the ANDP development team. This guide explains how to extend and main
 1. Create the source directory in `Apps/` or `Features/`.
 2. Add the target definition to `project.yml`.
 3. Run `./generate.sh` to update the Xcode project.
-4. Add the target to `build-matrix.sh` if it should be built automatically.
+4. Declare it in the `targets:` block of `andp.yml` if it should be built
+   automatically — see [Build](Build.md). The matrix comes from there, not from
+   `build-matrix.sh`, so a new platform needs no script edit.
 
 ## 3. Extending the Build Pipeline
 New orchestration scripts should follow these rules:

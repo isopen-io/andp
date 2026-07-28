@@ -6,6 +6,7 @@ separates "the build failed" from "MeeshyWatch cannot find WatchConnectivity".
 """
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import time
@@ -16,7 +17,8 @@ from ..errors import XcodeError
 from . import destination as dest
 
 BuildResult = namedtuple(
-    "BuildResult", "target action ok duration exit_code destination log_path error")
+    "BuildResult",
+    "target action ok duration exit_code destination log_path error result_bundle")
 
 MAX_ERROR_LINES = 10
 CI_SIGNING = ["CODE_SIGNING_ALLOWED=NO", "CODE_SIGNING_REQUIRED=NO",
@@ -119,11 +121,21 @@ def list_schemes(project_dir, run_process=None):
     return list(container.get("schemes") or [])
 
 
-def _result(target, action, ok, started, code, path, error):
+def result_bundle_path(project_root, target_name):
+    """Where the .xcresult of a test run lands.
+
+    test-report.sh consumes it, so the path is a contract — not an internal
+    detail. It lives under .andp/build/ like everything else the tool produces.
+    """
+    return os.path.join(paths.andp_dir(project_root), "build",
+                        "%s.xcresult" % target_name)
+
+
+def _result(target, action, ok, started, code, path, error, bundle=None):
     return BuildResult(target=target.name, action=action, ok=ok,
                        duration=round(time.time() - started, 2), exit_code=code,
                        destination=dest.to_argument(target), log_path=path,
-                       error=error)
+                       error=error, result_bundle=bundle)
 
 
 def _failure(target, code, error_code, path, message):
@@ -179,12 +191,18 @@ def build(target, project_dir, project_root=".", archive=False, run_process=None
 
 def test(target, project_dir, project_root=".", run_process=None):
     path = log_path(project_root, target.name, "test")
+    bundle = result_bundle_path(project_root, target.name)
+    if os.path.isdir(bundle):
+        # xcodebuild refuses to overwrite an existing bundle.
+        shutil.rmtree(bundle)
     started = time.time()
-    code = _invoke(_base_argv(target, ["test"]), project_dir, path, run_process)
+    code = _invoke(_base_argv(target, ["test", "-resultBundlePath", bundle]),
+                   project_dir, path, run_process)
     error = None if code == 0 else _failure(
         target, code, "test_failed", path,
         "The test suite exited with %s." % code)
-    return _result(target, "test", code == 0, started, code, path, error)
+    return _result(target, "test", code == 0, started, code, path, error,
+                   bundle=bundle)
 
 
 def app_path(target, project_dir, run_process=None):

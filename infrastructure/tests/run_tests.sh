@@ -82,7 +82,7 @@ rm -rf test_lproj
 # Test Analytics Manager
 echo "Testing analytics-manager.sh..."
 ./infrastructure/analytics-manager.sh record test_type test_name 42 SUCCESS > /dev/null
-if ls metrics/test_type_*.json > /dev/null 2>&1; then
+if ls "${ANDP_CONFIG_DIR:-.andp}"/metrics/test_type_*.json > /dev/null 2>&1; then
     echo "✅ analytics-manager.sh PASSED"
 else
     echo "❌ analytics-manager.sh FAILED"
@@ -137,7 +137,7 @@ rm img1.png img2.png
 # Test Dashboard Generator
 echo "Testing generate-dashboard.sh..."
 if ./infrastructure/generate-dashboard.sh > /dev/null; then
-    if [ -f "dashboard.html" ]; then
+    if [ -f "${ANDP_CONFIG_DIR:-.andp}/dashboard.html" ]; then
         echo "✅ generate-dashboard.sh PASSED"
     else
         echo "❌ generate-dashboard.sh FAILED: dashboard.html missing"

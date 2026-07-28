@@ -83,6 +83,9 @@ def _entry(result):
     entry = {"target": result.target, "ok": result.ok,
              "duration": result.duration, "destination": result.destination,
              "log": result.log_path}
+    if result.result_bundle is not None:
+        # test-report.sh reads this; an agent needs it to fetch failure details.
+        entry["result_bundle"] = result.result_bundle
     if result.error is not None:
         entry["error"] = result.error.to_dict()
     return entry
@@ -141,6 +144,9 @@ def _print_envelope(envelope, json_mode):
         print("%s  %-16s %6.1fs  %s"
               % (mark, entry["target"], entry["duration"], entry["destination"]))
         if not entry["ok"]:
+            # Two unsynchronised streams: without the flush, the stderr detail
+            # lands above the stdout line it belongs to.
+            sys.stdout.flush()
             error = entry["error"]
             print("   %s" % error["message"], file=sys.stderr)
             for line in error.get("context", {}).get("errors", []):
