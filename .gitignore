@@ -39,3 +39,6 @@ governance_report.md
 
 # GitHub
 .github/local_config.yml
+
+# Claude Code personal overrides for this project
+.claude/settings.local.json
