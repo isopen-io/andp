@@ -7,7 +7,7 @@ with real credentials it must hit the API and report auth + app lookup status.
 import pytest
 
 from andp.asc import asc_manager
-from conftest import FakeResponse, FakeSession
+from conftest import FakeResponse, FakeSession, write_secrets
 
 PARTIAL_SECRETS = """
 accounts:
@@ -25,7 +25,7 @@ accounts:
 @pytest.fixture
 def partial_secrets_dir(tmp_path, monkeypatch):
     """secrets.yml exists but issuer_id and key are still template placeholders."""
-    (tmp_path / "secrets.yml").write_text(PARTIAL_SECRETS)
+    write_secrets(tmp_path, PARTIAL_SECRETS)
     monkeypatch.chdir(tmp_path)
     return tmp_path
 
@@ -113,7 +113,7 @@ def test_verify_rejected_credentials_fail(configured_dir, fake_transport, capsys
 
 
 def test_verify_unusable_private_key_fails(tmp_path, monkeypatch, capsys):
-    (tmp_path / "secrets.yml").write_text(
+    write_secrets(tmp_path, 
         """
 accounts:
   primary:

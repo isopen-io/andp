@@ -6,7 +6,7 @@ import pytest
 
 from andp import service
 from andp.asc import asc_manager
-from conftest import FakeResponse, FakeSession, make_test_managers, real_secrets_yaml
+from conftest import FakeResponse, FakeSession, make_test_managers, real_secrets_yaml, write_secrets
 
 
 def _meta_tree(root):
@@ -16,7 +16,7 @@ def _meta_tree(root):
 
 
 def test_service_publish_pushes_metadata(tmp_path, monkeypatch, ec_private_key_pem):
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     root = str(tmp_path / "meta"); _meta_tree(root)
     session = FakeSession()
@@ -45,7 +45,7 @@ def test_service_publish_dry_run(tmp_path, monkeypatch):
 
 
 def test_cli_publish(tmp_path, monkeypatch, ec_private_key_pem, capsys):
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     root = str(tmp_path / "meta"); _meta_tree(root)
     session = FakeSession()

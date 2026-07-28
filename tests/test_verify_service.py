@@ -8,7 +8,7 @@ human output is unchanged; these tests pin the library envelope.
 from andp import service
 from andp.asc.client import ASCAPIError
 from andp.asc.config import AccountConfig
-from conftest import FakeResponse, FakeSession, make_test_managers, real_secrets_yaml
+from conftest import FakeResponse, FakeSession, make_test_managers, real_secrets_yaml, write_secrets
 
 
 def _configured():
@@ -138,7 +138,7 @@ def test_verify_checks_jwt_failure_blocks():
 def test_service_verify_loader_dry_run(tmp_path, monkeypatch):
     """service.verify loads creds itself; placeholders => failed credentials."""
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "secrets.yml").write_text(
+    write_secrets(tmp_path, 
         "accounts:\n  primary:\n    asc_api:\n"
         "      key_id: \"ABCDE12345\"\n      issuer_id: \"\"\n      key_content: \"\"\n")
     result = service.verify("app.d.mvp")
@@ -148,7 +148,7 @@ def test_service_verify_loader_dry_run(tmp_path, monkeypatch):
 
 
 def test_service_verify_loader_hits_api(tmp_path, monkeypatch, ec_private_key_pem):
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     session = FakeSession()
     session.queue(FakeResponse(200, {"data": [{"id": "app-1"}]}))

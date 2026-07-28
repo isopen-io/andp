@@ -131,13 +131,13 @@ def test_upload_real_resolves_app_from_ipa_bundle_id(
     import plistlib
     import zipfile
 
-    from conftest import FakeResponse, FakeSession
+    from conftest import FakeResponse, FakeSession, write_secrets
     from test_builds import _upload_flow_responses
 
     indented_key = "\n".join(
         f"        {line}" for line in ec_private_key_pem.strip().splitlines()
     )
-    (tmp_path / "secrets.yml").write_text(f"""
+    write_secrets(tmp_path, f"""
 accounts:
   primary:
     asc_api:

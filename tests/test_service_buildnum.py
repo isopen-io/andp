@@ -2,7 +2,7 @@
 from datetime import datetime, timezone
 
 from andp import service
-from conftest import FakeResponse, FakeSession, make_test_managers, real_secrets_yaml
+from conftest import FakeResponse, FakeSession, make_test_managers, real_secrets_yaml, write_secrets
 
 
 def _clock():
@@ -38,7 +38,7 @@ def test_commit_no_sha_is_error(monkeypatch):
 
 
 def test_max_build_floor_wins(tmp_path, monkeypatch, ec_private_key_pem):
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     session = FakeSession()
     session.queue(
@@ -53,7 +53,7 @@ def test_max_build_floor_wins(tmp_path, monkeypatch, ec_private_key_pem):
 
 
 def test_max_build_asc_wins(tmp_path, monkeypatch, ec_private_key_pem):
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     session = FakeSession()
     session.queue(
@@ -67,7 +67,7 @@ def test_max_build_asc_wins(tmp_path, monkeypatch, ec_private_key_pem):
 
 def test_max_build_dry_run_is_no_credentials(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "secrets.yml").write_text(
+    write_secrets(tmp_path, 
         "accounts:\n  primary:\n    asc_api:\n"
         "      key_id: \"ABCDE12345\"\n      issuer_id: \"\"\n      key_content: \"\"\n")
     r = service.build_number("max-build", bundle_id="me.app")
@@ -76,7 +76,7 @@ def test_max_build_dry_run_is_no_credentials(tmp_path, monkeypatch):
 
 
 def test_max_build_app_not_found(tmp_path, monkeypatch, ec_private_key_pem):
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     session = FakeSession()
     session.queue(FakeResponse(200, {"data": []}))
@@ -105,7 +105,7 @@ def test_commit_bad_digits_is_envelope_not_crash():
 
 
 def test_max_build_warns_when_dotted_versions_skipped(tmp_path, monkeypatch, ec_private_key_pem):
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     session = FakeSession()
     session.queue(

@@ -9,7 +9,7 @@ import zipfile
 import pytest
 
 from andp import service
-from conftest import FakeResponse, FakeSession, make_test_managers
+from conftest import FakeResponse, FakeSession, make_test_managers, write_secrets
 
 
 def _make_ipa(directory, name="App.ipa"):
@@ -29,7 +29,7 @@ def real_session(tmp_path, monkeypatch, ec_private_key_pem):
     """secrets.yml with test creds + a patched make_managers returning a
     recording FakeSession the test controls."""
     from conftest import real_secrets_yaml
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     session = FakeSession()
     monkeypatch.setattr(service, "make_managers", lambda account: make_test_managers(session))

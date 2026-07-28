@@ -5,7 +5,7 @@ import zipfile
 
 from andp.asc import asc_manager
 from andp import service
-from conftest import FakeResponse, FakeSession, make_test_managers, real_secrets_yaml
+from conftest import FakeResponse, FakeSession, make_test_managers, real_secrets_yaml, write_secrets
 
 
 def _make_ipa(directory):
@@ -21,7 +21,7 @@ def _make_ipa(directory):
 
 
 def test_release_start_then_status_json(tmp_path, monkeypatch, ec_private_key_pem, capsys):
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     session = FakeSession()
     monkeypatch.setattr(service, "make_managers", lambda a: make_test_managers(session))
@@ -54,7 +54,7 @@ def test_release_start_dry_run_plan(tmp_path, monkeypatch, capsys):
 
 
 def test_release_poll_drives_to_done(tmp_path, monkeypatch, ec_private_key_pem, capsys):
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     session = FakeSession()
     session.queue(

@@ -9,7 +9,7 @@ import zipfile
 import pytest
 
 from andp import mcp, service
-from conftest import FakeResponse, FakeSession, make_test_managers
+from conftest import FakeResponse, FakeSession, make_test_managers, write_secrets
 
 
 def _call(method, params=None, mid=1):
@@ -70,7 +70,7 @@ def test_release_start_is_library_first_with_structured_content(
     tmp_path, monkeypatch, ec_private_key_pem
 ):
     from conftest import real_secrets_yaml
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     session = FakeSession()
     monkeypatch.setattr(service, "make_managers", lambda account: make_test_managers(session))
@@ -94,7 +94,7 @@ def test_release_poll_advances_and_flags_terminal(
     tmp_path, monkeypatch, ec_private_key_pem
 ):
     from conftest import real_secrets_yaml
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     session = FakeSession()
     session.queue(
@@ -125,7 +125,7 @@ def test_release_poll_advances_and_flags_terminal(
 
 def test_submit_still_gated_by_policy(tmp_path, monkeypatch, ec_private_key_pem):
     from conftest import real_secrets_yaml
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     response = _call("tools/call", {"name": "submit",
                                     "arguments": {"bundle_id": "me.demo.app", "version": "1.0"}})

@@ -5,12 +5,12 @@ The old submit did ensure_version -> submit_for_review with no attach_build in
 between — a review submission doomed to fail. Regression test for that.
 """
 from andp.asc import asc_manager
-from conftest import FakeResponse
+from conftest import FakeResponse, write_secrets
 
 
 def _configured(tmp_path, monkeypatch, ec_private_key_pem):
     from conftest import real_secrets_yaml
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
 
 

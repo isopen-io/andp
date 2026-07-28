@@ -14,7 +14,7 @@ import pytest
 from andp import service
 from andp.publish import publish_metadata
 from andp.asc.client import ASCAPIError
-from conftest import FakeResponse, FakeSession, make_test_managers
+from conftest import FakeResponse, FakeSession, make_test_managers, write_secrets
 
 
 def _shot(root, locale, display, name, data=b"PNG"):
@@ -67,7 +67,7 @@ def test_only_missing_screenshots_are_uploaded_on_retry(tmp_path):
 
 def test_service_publish_wraps_api_errors(tmp_path, monkeypatch, ec_private_key_pem):
     from conftest import real_secrets_yaml
-    (tmp_path / "secrets.yml").write_text(real_secrets_yaml(ec_private_key_pem))
+    write_secrets(tmp_path, real_secrets_yaml(ec_private_key_pem))
     monkeypatch.chdir(tmp_path)
     root = str(tmp_path / "m"); _text(root, "en-US", "whatsNew", "Hi")
 
