@@ -54,6 +54,7 @@ def with_xcodebuild(tmp_path, monkeypatch):
     fake_bin.mkdir()
     (fake_bin / "xcodebuild").write_text("#!/bin/sh\n")
     monkeypatch.setenv("PATH", str(fake_bin))
+    (tmp_path / "Demo.xcodeproj").mkdir()
 
 
 @pytest.fixture

@@ -101,6 +101,8 @@ def run_many(selected, action, project_dir, project_root, archive=False,
     A broken visionOS target must not hide the state of the other four.
     """
     dry_run = not runner.xcodebuild_available()
+    if not dry_run:
+        targets.ensure_project(project_dir, project_root)
     results = []
     for target in selected:
         if dry_run:
@@ -191,6 +193,7 @@ def run_target(target, project_dir, project_root, build_first=True,
         return {"command": "run", "ok": True, "dry_run": True,
                 "results": [_dry_entry(target)]}
 
+    targets.ensure_project(project_dir, project_root)
     if build_first:
         result = runner.build(target, project_dir, project_root,
                               run_process=run_process)

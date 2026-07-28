@@ -62,6 +62,28 @@ def project_dir(project_root="."):
     return project_root
 
 
+def ensure_project(directory, project_root="."):
+    """Fail once, up front, when there is no Xcode project to build.
+
+    Without this, every target in the matrix launches xcodebuild only to
+    rediscover the same absence — five identical failures instead of one
+    actionable error naming the directory that was resolved and why.
+    """
+    if os.path.isdir(directory):
+        for entry in os.listdir(directory):
+            if entry.endswith((".xcodeproj", ".xcworkspace")):
+                return directory
+    raise XcodeError(
+        "No Xcode project or workspace in `%s`." % directory,
+        code="no_project",
+        remediation=("Set $%s, or `project.dir` in andp.yml, to the directory "
+                     "holding the .xcodeproj — and generate it if needed "
+                     "(xcodegen)." % ENV_APP_DIR),
+        context={"project_dir": directory,
+                 "env": os.environ.get(ENV_APP_DIR),
+                 "policy": paths.policy_path(project_root)})
+
+
 def _validate(name, spec):
     """Reject unknown fields outright.
 

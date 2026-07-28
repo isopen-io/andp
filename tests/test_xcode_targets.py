@@ -140,6 +140,31 @@ def test_no_andp_yml_at_all(tmp_path):
     assert targets.list_names(str(tmp_path)) == []
 
 
+def test_ensure_project_accepts_an_xcodeproj(tmp_path):
+    (tmp_path / "Demo.xcodeproj").mkdir()
+    assert targets.ensure_project(str(tmp_path)) == str(tmp_path)
+
+
+def test_ensure_project_accepts_a_workspace(tmp_path):
+    (tmp_path / "Demo.xcworkspace").mkdir()
+    assert targets.ensure_project(str(tmp_path)) == str(tmp_path)
+
+
+def test_ensure_project_fails_once_up_front(tmp_path):
+    """Sans cette garde, chaque cible relance xcodebuild pour la même absence."""
+    with pytest.raises(XcodeError) as excinfo:
+        targets.ensure_project(str(tmp_path), str(tmp_path))
+    assert excinfo.value.code == "no_project"
+    assert excinfo.value.context["project_dir"] == str(tmp_path)
+    assert excinfo.value.context["policy"].endswith("andp.yml")
+
+
+def test_ensure_project_on_a_missing_directory(tmp_path):
+    with pytest.raises(XcodeError) as excinfo:
+        targets.ensure_project(str(tmp_path / "absent"))
+    assert excinfo.value.code == "no_project"
+
+
 def test_project_dir_prefers_the_env_var(tmp_path, monkeypatch):
     monkeypatch.setenv(targets.ENV_APP_DIR, "/from/env")
     assert targets.project_dir(str(tmp_path)) == "/from/env"

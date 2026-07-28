@@ -7,7 +7,11 @@ from andp.xcode.targets import Target
 
 @pytest.fixture(autouse=True)
 def with_xcodebuild(tmp_path, monkeypatch):
-    """Un faux xcodebuild sur le PATH : sans lui, tout part en DRY-RUN."""
+    """Un faux xcodebuild sur le PATH et un projet factice.
+
+    Sans le premier tout part en DRY-RUN ; sans le second, ensure_project
+    coupe avant la boucle — ce qui est précisément son rôle.
+    """
     monkeypatch.delenv("ANDP_CONFIG_DIR", raising=False)
     monkeypatch.delenv("CI", raising=False)
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
@@ -15,6 +19,7 @@ def with_xcodebuild(tmp_path, monkeypatch):
     fake_bin.mkdir()
     (fake_bin / "xcodebuild").write_text("#!/bin/sh\n")
     monkeypatch.setenv("PATH", str(fake_bin))
+    (tmp_path / "Demo.xcodeproj").mkdir()
 
 
 def _t(name, **kwargs):
