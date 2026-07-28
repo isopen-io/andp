@@ -746,8 +746,16 @@ def main(argv):
         # run in a repo with no secrets file. Every other command still fails.
         if command == "build-number":
             account = AccountConfig(account_id, None, None, None)
+        elif json_mode:
+            # stdout must stay parsable: an agent reads code/retryable/remediation
+            # from here, and gets nothing usable from a bare error line.
+            print(json.dumps({"command": command, "ok": False,
+                              "error": exc.to_dict()}))
+            return 1
         else:
-            print(f"Error: {exc}")
+            print(f"❌ {exc.message}", file=sys.stderr)
+            if exc.remediation:
+                print(f"   → {exc.remediation}", file=sys.stderr)
             return 1
 
     dry_run = not account.is_configured()
