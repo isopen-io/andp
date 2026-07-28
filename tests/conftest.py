@@ -110,7 +110,7 @@ def write_secrets(tmp_path, content):
 
     Un seul site à changer quand l'emplacement bouge — c'est tout l'intérêt.
     """
-    path = tmp_path / "secrets.yml"
+    path = tmp_path / ".andp" / "secrets.yml"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content)
     return path
