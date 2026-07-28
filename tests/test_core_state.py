@@ -8,7 +8,7 @@ import os
 
 import pytest
 
-from andp.core.errors import AndpError
+from andp.errors import AndpError
 from andp.core.state import StateStore
 
 

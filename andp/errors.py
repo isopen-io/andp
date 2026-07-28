@@ -26,6 +26,27 @@ class AndpError(Exception):
         }
 
 
+class ConfigError(AndpError):
+    """Configuration error — an AndpError that is never retryable.
+
+    Subclassing keeps a single taxonomy: `except AndpError` catches it, and
+    to_dict() makes it serialisable without any ad-hoc conversion. `context`
+    carries what was inspected (searched paths, misplaced file) so an agent can
+    remediate without re-running the command to explore.
+    """
+
+    def __init__(self, message, code="config_error", remediation="", context=None):
+        super().__init__(code=code, message=message,
+                         retryable=False, remediation=remediation)
+        self.context = context or {}
+
+    def to_dict(self):
+        payload = super().to_dict()
+        if self.context:
+            payload["context"] = self.context
+        return payload
+
+
 _STATUS_MAP = {
     401: ("auth_rejected", False,
           "Check key_id, issuer_id and the API key's App Store Connect role."),

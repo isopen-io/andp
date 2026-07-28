@@ -8,6 +8,8 @@ import os
 
 import yaml
 
+from ..errors import ConfigError  # noqa: F401  (re-exported for existing importers)
+
 # Values from secrets.example.yml that mark an account as "not really configured".
 _PLACEHOLDER_MARKERS = (
     "PRIMARY_KEY_CONTENT",
@@ -15,10 +17,6 @@ _PLACEHOLDER_MARKERS = (
     "REPLACE_WITH",
 )
 _PLACEHOLDER_KEY_IDS = ("ABCDE12345", "VWXYZ67890")
-
-
-class ConfigError(Exception):
-    """Raised when secrets are missing or malformed."""
 
 
 class AccountConfig:

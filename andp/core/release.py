@@ -18,7 +18,7 @@ from ..asc.appstore import (
     EDITABLE_VERSION_STATES, IN_REVIEW_VERSION_STATES, version_state,
 )
 from ..asc.client import ASCAPIError
-from .errors import AndpError, from_asc_error, from_unexpected
+from ..errors import AndpError, from_asc_error, from_unexpected
 from .ipa import read_export_compliance, read_metadata, sha256
 
 SCHEMA_VERSION = 1

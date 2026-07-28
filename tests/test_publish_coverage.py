@@ -6,7 +6,7 @@ import os
 
 import pytest
 
-from andp.core.errors import from_unexpected
+from andp.errors import from_unexpected
 from andp.publish import publish_metadata
 from andp.core.release import ReleaseMachine, release_id
 from andp.core.state import StateStore

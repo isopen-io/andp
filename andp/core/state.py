@@ -10,7 +10,7 @@ import errno
 import json
 import os
 
-from .errors import AndpError
+from ..errors import AndpError
 
 
 class StateStore:

@@ -6,7 +6,7 @@ import zipfile
 
 import pytest
 
-from andp.core.errors import AndpError
+from andp.errors import AndpError
 from andp.core.release import ReleaseMachine, release_id
 from andp.core.state import StateStore
 from conftest import FakeResponse, FakeSession, make_test_managers

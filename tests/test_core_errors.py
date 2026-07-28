@@ -3,7 +3,7 @@ from the error object alone — code, retryable, remediation.
 """
 import pytest
 
-from andp.core.errors import AndpError, from_asc_error
+from andp.errors import AndpError, from_asc_error
 from andp.asc.client import ASCAPIError
 
 
