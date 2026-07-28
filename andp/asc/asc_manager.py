@@ -121,12 +121,13 @@ def _cmd_verify(account, managers, dry_run, args, json_mode=False):
 
 def _cmd_upload(account, managers, dry_run, args, json_mode=False):
     if not args:
-        print("Error: IPA path required for upload.")
-        return 2
+        return _fail("upload", "bad_usage", "IPA path required for upload.",
+                     "andp upload <ipa_path>", json_mode, rc=2)
     ipa_path = args[0]
     if not os.path.exists(ipa_path):
-        print(f"Error: IPA not found: {ipa_path}")
-        return 1
+        return _fail("upload", "ipa_missing", f"IPA not found: {ipa_path}",
+                     "Build the archive first: andp build <target> --archive",
+                     json_mode)
     bundle_id, version, build_number = _ipa_metadata(ipa_path)
     if not version:
         version = _read_file_stripped("VERSION", "0.0.0")
@@ -192,12 +193,13 @@ def _cmd_release(account, managers, dry_run, args, json_mode=False):
         group_name = args[idx + 1]
         del args[idx:idx + 2]
     if not args:
-        print("Usage: release <ipa_path> [--group <name>]")
-        return 2
+        return _fail("release", "bad_usage", "IPA path required for release.",
+                     "andp release <ipa_path> [--group <name>]", json_mode, rc=2)
     ipa_path = args[0]
     if not os.path.exists(ipa_path):
-        print(f"Error: IPA not found: {ipa_path}")
-        return 1
+        return _fail("release", "ipa_missing", f"IPA not found: {ipa_path}",
+                     "Build the archive first: andp build <target> --archive",
+                     json_mode)
     bundle_id, version, build_number = _ipa_metadata(ipa_path)
 
     if dry_run:
@@ -354,13 +356,15 @@ def _print_release_human(result):
 
 def _cmd_status(account, managers, dry_run, args, json_mode=False):
     if len(args) < 2:
-        print("Usage: status <bundle_id> <build_number>")
-        return 2
+        return _fail("status", "bad_usage", "bundle_id and build_number required.",
+                     "andp status <bundle_id> <build_number>", json_mode, rc=2)
     bundle_id, build_number = args[0], args[1]
 
     if dry_run:
-        print(f"[DRY-RUN] Would poll processing state of build {build_number} for {bundle_id}.")
-        return 0
+        return _dry_run_envelope(
+            "status",
+            f"[DRY-RUN] Would poll processing state of build {build_number} for {bundle_id}.",
+            json_mode, bundle_id=bundle_id, build_number=build_number)
 
     app = managers.apps.find_app(bundle_id)
     if app is None:
@@ -379,11 +383,12 @@ def _cmd_testflight(account, managers, dry_run, args, json_mode=False):
     emails = args[3:]
 
     if dry_run:
-        print(
+        return _dry_run_envelope(
+            "testflight",
             f"[DRY-RUN] Would ensure group '{group_name}' on {bundle_id} "
-            f"and {action} testers: {', '.join(emails) or '(none)'}"
-        )
-        return 0
+            f"and {action} testers: {', '.join(emails) or '(none)'}",
+            json_mode, bundle_id=bundle_id, group=group_name, action=action,
+            testers=list(emails))
 
     app = managers.apps.find_app(bundle_id)
     if app is None:
@@ -395,20 +400,23 @@ def _cmd_testflight(account, managers, dry_run, args, json_mode=False):
             managers.testflight.add_tester(group["id"], email)
             print(f"Added tester {email} to '{group_name}'.")
     else:
-        print(f"Error: Unsupported testflight action '{action}'.")
-        return 2
+        return _fail("testflight", "bad_usage",
+                     f"Unsupported testflight action '{action}'.",
+                     "The only supported action is `add`.", json_mode, rc=2)
     return 0
 
 
 def _cmd_submit(account, managers, dry_run, args, json_mode=False):
     if len(args) < 2:
-        print("Usage: submit <bundle_id> <version>")
-        return 2
+        return _fail("submit", "bad_usage", "bundle_id and version required.",
+                     "andp submit <bundle_id> <version>", json_mode, rc=2)
     bundle_id, version = args[0], args[1]
 
     if dry_run:
-        print(f"[DRY-RUN] Would submit version {version} of {bundle_id} for App Review.")
-        return 0
+        return _dry_run_envelope(
+            "submit",
+            f"[DRY-RUN] Would submit version {version} of {bundle_id} for App Review.",
+            json_mode, bundle_id=bundle_id, version=version)
 
     app = managers.apps.find_app(bundle_id)
     if app is None:
@@ -435,8 +443,10 @@ def _cmd_publish(account, managers, dry_run, args, json_mode=False):
     """Push release notes + screenshots + previews from a folder tree."""
     from .. import service
     if len(args) < 3:
-        print("Usage: publish <bundle_id> <version> <metadata_dir>")
-        return 2
+        return _fail("publish", "bad_usage",
+                     "bundle_id, version and metadata_dir required.",
+                     "andp publish <bundle_id> <version> <metadata_dir>",
+                     json_mode, rc=2)
     result = service.publish(args[0], args[1], args[2], account=account.account_id)
     if json_mode:
         print(json.dumps(result))
@@ -827,7 +837,7 @@ def _cmd_config(account, managers, dry_run, args, json_mode=False):
     return 0
 
 
-def _error_envelope(command, exc, json_mode):
+def _error_envelope(command, exc, json_mode, rc=1):
     """Failure envelope — parsable JSON, or a human message on stderr.
 
     One failure shape for the whole tool, defined once. In --json, stdout must
@@ -841,7 +851,31 @@ def _error_envelope(command, exc, json_mode):
         print(f"❌ {exc.message}", file=sys.stderr)
         if exc.remediation:
             print(f"   → {exc.remediation}", file=sys.stderr)
-    return 1
+    return rc
+
+
+def _fail(command, code, message, remediation, json_mode, rc=1):
+    """Shorthand for the failure paths that used to print a bare line."""
+    return _error_envelope(
+        command,
+        AndpError(code=code, message=message, retryable=False,
+                  remediation=remediation),
+        json_mode, rc=rc)
+
+
+def _dry_run_envelope(command, message, json_mode, **fields):
+    """DRY-RUN report — a JSON envelope, or the human sentence on stdout.
+
+    Without this, `--json` returned prose on stdout and an agent could not tell
+    a planned action from a performed one.
+    """
+    if json_mode:
+        payload = {"command": command, "ok": True, "dry_run": True}
+        payload.update(fields)
+        print(json.dumps(payload))
+    else:
+        print(message)
+    return 0
 
 
 def _xcode_handler(command, func):

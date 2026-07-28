@@ -43,10 +43,6 @@ def load_targets(project_root="."):
     return dict((k, v) for k, v in block.items() if k != _DEFAULTS_KEY)
 
 
-def list_names(project_root="."):
-    return sorted(load_targets(project_root).keys())
-
-
 def project_dir(project_root="."):
     """Where the Xcode project lives: $ANDP_APP_DIR, then project.dir, then root.
 

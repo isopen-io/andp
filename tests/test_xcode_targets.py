@@ -46,7 +46,7 @@ targets:
 def test_defaults_is_not_a_target(tmp_path):
     root = _write(tmp_path,
                   "targets:\n  defaults:\n    scheme: A\n  x:\n    platform: iOS\n")
-    assert targets.list_names(root) == ["x"]
+    assert sorted(targets.load_targets(root)) == ["x"]
     with pytest.raises(XcodeError) as excinfo:
         targets.resolve("defaults", root)
     assert excinfo.value.code == "target_not_found"
@@ -137,7 +137,6 @@ def test_resolve_all_falls_back_to_autodetection(tmp_path):
 
 def test_no_andp_yml_at_all(tmp_path):
     assert targets.load_targets(str(tmp_path)) == {}
-    assert targets.list_names(str(tmp_path)) == []
 
 
 def test_ensure_project_accepts_an_xcodeproj(tmp_path):
