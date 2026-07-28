@@ -9,11 +9,11 @@ APP_DIR="${ANDP_APP_DIR:-examples/meeshy}"
 
 SCHEME=${1:-"Meeshy"}
 CONFIGURATION="Release"
-ARCHIVE_PATH="$ROOT_DIR/build/$SCHEME.xcarchive"
+ARCHIVE_PATH="${ANDP_CONFIG_DIR:-$ROOT_DIR/.andp}/build/$SCHEME.xcarchive"
 
 echo "Archiving scheme: $SCHEME..."
 
-mkdir -p build
+mkdir -p "$(dirname "$ARCHIVE_PATH")"
 
 # Build settings to allow compilation in CI without certificates
 BUILD_SETTINGS=""

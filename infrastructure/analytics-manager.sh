@@ -5,7 +5,7 @@
 
 set -e
 
-METRICS_DIR="metrics"
+METRICS_DIR="${ANDP_CONFIG_DIR:-.andp}/metrics"
 mkdir -p "$METRICS_DIR"
 
 COMMAND=$1

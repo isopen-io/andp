@@ -56,8 +56,8 @@ cat <<EOF >> "$REPORT_FILE"
 EOF
 
 # Extract security status from security-auditor output or log
-# For simplicity, we check if secrets.yml exists as a proxy for the audit running
-if [ -f "secrets.yml" ] || [ -f "secrets.example.yml" ]; then
+# For simplicity, a resolvable credentials file is the proxy for the audit running
+if python3 -m andp config path secrets >/dev/null 2>&1; then
     echo "- **Secret Scanning:** Completed (See security logs)" >> "$REPORT_FILE"
     echo "- **Vulnerability Scan:** Integrated via SBOM" >> "$REPORT_FILE"
 else

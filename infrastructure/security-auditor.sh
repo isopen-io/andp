@@ -33,10 +33,15 @@ else
     fi
 fi
 
-if [ -f "secrets.yml" ]; then
-    echo "✅ secrets.yml found (local only)."
+if SECRETS_PATH=$(python3 -m andp config path secrets 2>/dev/null) && [ -n "$SECRETS_PATH" ]; then
+    echo "✅ credentials found at $SECRETS_PATH (local only)."
 else
-    echo "⚠️ secrets.yml missing. Ensure you copied it from secrets.example.yml."
+    echo "⚠️ No credentials. Create .andp/secrets.yml from secrets.example.yml."
+fi
+
+if [ -f "secrets.yml" ]; then
+    echo "❌ secrets.yml at the project root is no longer read by ANDP — run: andp config migrate"
+    FOUND_SECRETS=$((FOUND_SECRETS + 1))
 fi
 
 if [ $FOUND_SECRETS -gt 0 ]; then

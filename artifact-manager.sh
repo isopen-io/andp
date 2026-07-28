@@ -5,8 +5,8 @@
 
 set -e
 
-ARTIFACTS_DIR="artifacts"
-BUILD_DIR="build"
+ARTIFACTS_DIR="${ANDP_CONFIG_DIR:-.andp}/artifacts"
+BUILD_DIR="${ANDP_CONFIG_DIR:-.andp}/build"
 
 COMMAND=$1
 

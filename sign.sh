@@ -4,12 +4,18 @@
 
 set -e
 
+# Le binaire `andp` n'est pas garanti dans le PATH des runners — les workflows
+# utilisent déjà `python3 -m andp` (action.yml). Une seule implémentation de la
+# résolution de config, côté Python: le shell ne la réimplémente jamais.
+andp_cli() { command -v andp >/dev/null 2>&1 && andp "$@" || python3 -m andp "$@"; }
+
 ARCHIVE_PATH=$1
 ACCOUNT=${2:-"primary"}
-EXPORT_PATH="build/exported"
-# The app/IPA name follows the archive name (e.g. build/MyApp.xcarchive -> MyApp.ipa)
+ANDP_DIR=$(andp_cli config dir 2>/dev/null || echo ".andp")
+EXPORT_PATH="$ANDP_DIR/build/exported"
+# The app/IPA name follows the archive name (e.g. MyApp.xcarchive -> MyApp.ipa)
 APP_NAME=$(basename "${ARCHIVE_PATH:-Meeshy.xcarchive}" .xcarchive)
-EXPORT_OPTIONS_PLIST="infrastructure/build/ExportOptions_$ACCOUNT.plist"
+EXPORT_OPTIONS_PLIST="$ANDP_DIR/build/ExportOptions_$ACCOUNT.plist"
 
 if [ -z "$ARCHIVE_PATH" ]; then
     echo "Usage: ./sign.sh <path_to_xcarchive> [account_id]"
@@ -21,11 +27,25 @@ echo "Signing and exporting archive: $ARCHIVE_PATH using account: $ACCOUNT..."
 # Ensure export path exists
 mkdir -p "$EXPORT_PATH"
 
-# Extract Team ID from secrets if possible
-TEAM_ID=$(python3 -c "import yaml, sys; loader = getattr(yaml, 'CSafeLoader', yaml.SafeLoader); data = yaml.load(open('secrets.yml' if sys.path[0]+'/secrets.yml' else 'secrets.example.yml'), Loader=loader); print(data.get('accounts', {}).get('$ACCOUNT', {}).get('signing', {}).get('development_team', 'REPLACE_WITH_TEAM_ID'))" 2>/dev/null || echo "REPLACE_WITH_TEAM_ID")
+# Extract Team ID from secrets if possible.
+# La condition d'origine (`'secrets.yml' if sys.path[0]+'/secrets.yml' else ...`)
+# était une concaténation de chaînes, toujours vraie: le fallback était mort.
+SECRETS_PATH=$(andp_cli config path secrets 2>/dev/null || true)
+if [ -n "$SECRETS_PATH" ]; then
+    TEAM_ID=$(SECRETS_PATH="$SECRETS_PATH" ANDP_ACCOUNT="$ACCOUNT" python3 -c "
+import os, yaml
+loader = getattr(yaml, 'CSafeLoader', yaml.SafeLoader)
+with open(os.environ['SECRETS_PATH']) as f:
+    data = yaml.load(f, Loader=loader) or {}
+account = (data.get('accounts', {}) or {}).get(os.environ['ANDP_ACCOUNT'], {}) or {}
+print((account.get('signing', {}) or {}).get('development_team', 'REPLACE_WITH_TEAM_ID'))
+" 2>/dev/null || echo "REPLACE_WITH_TEAM_ID")
+else
+    TEAM_ID="REPLACE_WITH_TEAM_ID"
+fi
 
 # Create a default ExportOptions.plist if it doesn't exist or for this account
-mkdir -p infrastructure/build
+mkdir -p "$ANDP_DIR/build"
 cat <<EOF > "$EXPORT_OPTIONS_PLIST"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

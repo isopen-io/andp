@@ -47,10 +47,11 @@ rm -f "$APP_DIR/Apps/MeeshyTests/Info.plist.new1"
 
 # Test Artifact Manager
 echo "Testing artifact-manager.sh..."
-mkdir -p build/test
-touch build/test/app.ipa
+ANDP_DIR="${ANDP_CONFIG_DIR:-.andp}"
+mkdir -p "$ANDP_DIR/build/test"
+touch "$ANDP_DIR/build/test/app.ipa"
 ./artifact-manager.sh package > /dev/null
-if [ -f "artifacts/app.ipa" ] && [ -f "artifacts/Meeshy.dmg" ] && [ -f "artifacts/Meeshy.pkg" ]; then
+if [ -f "$ANDP_DIR/artifacts/app.ipa" ] && [ -f "$ANDP_DIR/artifacts/Meeshy.dmg" ] && [ -f "$ANDP_DIR/artifacts/Meeshy.pkg" ]; then
     echo "✅ artifact-manager.sh package PASSED"
 else
     echo "❌ artifact-manager.sh package FAILED"
