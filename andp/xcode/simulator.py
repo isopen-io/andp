@@ -80,9 +80,9 @@ def boot(udid, run_process=None):
     `simctl boot` fails on an already-booted device, so its exit code is not
     the signal — bootstatus is what decides.
     """
-    launcher = run_process or _default_launcher
-    launcher(["xcrun", "simctl", "boot", udid])
-    if launcher(["xcrun", "simctl", "bootstatus", udid]) != 0:
+    _capture(["xcrun", "simctl", "boot", udid], None, run_process)
+    code, _ = _capture(["xcrun", "simctl", "bootstatus", udid], None, run_process)
+    if code != 0:
         raise XcodeError(
             "Simulator %s did not boot." % udid,
             code="simulator_boot_failed", retryable=True,
@@ -91,8 +91,9 @@ def boot(udid, run_process=None):
 
 
 def install(udid, app, run_process=None):
-    launcher = run_process or _default_launcher
-    if launcher(["xcrun", "simctl", "install", udid, app]) != 0:
+    code, _ = _capture(["xcrun", "simctl", "install", udid, app], None,
+                       run_process)
+    if code != 0:
         raise XcodeError(
             "Install refused on %s." % udid,
             code="install_failed",
@@ -101,13 +102,22 @@ def install(udid, app, run_process=None):
 
 
 def launch(udid, bundle, run_process=None):
-    launcher = run_process or _default_launcher
-    if launcher(["xcrun", "simctl", "launch", udid, bundle]) != 0:
+    """Launch and return the app's pid.
+
+    The output is captured rather than inherited: `simctl launch` prints
+    "<bundle>: <pid>" on stdout, which in --json mode lands ahead of the
+    envelope and makes it unparsable. The pid goes into the envelope instead.
+    """
+    code, out = _capture(["xcrun", "simctl", "launch", udid, bundle], None,
+                         run_process)
+    if code != 0:
         raise XcodeError(
             "Launching %s refused on %s." % (bundle, udid),
             code="launch_failed",
             remediation="Check the bundle identifier, and that the app installed.",
             context={"udid": udid, "bundle_id": bundle})
+    pid = (out or "").strip().rsplit(":", 1)[-1].strip()
+    return int(pid) if pid.isdigit() else None
 
 
 def stream_logs(udid, bundle, run_process=None):

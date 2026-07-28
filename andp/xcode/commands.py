@@ -243,7 +243,9 @@ def run_target(target, project_dir, project_root, build_first=True,
     if found.get("state") != "Booted":
         simulator.boot(udid, run_process=run_process)
     simulator.install(udid, app, run_process=run_process)
-    simulator.launch(udid, bundle, run_process=run_process)
+    pid = simulator.launch(udid, bundle, run_process=run_process)
+    if pid is not None:
+        entry["pid"] = pid
     if follow_logs:
         simulator.stream_logs(udid, bundle, run_process=run_process)
     return {"command": "run", "ok": True, "dry_run": False, "results": [entry]}

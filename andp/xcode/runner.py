@@ -26,10 +26,17 @@ CI_SIGNING = ["CODE_SIGNING_ALLOWED=NO", "CODE_SIGNING_REQUIRED=NO",
               "CODE_SIGNING_INJECT_BASE_ENTITLEMENTS=NO"]
 
 
-def run_process(argv, cwd=None, stdout=None):
-    """Default launcher: actually runs. Tests inject something else."""
-    return subprocess.call(argv, cwd=cwd, stdout=stdout,
-                           stderr=subprocess.STDOUT)
+def run_process(argv, cwd=None, stdout=None, merge_stderr=True):
+    """Default launcher: actually runs. Tests inject something else.
+
+    merge_stderr is right for build logs — a compiler error on stderr belongs in
+    the log next to the line that caused it. It is wrong for anything parsed:
+    xcodebuild prefixes `-json` output with warnings like "Using the first of
+    multiple matching destinations", which corrupt the payload.
+    """
+    return subprocess.call(
+        argv, cwd=cwd, stdout=stdout,
+        stderr=subprocess.STDOUT if merge_stderr else subprocess.DEVNULL)
 
 
 def xcodebuild_available():
@@ -87,11 +94,16 @@ def _invoke(argv, project_dir, path, launcher, append=False):
 
 
 def _capture(argv, project_dir, launcher):
-    """Run and return (exit_code, stdout) without touching a log file."""
+    """Run and return (exit_code, stdout) without touching a log file.
+
+    stderr is discarded, not merged: every caller here parses the output as
+    JSON, and xcodebuild happily writes warnings to stderr ahead of it.
+    """
     launcher = launcher or run_process
     handle = tempfile.TemporaryFile(mode="w+")
     try:
-        code = launcher(argv, cwd=project_dir, stdout=handle)
+        code = launcher(argv, cwd=project_dir, stdout=handle,
+                        merge_stderr=False)
         handle.seek(0)
         return code, handle.read()
     finally:

@@ -205,6 +205,48 @@ def test_failed_test_has_its_own_code(tmp_path):
     assert result.error.code == "test_failed"
 
 
+def test_parsed_output_never_merges_stderr(tmp_path):
+    """xcodebuild préfixe le JSON d'avertissements sur stderr.
+
+    Les fusionner corrompt le payload: `-showBuildSettings -json` renvoyait
+    « xcodebuild: WARNING: Using the first of multiple matching destinations »
+    avant le JSON, et `andp run` répondait app_not_found après un build réussi.
+    """
+    class Spy(FakeProcess):
+        def __init__(self, *a, **kw):
+            FakeProcess.__init__(self, *a, **kw)
+            self.merge_flags = []
+
+        def __call__(self, argv, **kwargs):
+            self.merge_flags.append(kwargs.get("merge_stderr"))
+            return FakeProcess.__call__(self, argv, **kwargs)
+
+    spy = Spy(0, json.dumps({"project": {"schemes": ["A"]}}))
+    runner.list_schemes(str(tmp_path), run_process=spy)
+    assert spy.merge_flags == [False]
+
+    spy = Spy(0, json.dumps([{"buildSettings": {"TARGET_BUILD_DIR": "/b",
+                                                "FULL_PRODUCT_NAME": "A.app"}}]))
+    runner.app_path(_t(), str(tmp_path), run_process=spy)
+    assert spy.merge_flags == [False]
+
+
+def test_build_logs_do_keep_stderr(tmp_path):
+    """À l'inverse: une erreur de compilation doit atterrir dans le log."""
+    class Spy(FakeProcess):
+        def __init__(self, *a, **kw):
+            FakeProcess.__init__(self, *a, **kw)
+            self.merge_flags = []
+
+        def __call__(self, argv, **kwargs):
+            self.merge_flags.append(kwargs.get("merge_stderr", True))
+            return FakeProcess.__call__(self, argv, **kwargs)
+
+    spy = Spy()
+    runner.build(_t(), str(tmp_path), str(tmp_path), run_process=spy)
+    assert spy.merge_flags == [True]
+
+
 def test_list_schemes_parses_a_project_payload(tmp_path):
     payload = json.dumps({"project": {"schemes": ["Meeshy", "MeeshyWatch"]}})
     assert runner.list_schemes(str(tmp_path),
