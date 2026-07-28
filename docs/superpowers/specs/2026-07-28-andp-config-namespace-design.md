@@ -4,6 +4,10 @@
 **Statut :** design validé, prêt pour le plan d'implémentation
 **Portée :** spec 1 sur 2. La spec 2 (`andp build` / `andp run` multi-cibles) dépend de celle-ci.
 
+Deux sujets, liés par une même exigence — qu'ANDP reste exploitable par un agent
+autonome : la résolution de configuration dans l'espace de nom `.andp/` (§1–§5), et
+l'entrée des erreurs de configuration dans la taxonomie typée du projet (§6).
+
 ## 1. Problème
 
 ANDP résout `secrets.yml` dans le répertoire courant uniquement (`andp/asc/config.py:52`) :
@@ -56,6 +60,16 @@ et détection sont deux choses distinctes ; seul le chargement disparaît.
 `ANDP_HOME` est déjà utilisé pour désigner le checkout du repo ANDP
 (`.github/workflows/andp-release.yml:58-60`, où il vaut parfois littéralement
 `$GITHUB_WORKSPACE/.andp`). La réutiliser produirait une collision silencieuse.
+
+### 2.4 Les erreurs de configuration entrent dans la taxonomie typée
+
+ANDP se destine à des agents autonomes : une erreur n'est utile que si elle est
+structurée. Les erreurs de configuration sont aujourd'hui la seule famille à échapper à
+la taxonomie `AndpError` — elles remontent en texte brut, y compris en mode `--json`.
+
+Cette spec les y fait entrer (§6). C'est une décision d'architecture qui dépasse le
+strict correctif de résolution, assumée ici parce que les deux nouveaux codes d'erreur
+n'auraient aucune valeur pour un agent s'ils ne parvenaient pas jusqu'à lui.
 
 ## 3. Contrat de résolution
 
@@ -175,49 +189,127 @@ idempotent : sans rien à migrer il l'annonce et sort 0. Il ne touche à aucun a
 
 ## 6. Erreurs
 
-Deux codes ajoutés à la taxonomie existante (`andp/core/errors.py` :
-`code` / `message` / `retryable` / `remediation`) :
+Deux codes ajoutés à la taxonomie typée (`code` / `message` / `retryable` /
+`remediation`), dont §6.1 fixe l'emplacement définitif en `andp/errors.py` :
 
 | code | retryable | déclencheur | remediation |
 |---|---|---|---|
 | `config_misplaced` | `False` | `./secrets.yml` existe (§3.3) | `mkdir -p .andp && mv secrets.yml .andp/secrets.yml` ou `andp config migrate` |
 | `config_not_found` | `False` | aucun fichier trouvé, template compris | créer `.andp/secrets.yml` à partir de `secrets.example.yml` |
 
-### 6.1 Où chaque type d'exception vit
+### 6.1 Taxonomie unifiée — `andp/errors.py`
 
-Le repo a déjà une frontière de traduction délibérée, et cette spec la respecte plutôt
-que de la contourner :
+**Objectif : ANDP reste utilisable par un agent autonome, donc toute erreur remonte
+structurée jusqu'à la surface, sans exception.**
 
-- `andp/asc/config.py` lève `ConfigError` (2 sites : `:54`, `:63`)
-- `andp/service.py:26-32` la traduit en `AndpError` — *« so callers have one error type
-  to catch »*
-- `asc_manager.py:744` et `metadata_manager.py:67` catchent `ConfigError` directement
+État actuel. La dépendance entre packages va `core` → `asc` :
+`andp/core/release.py:17,21` importe `asc/appstore.py` et `asc/client.py`, tandis
+qu'`andp/asc/` n'importe jamais `core/`. Faire dépendre `asc/config.py` de
+`core/errors.py` installerait donc une dépendance bidirectionnelle entre les deux
+packages.
 
-Pour que le code typé survive à la traduction, `ConfigError` gagne deux attributs
-optionnels, sans casser ses deux appels existants ni `tests/test_config.py:56,70` :
+`errors.py` n'est pas de la logique métier : c'est du vocabulaire transverse. Il remonte
+à la racine du package, en module feuille dépendu par tous et ne dépendant de rien :
 
-```python
-class ConfigError(Exception):
-    def __init__(self, message, code="config_error", remediation=""):
-        super().__init__(message)
-        self.code = code
-        self.remediation = remediation
+```
+andp/errors.py          ← feuille, n'importe que dataclasses
+   ↑        ↑        ↑
+ asc/     core/   service.py
 ```
 
-`service.py:32` propage alors `exc.code` et `exc.remediation` au lieu de son
-`code="config_error"` et de sa remediation « Check secrets.yml and the --account name. »
-aujourd'hui codés en dur.
+`ConfigError` en devient une sous-classe :
+
+```python
+# andp/errors.py
+class ConfigError(AndpError):
+    """Erreur de configuration — un AndpError qui n'est jamais retryable."""
+    def __init__(self, message, code="config_error", remediation=""):
+        super().__init__(code=code, message=message,
+                         retryable=False, remediation=remediation)
+```
+
+Conséquences :
+
+- **Une seule taxonomie.** `to_dict()` est disponible sur toute erreur, donc toute erreur
+  est sérialisable en JSON sans conversion ad hoc. `retryable=False` est vrai par nature
+  pour la configuration : une config cassée ne se répare pas en réessayant.
+- **Le bloc de traduction disparaît.** `service.py:26-32` existait précisément parce que
+  les deux types étaient étrangers (*« so callers have one error type to catch »*).
+  `except AndpError` attrape désormais `ConfigError` : `_managers_for` n'a plus besoin
+  de traduire, et le code net diminue.
+- **Rien ne casse.** Les quatre `except ConfigError` (`service.py:30`,
+  `asc_manager.py:744`, `metadata_manager.py:67`) et `tests/test_config.py:56,70`
+  restent valides — c'est une sous-classe.
+- **Évolutif pour la spec 2.** `BuildError`, `SimulatorError`, `DeviceError` suivent le
+  même patron : xcodebuild qui échoue (non retryable), un simulateur qui ne boote pas
+  (retryable), un device non appairé (non retryable, remediation explicite).
+
+`andp/core/errors.py` est supprimé ; ses 12 sites d'import passent à `andp.errors`.
+Aucune API publique n'est touchée : `pyproject.toml` n'expose que `andp.cli:main`.
+
+### 6.2 Invariant : `--json` produit toujours du JSON
+
+Aujourd'hui, une erreur de configuration court-circuite l'enveloppe. `asc_manager.py:749`
+et `metadata_manager.py:68` font :
+
+```python
+except ConfigError as exc:
+    print(f"Error: {exc}")     # texte brut, MÊME avec --json
+    return 1
+```
+
+Un agent qui lance `andp verify --json` sans fichier de credentials reçoit donc du texte
+non parsable sur stdout et perd tout : code, `retryable`, remediation. Aucun test ne
+couvre ce chemin (`tests/test_json_output.py` teste des credentials *placeholder*,
+jamais *absents*).
+
+**Invariant établi par cette spec : en mode `--json`, stdout est toujours du JSON valide,
+y compris pour les erreurs de configuration et d'usage.** Les deux sites ci-dessus
+sérialisent l'enveloppe standard du projet (`service.py:719`) :
+
+```json
+{"command": "verify", "ok": false,
+ "error": {"code": "config_misplaced",
+           "message": "secrets.yml trouvé à la racine du projet, mais ANDP ne lit plus cet emplacement.",
+           "retryable": false,
+           "remediation": "mkdir -p .andp && mv secrets.yml .andp/secrets.yml (ou : andp config migrate)"}}
+```
+
+En mode humain, le rendu texte actuel est conservé.
+
+### 6.3 Diagnostic exploitable par un agent
+
+`config_misplaced` et `config_not_found` portent, en plus des quatre champs standard, un
+bloc `context` qui dit ce qui a été inspecté — un agent peut alors remédier sans deviner
+ni relancer la commande pour explorer :
+
+```json
+"context": {"resolved": null,
+            "misplaced": "./secrets.yml",
+            "searched": ["$ANDP_CONFIG_DIR/secrets.yml", "./.andp/secrets.yml",
+                         "~/.andp/secrets.yml", "./secrets.example.yml"]}
+```
+
+Le champ `origin` (§4) apparaît dans ce bloc dès qu'un fichier est résolu, ce qui rend
+`andp config --json` directement consommable comme diagnostic.
 
 ## 7. Sites à migrer
 
-### Python (4 fichiers)
+### Python (8 fichiers)
 
 | Fichier | Changement |
 |---|---|
+| `andp/errors.py` | nouveau — `core/errors.py` remonté, `ConfigError(AndpError)` ajouté (§6.1) |
+| `andp/core/errors.py` | supprimé ; 12 imports repointés vers `andp.errors` |
 | `andp/paths.py` | nouveau (§4) |
-| `andp/asc/config.py:52` | consomme `resolve_config` ; `AccountConfig` porte `origin` |
-| `andp/asc/asc_manager.py` | `COMMANDS["config"]` + `_cmd_config` ; `:99` affiche l'origine résolue |
-| `andp/service.py:32,314,358,737` | les remediations « Fill in secrets.yml » citent le chemin résolu |
+| `andp/asc/config.py:52` | consomme `resolve_config` ; `AccountConfig` porte `origin` ; lève les deux nouveaux codes |
+| `andp/asc/asc_manager.py` | `COMMANDS["config"]` + `_cmd_config` ; `:99` affiche l'origine résolue ; `:749` sérialise l'enveloppe en mode `--json` (§6.2) |
+| `andp/asc/metadata_manager.py:68` | idem `:749` — plus de `print(f"Error: {exc}")` nu |
+| `andp/service.py:26-32` | le bloc de traduction `ConfigError` → `AndpError` disparaît (§6.1) |
+| `andp/service.py:314,358,737` | les remediations « Fill in secrets.yml » citent le chemin résolu |
+
+Les 12 imports à repointer : `service.py:12,140,214,304,349,442,512,605,654`,
+`publish.py:18`, `core/state.py:13`, `core/release.py:21`.
 
 ### Shell (6 fichiers)
 
@@ -298,9 +390,42 @@ def test_root_secrets_never_silently_falls_back_to_template(tmp_path, monkeypatc
     assert e.value.code == "config_misplaced"   # et surtout PAS un DRY-RUN silencieux
 ```
 
-Un second test couvre la traduction §6.1 : le même scénario via `service.verify()` doit
-produire une enveloppe portant `error.code == "config_misplaced"`, prouvant que le code
-typé survit au passage `ConfigError` → `AndpError`.
+Un second test vérifie §6.1 : le même scénario via `service.verify()` produit une
+enveloppe portant `error.code == "config_misplaced"` — le code typé traverse les couches
+sans conversion, `ConfigError` étant désormais un `AndpError`.
+
+### Tests de l'invariant JSON (§6.2)
+
+Le trou le plus important, aujourd'hui non couvert : **toute** commande en `--json` doit
+produire du JSON parsable même sans configuration.
+
+```python
+@pytest.mark.parametrize("cmd", [
+    ["verify"], ["upload", "app.ipa"], ["status", "me.app", "42"],
+    ["submit", "me.app", "1.0"], ["precheck", "me.app", "1.0"],
+    ["readiness", "testflight", "me.app"], ["store", "apply", "me.app"],
+])
+def test_json_stays_parsable_without_any_config(cmd, tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)          # ni .andp/, ni ~/.andp/, ni template
+    main(cmd + ["--json"])
+    payload = json.loads(capsys.readouterr().out)   # ne doit pas lever
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "config_not_found"
+    assert payload["error"]["retryable"] is False
+    assert payload["error"]["remediation"]           # non vide
+```
+
+Un test symétrique couvre `config_misplaced`, et un troisième vérifie que le bloc
+`context` de §6.3 liste bien les emplacements inspectés.
+
+### Test de la structure de la taxonomie (§6.1)
+
+```python
+def test_config_error_is_an_andp_error():
+    err = ConfigError("boom", code="config_misplaced", remediation="fix it")
+    assert isinstance(err, AndpError)          # une seule taxonomie
+    assert err.to_dict()["retryable"] is False # jamais retryable par construction
+```
 
 ### `tests/conftest.py`
 
@@ -322,13 +447,23 @@ Réécrit autour de la nouvelle cascade. Son cas « sans `secrets.yml`, on retom
 
 Chaque étape laisse la suite verte :
 
+0. **Taxonomie** — `core/errors.py` → `andp/errors.py`, `ConfigError(AndpError)`,
+   12 imports repointés, suppression du bloc de traduction `service.py:26-32`.
+   Étape autonome : elle ne dépend de rien de ce qui suit et se valide seule sur la
+   suite existante.
 1. `andp/paths.py` + `tests/test_paths.py`
 2. `andp/asc/config.py` + les deux codes d'erreur + le test de non-régression
-3. `andp config` (CLI)
-4. `conftest.py` + migration des 25 fichiers de test
-5. Scripts shell
-6. CI et actions
-7. Documentation et `.gitignore`
+3. Invariant JSON (§6.2) : `asc_manager.py:749`, `metadata_manager.py:68`,
+   et les tests paramétrés
+4. `andp config` (CLI)
+5. `conftest.py` + migration des 25 fichiers de test
+6. Scripts shell
+7. CI et actions
+8. Documentation et `.gitignore`
+
+L'étape 0 en tête n'est pas un détail d'ordonnancement : sans taxonomie unifiée, les
+étapes 2 et 3 devraient inventer un mécanisme de transport pour les codes d'erreur,
+qu'il faudrait ensuite défaire.
 
 ## 10. Hors périmètre
 
