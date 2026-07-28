@@ -52,11 +52,12 @@ fi
 
 # 2. Dependency Vulnerability Scanning
 echo "Scanning dependencies for vulnerabilities..."
-if [ -f "metrics/sbom.json" ]; then
+if [ -f "${ANDP_CONFIG_DIR:-.andp}/metrics/sbom.json" ]; then
     # In a real enterprise environment, this would call an API like Snyk, GitHub Advisory Database, or OSV
     # Here we implement a mock scanner that checks against a local vulnerability database
-    python3 - << 'END'
+    ANDP_SBOM="${ANDP_CONFIG_DIR:-.andp}/metrics/sbom.json" python3 - << 'END'
 import json
+import os
 import sys
 
 # Mock vulnerability database
@@ -67,7 +68,7 @@ VULN_DB = {
 }
 
 try:
-    with open('metrics/sbom.json', 'r') as f:
+    with open(os.environ.get('ANDP_SBOM', '.andp/metrics/sbom.json'), 'r') as f:
         sbom = json.load(f)
 
     vulnerabilities_found = 0

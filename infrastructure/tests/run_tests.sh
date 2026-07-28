@@ -148,4 +148,26 @@ else
     exit 1
 fi
 
+# Test Telemetry Collector
+echo "Testing telemetry-collector.sh..."
+METRICS_DIR="${ANDP_CONFIG_DIR:-.andp}/metrics"
+rm -f "$METRICS_DIR"/telemetry_*.json
+if ./infrastructure/telemetry-collector.sh > /dev/null; then
+    if ls "$METRICS_DIR"/telemetry_*.json >/dev/null 2>&1; then
+        # Verify JSON validity and structure
+        if ANDP_METRICS_DIR="$METRICS_DIR" python3 -c "import json, glob, os; d = json.load(open(glob.glob(os.path.join(os.environ['ANDP_METRICS_DIR'], 'telemetry_*.json'))[0])); assert 'event_id' in d; assert 'environment' in d; assert 'metrics' in d; assert 'supply_chain' in d" 2>/dev/null; then
+            echo "✅ telemetry-collector.sh PASSED"
+        else
+            echo "❌ telemetry-collector.sh FAILED: telemetry structure or format invalid"
+            exit 1
+        fi
+    else
+        echo "❌ telemetry-collector.sh FAILED: telemetry JSON file missing"
+        exit 1
+    fi
+else
+    echo "❌ telemetry-collector.sh FAILED"
+    exit 1
+fi
+
 echo "All Infrastructure Tests PASSED."

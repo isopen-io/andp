@@ -78,8 +78,12 @@ def load_account(account_id, secrets_file=None, project_root="."):
                          "searched": paths.searched_paths("secrets.yml", project_root)})
         path, origin = resolution.path, resolution.origin
 
+    # Deliberately uncached, unlike load_policy: this runs once per command,
+    # ahead of network calls that cost hundreds of milliseconds, so a cache buys
+    # nothing — and it would hold credentials in memory for the whole life of
+    # the long-running MCP process.
     with open(path, "r") as f:
-        # Bolt Optimization: Use PyYAML's LibYAML-backed CSafeLoader if available (~8x speedup)
+        # LibYAML-backed CSafeLoader when available (~8x speedup)
         loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
         data = yaml.load(f, Loader=loader) or {}
 

@@ -89,11 +89,13 @@ def main():
 
     # Generate report
     mermaid = generate_mermaid_graph(graph)
-    os.makedirs("metrics", exist_ok=True)
-    with open("metrics/dependency_graph.mermaid", "w") as f:
+    metrics_dir = os.path.join(os.environ.get("ANDP_CONFIG_DIR", ".andp"), "metrics")
+    os.makedirs(metrics_dir, exist_ok=True)
+    graph_path = os.path.join(metrics_dir, "dependency_graph.mermaid")
+    with open(graph_path, "w") as f:
         f.write(mermaid)
 
-    print(f"\nDependency graph generated: metrics/dependency_graph.mermaid")
+    print(f"\nDependency graph generated: {graph_path}")
     print("-" * 30)
     for target, deps in graph.items():
         print(f"{target}: {', '.join(deps) if deps else 'None'}")

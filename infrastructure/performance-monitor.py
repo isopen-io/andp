@@ -39,9 +39,10 @@ def main():
     print("-" * 25)
 
     # Save metrics for analytics
-    metrics_json = os.path.join("metrics", f"perf_{int(os.path.getmtime(xcresult_path))}.json")
+    metrics_dir = os.path.join(os.environ.get("ANDP_CONFIG_DIR", ".andp"), "metrics")
+    metrics_json = os.path.join(metrics_dir, f"perf_{int(os.path.getmtime(xcresult_path))}.json")
     try:
-        os.makedirs("metrics", exist_ok=True)
+        os.makedirs(metrics_dir, exist_ok=True)
         with open(metrics_json, "w") as f:
             json.dump({
                 "type": "performance",

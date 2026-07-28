@@ -80,5 +80,5 @@ else
 fi
 
 # Store results for dashboard/governance report
-mkdir -p metrics
-echo "{\"asset_violations\": $VIOLATIONS, \"status\": \"$( [ $VIOLATIONS -eq 0 ] && echo "PASSED" || echo "FAILED" )\"}" > metrics/asset_governance.json
+mkdir -p "${ANDP_CONFIG_DIR:-.andp}/metrics"
+echo "{\"asset_violations\": $VIOLATIONS, \"status\": \"$( [ $VIOLATIONS -eq 0 ] && echo "PASSED" || echo "FAILED" )\"}" > "${ANDP_CONFIG_DIR:-.andp}/metrics/asset_governance.json"

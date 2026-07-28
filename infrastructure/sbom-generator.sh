@@ -6,7 +6,9 @@ set -e
 # ANDP Software Bill of Materials (SBOM) Generator
 # Generates a CycloneDX-compatible JSON SBOM for the project.
 
-OUTPUT_DIR="metrics"
+# The .andp namespace — generate-dashboard.sh reads sbom.json from there, so
+# writing to a bare "metrics/" meant the dashboard never found it.
+OUTPUT_DIR="${ANDP_CONFIG_DIR:-.andp}/metrics"
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_FILE="${OUTPUT_DIR}/sbom.json"
 
@@ -86,14 +88,21 @@ echo "Analyzing dependencies from project.yml..."
 # Use python to parse YAML to avoid brittle grep/awk
 DEPS=$(python3 - << 'END'
 import sys
+import os
 import yaml
 
 try:
-    with open(os.environ.get('ANDP_APP_DIR', 'examples/meeshy') + '/project.yml', 'r') as f:
-        config = yaml.safe_load(f)
+    app_dir = os.environ.get('ANDP_APP_DIR', 'examples/meeshy')
+    project_path = os.path.join(app_dir, 'project.yml')
+    with open(project_path, 'r', encoding='utf-8') as f:
+        # Bolt Optimization: Use PyYAML's LibYAML-backed CSafeLoader if available (~8x speedup)
+        loader = getattr(yaml, 'CSafeLoader', yaml.SafeLoader)
+        config = yaml.load(f, Loader=loader)
 
-    packages = config.get('packages', {})
+    packages = config.get('packages', {}) or {}
     for name, details in packages.items():
+        if not details:
+            continue
         if 'url' in details:
             print(f"DEP_REMOTE|{name}|{details.get('from', 'unknown')}|{details['url']}")
         elif 'path' in details:

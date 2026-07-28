@@ -281,11 +281,12 @@ def main():
     print("\n" + "=" * 60)
 
     # Save results for dashboard
-    os.makedirs("metrics", exist_ok=True)
-    with open("metrics/ai_analysis.json", "w") as f:
+    metrics_dir = os.path.join(os.environ.get("ANDP_CONFIG_DIR", ".andp"), "metrics")
+    os.makedirs(metrics_dir, exist_ok=True)
+    with open(os.path.join(metrics_dir, "ai_analysis.json"), "w") as f:
         json.dump(analysis_results, f, indent=2)
 
-    with open("metrics/governance_scorecard.json", "w") as f:
+    with open(os.path.join(metrics_dir, "governance_scorecard.json"), "w") as f:
         json.dump(analysis_results["governance_metrics"], f, indent=2)
 
 if __name__ == "__main__":
