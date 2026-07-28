@@ -4,7 +4,7 @@ An agent reading an AndpError knows, without parsing prose, whether the same
 call can be retried as-is (retryable) and what to change otherwise
 (remediation). Codes are stable identifiers.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -13,38 +13,51 @@ class AndpError(Exception):
     message: str
     retryable: bool
     remediation: str
+    # What was inspected when the failure happened — searched paths, allowed
+    # values, compiler error lines. An agent remediates without re-running the
+    # command to explore. Optional and last: every existing construction site
+    # passes keywords, so adding a field moves nothing.
+    context: dict = field(default_factory=dict)
 
     def __post_init__(self):
         super().__init__(f"[{self.code}] {self.message}")
 
     def to_dict(self):
-        return {
+        payload = {
             "code": self.code,
             "message": self.message,
             "retryable": self.retryable,
             "remediation": self.remediation,
         }
+        if self.context:
+            payload["context"] = self.context
+        return payload
 
 
 class ConfigError(AndpError):
     """Configuration error — an AndpError that is never retryable.
 
     Subclassing keeps a single taxonomy: `except AndpError` catches it, and
-    to_dict() makes it serialisable without any ad-hoc conversion. `context`
-    carries what was inspected (searched paths, misplaced file) so an agent can
-    remediate without re-running the command to explore.
+    to_dict() makes it serialisable without any ad-hoc conversion.
     """
 
     def __init__(self, message, code="config_error", remediation="", context=None):
-        super().__init__(code=code, message=message,
-                         retryable=False, remediation=remediation)
-        self.context = context or {}
+        super().__init__(code=code, message=message, retryable=False,
+                         remediation=remediation, context=context or {})
 
-    def to_dict(self):
-        payload = super().to_dict()
-        if self.context:
-            payload["context"] = self.context
-        return payload
+
+class XcodeError(AndpError):
+    """Local-tooling failure (build, simulator, device).
+
+    Nearly all of these are permanent: a broken build stays broken until the
+    code changes, and retrying wastes minutes. `simulator_boot_failed` is the
+    exception — simctl fails transiently under load — hence the parameter.
+    """
+
+    def __init__(self, message, code="xcode_error", retryable=False,
+                 remediation="", context=None):
+        super().__init__(code=code, message=message, retryable=retryable,
+                         remediation=remediation, context=context or {})
 
 
 _STATUS_MAP = {
