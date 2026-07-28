@@ -81,9 +81,6 @@ jobs:
       with:
         name: governance
         path: |
-          governance_report.md
-          dashboard.html
-          metrics/
           .andp/governance_report.md
           .andp/dashboard.html
           .andp/metrics/
@@ -106,10 +103,10 @@ jobs:
       env:
         SCHEME: ${{ inputs.scheme }}
         ASC_API_KEY: ${{ secrets.ASC_API_KEY }}
-      run: cd "$ANDP_HOME" && ./sign.sh "build/$SCHEME.xcarchive"
+      run: cd "$ANDP_HOME" && ./sign.sh ".andp/build/$SCHEME.xcarchive"
 
     - name: Upload to App Store Connect
       if: inputs.upload
       env:
         SCHEME: ${{ inputs.scheme }}
-      run: cd "$ANDP_HOME" && ./asc-manager.sh upload "build/exported/$SCHEME.ipa"
+      run: cd "$ANDP_HOME" && ./asc-manager.sh upload ".andp/build/exported/$SCHEME.ipa"

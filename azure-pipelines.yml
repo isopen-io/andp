@@ -27,13 +27,13 @@ stages:
       displayName: 'Generate Dashboard'
     - script: ./archive.sh
       displayName: 'Archive'
-    - script: ./sign.sh build/*.xcarchive
+    - script: ./sign.sh .andp/build/*.xcarchive
       displayName: 'Sign'
     - task: PublishBuildArtifacts@1
       inputs:
-        PathtoPublish: 'build/exported'
+        PathtoPublish: '.andp/build/exported'
         ArtifactName: 'ipa'
     - task: PublishBuildArtifacts@1
       inputs:
-        PathtoPublish: 'governance_report.md'
+        PathtoPublish: '.andp/governance_report.md'
         ArtifactName: 'governance'

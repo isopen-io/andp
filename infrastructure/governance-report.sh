@@ -5,8 +5,10 @@
 
 set -e
 
-REPORT_FILE="governance_report.md"
-METRICS_DIR="metrics"
+REPORT_FILE="${ANDP_CONFIG_DIR:-.andp}/governance_report.md"
+METRICS_DIR="${ANDP_CONFIG_DIR:-.andp}/metrics"
+
+mkdir -p "$(dirname "$REPORT_FILE")"
 
 echo "Generating Enterprise Governance Report..."
 
