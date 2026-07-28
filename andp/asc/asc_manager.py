@@ -35,6 +35,7 @@ Commands (all accept --json for a structured, agent-friendly envelope):
   readiness appstore <bundle_id> <version>       Can this version go to the App Store cleanly?
   store <pricing|availability|age-rating|apply>  Configure price, territories, age rating
   build-number [bundle] --strategy S             Next build number (max-build|timestamp|commit)
+  config [path <secrets|policy>|dir|migrate]     Where ANDP reads its configuration
 """
 
 
@@ -698,6 +699,124 @@ def _cmd_build_number(account, managers, dry_run, args, json_mode=False):
     return 0
 
 
+_CONFIG_USAGE = ("Usage: config [path <secrets|policy> | dir | migrate] "
+                 "[--account <id>] [--json]")
+
+
+def _config_diagnostic(account_id, project_root="."):
+    """L'état résolu de la configuration — la donnée derrière `andp config`."""
+    from .. import paths
+
+    resolution = paths.resolve_config("secrets.yml", project_root)
+    misplaced = paths.misplaced_secrets(project_root)
+    configured = False
+    if resolution.path and not misplaced:
+        try:
+            configured = load_account(account_id,
+                                      project_root=project_root).is_configured()
+        except ConfigError:
+            configured = False
+
+    policy = paths.policy_path(project_root)
+    return {
+        "command": "config",
+        "ok": misplaced is None,
+        "account": account_id,
+        "dir": paths.andp_dir(project_root),
+        "secrets": {"path": resolution.path, "origin": resolution.origin,
+                    "configured": configured,
+                    "searched": paths.searched_paths("secrets.yml", project_root)},
+        "policy": {"path": policy, "present": os.path.exists(policy)},
+        "misplaced": misplaced,
+    }
+
+
+def _print_config_human(diag):
+    print(f"ANDP config (account '{diag['account']}')")
+    print(f"  dir       {diag['dir']}")
+    secrets = diag["secrets"]
+    if secrets["path"]:
+        state = "✅ configured" if secrets["configured"] else "⚪ dry-run"
+        print(f"  secrets   {secrets['path']}   {secrets['origin']}   {state}")
+    else:
+        print("  secrets   (aucun)   — cherché dans :")
+        for candidate in secrets["searched"]:
+            print(f"              {candidate}")
+    policy = diag["policy"]
+    print(f"  policy    {policy['path']}   "
+          f"{'present' if policy['present'] else 'absent'}")
+    if diag["misplaced"]:
+        print(f"\n❌ {diag['misplaced']} n'est plus lu par ANDP.", file=sys.stderr)
+        print("   → andp config migrate", file=sys.stderr)
+
+
+def _cmd_config_migrate(project_root="."):
+    """Déplace ./secrets.yml vers .andp/secrets.yml. N'écrase jamais."""
+    from .. import paths
+
+    legacy = paths.misplaced_secrets(project_root)
+    if legacy is None:
+        print("Rien à migrer : aucun secrets.yml à la racine.", file=sys.stderr)
+        return 0
+
+    target_dir = paths.andp_dir(project_root)
+    target = os.path.join(target_dir, "secrets.yml")
+    if os.path.exists(target):
+        print(f"❌ {target} existe déjà — migration refusée pour ne rien écraser.",
+              file=sys.stderr)
+        print(f"   → comparez les deux fichiers, puis supprimez {legacy}.",
+              file=sys.stderr)
+        return 1
+
+    os.makedirs(target_dir, mode=0o700, exist_ok=True)
+    os.chmod(target_dir, 0o700)
+    os.rename(legacy, target)
+    os.chmod(target, 0o600)
+    print(f"✅ {legacy} → {target}", file=sys.stderr)
+    return 0
+
+
+def _cmd_config(account, managers, dry_run, args, json_mode=False):
+    """Résolution de configuration — sans credentials, par construction."""
+    from .. import paths
+
+    args = list(args)
+    sub = args[0] if args else None
+
+    if sub == "migrate":
+        return _cmd_config_migrate()
+
+    if sub == "path":
+        target = args[1] if len(args) > 1 else None
+        if target == "secrets":
+            resolution = paths.resolve_config("secrets.yml")
+            if resolution.path is None:
+                print("Aucun fichier de credentials résolu.", file=sys.stderr)
+                return 1
+            print(resolution.path)          # stdout ne porte que la valeur
+            return 0
+        if target == "policy":
+            print(paths.policy_path())
+            return 0
+        print(_CONFIG_USAGE, file=sys.stderr)
+        return 2
+
+    if sub == "dir":
+        print(paths.andp_dir())
+        return 0
+
+    if sub is not None:
+        print(_CONFIG_USAGE, file=sys.stderr)
+        return 2
+
+    diag = _config_diagnostic(account.account_id)
+    if json_mode:
+        print(json.dumps(diag))
+        return 0
+    _print_config_human(diag)
+    return 0
+
+
 COMMANDS = {
     "verify": _cmd_verify,
     "upload": _cmd_upload,
@@ -710,6 +829,7 @@ COMMANDS = {
     "readiness": _cmd_readiness,
     "store": _cmd_store,
     "build-number": _cmd_build_number,
+    "config": _cmd_config,
 }
 
 
@@ -742,9 +862,10 @@ def main(argv):
     try:
         account = load_account(account_id)
     except ConfigError as exc:
-        # `build-number` (timestamp/commit) needs no credentials at all — let it
-        # run in a repo with no secrets file. Every other command still fails.
-        if command == "build-number":
+        # `build-number` (timestamp/commit) and `config` need no credentials at
+        # all — the latter exists precisely to diagnose a broken configuration,
+        # so requiring one would defeat its purpose. Every other command fails.
+        if command in ("build-number", "config"):
             account = AccountConfig(account_id, None, None, None)
         elif json_mode:
             # stdout must stay parsable: an agent reads code/retryable/remediation
@@ -764,7 +885,10 @@ def main(argv):
         # make ASCAuth raise — e.g. a fork PR with unset secrets). Handlers know
         # to run in DRY-RUN from the flag; the banner is human-mode only and goes
         # to stderr so a command whose stdout is captured (build-number) is clean.
-        if not json_mode:
+        # `config` and `build-number` don't need credentials at all: announcing
+        # DRY-RUN to them is noise, and misleading for `config`, whose whole job
+        # is to report on a configuration that may legitimately be absent.
+        if not json_mode and command not in ("build-number", "config"):
             print(
                 f"No real App Store Connect credentials for account '{account_id}' "
                 "(placeholders detected) — running in DRY-RUN mode.",
