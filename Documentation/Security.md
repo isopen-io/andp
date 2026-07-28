@@ -5,7 +5,7 @@ ANDP prioritizes security through isolation, auditing, and native tool integrati
 ## 1. Secret Management
 ANDP uses a tiered approach to secrets:
 - **`secrets.example.yml`**: A public template showing required keys.
-- **`secrets.yml`**: A local-only file (git-ignored) containing actual credentials.
+- **`.andp/secrets.yml`**: A local-only file (git-ignored) containing actual credentials.
 - **Environment Variables**: CI/CD systems should inject secrets as environment variables, which the scripts are designed to prioritize.
 
 ## 2. Automated Auditing
@@ -21,7 +21,7 @@ ANDP implements supply chain security through:
 
 ## 4. Signing Security
 - **Identity Discovery**: `infrastructure/certificate-manager.sh` uses the macOS Keychain to safely discover valid signing identities.
-- **Account Isolation**: Supports multiple Apple Developer accounts via the `accounts` structure in `secrets.yml`.
+- **Account Isolation**: Supports multiple Apple Developer accounts via the `accounts` structure in `.andp/secrets.yml`.
 
 ## 5. Keychain Isolation
 On CI runners, it is recommended to create a temporary keychain for each build:

@@ -60,7 +60,7 @@ Envoi : `Authorization: Bearer <token>`. ANDP régénère le token à 19 min ave
 ## 5. Utilisation ANDP
 
 ```bash
-# Renseigner secrets.yml (copie de secrets.example.yml) avec key_id, issuer_id, key_content
+# Renseigner .andp/secrets.yml (copie de secrets.example.yml) avec key_id, issuer_id, key_content
 
 ./asc-manager.sh verify me.meeshy.app                        # préflight de publication
 ./asc-manager.sh upload build/exported/Meeshy.ipa            # Build Upload API

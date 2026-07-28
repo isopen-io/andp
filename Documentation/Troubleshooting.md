@@ -11,7 +11,7 @@ Common issues encountered when using ANDP and their solutions.
 
 ## 2. Build & Signing Issues
 **Issue:** `xcodebuild` exit code 65 or 70.
-- **Solution:** This is often related to code signing. Ensure `secrets.yml` has the correct `development_team`. If on CI, ensure `CI=true` environment variable is set to enable signing bypass.
+- **Solution:** This is often related to code signing. Ensure `.andp/secrets.yml` has the correct `development_team`. If on CI, ensure `CI=true` environment variable is set to enable signing bypass.
 
 **Issue:** Missing Provisioning Profiles.
 - **Solution:** Use `./infrastructure/certificate-manager.sh list` to verify identities are available in the keychain.
@@ -28,7 +28,7 @@ Common issues encountered when using ANDP and their solutions.
 - **Solution:** Run `./infrastructure/bootstrap.sh` to install Python dependencies.
 
 **Issue:** 401 Unauthorized from ASC API.
-- **Solution:** Check your `issuer_id` and `key_id` in `secrets.yml`. Ensure the private key has the correct line breaks.
+- **Solution:** Check your `issuer_id` and `key_id` in `.andp/secrets.yml`. Ensure the private key has the correct line breaks.
 
 ## 5. Getting Help
 - Check the `Documentation/` folder for specific guides.

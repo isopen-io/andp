@@ -140,7 +140,7 @@ at submit; the `note` says what is not checked.
 - **Honest.** `verify`/`precheck` fail (or report unverified) when publishing
   genuinely can't work; a transient rate-limit or network blip is `unverified`,
   not a false red.
-- **Secret-safe.** The private key is written to a `umask 077` temp `secrets.yml`
+- **Secret-safe.** The private key is written to a `umask 077` temp `.andp/secrets.yml`
   that is removed on exit; only Apple's own error text (never request headers)
   reaches the report — no JWT leakage.
 - **Fork-safe.** Missing secrets ⇒ ⚪ Unverified skip (green, `ready=unknown`) by
