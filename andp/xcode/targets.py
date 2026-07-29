@@ -22,12 +22,32 @@ _DEFAULTS_KEY = "defaults"
 
 
 def _load_yaml(project_root):
+    """andp.yml as a mapping — a typed error, never a raw YAMLError.
+
+    Every reader in this module funnels through here, so one guard covers them
+    all. A parse error escaping raw reaches the CLI as a traceback with nothing
+    on stdout, which breaks the {ok, error} envelope an agent parses.
+    """
     path = paths.policy_path(project_root)
     if not os.path.exists(path):
         return {}
     with open(path, "r") as handle:
         loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
-        return yaml.load(handle, Loader=loader) or {}
+        try:
+            document = yaml.load(handle, Loader=loader) or {}
+        except yaml.YAMLError as exc:
+            raise XcodeError(
+                "andp.yml is not valid YAML: %s" % exc,
+                code="bad_config",
+                remediation="Fix the YAML syntax in andp.yml.",
+                context={"policy": path})
+    if not isinstance(document, dict):
+        raise XcodeError(
+            "andp.yml must be a mapping, not a %s." % type(document).__name__,
+            code="bad_config",
+            remediation="Its top level holds keys: project:, targets:, store:",
+            context={"policy": path, "found": type(document).__name__})
+    return document
 
 
 def load_targets(project_root="."):
@@ -40,7 +60,10 @@ def load_targets(project_root="."):
             "The `targets:` block of andp.yml must be a mapping of targets.",
             code="bad_target_config",
             remediation="targets:\n  my-target:\n    platform: iOS")
-    return dict((k, v) for k, v in block.items() if k != _DEFAULTS_KEY)
+    # Names are normalised to strings because YAML reads an unquoted `26:` as an
+    # integer. Left alone, `andp targets` would print a name that `andp build`
+    # then rejects, and sorting a mix of both raises a bare TypeError.
+    return dict((str(k), v) for k, v in block.items() if k != _DEFAULTS_KEY)
 
 
 def project_dir(project_root="."):
@@ -52,7 +75,15 @@ def project_dir(project_root="."):
     from_env = os.environ.get(ENV_APP_DIR)
     if from_env:
         return from_env
-    declared = (_load_yaml(project_root).get("project") or {}).get("dir")
+    block = _load_yaml(project_root).get("project")
+    if block is not None and not isinstance(block, dict):
+        raise XcodeError(
+            "The `project:` block of andp.yml must be a mapping.",
+            code="bad_config",
+            remediation="project:\n  dir: apps/ios",
+            context={"policy": paths.policy_path(project_root),
+                     "found": type(block).__name__})
+    declared = (block or {}).get("dir")
     if declared:
         return os.path.join(project_root, declared)
     return project_root
@@ -109,7 +140,25 @@ def _validate(name, spec):
                      "allowed": list(PLATFORMS)})
 
 
+def _validate_overrides(overrides):
+    """Command-line overrides bypass andp.yml, and so bypassed its validation.
+
+    Without this, `--platform Android` travelled all the way to xcodebuild as
+    `platform=Android Simulator`: the failure then names a destination, never
+    the flag that was mistyped.
+    """
+    platform = (overrides or {}).get("platform")
+    if platform is not None and platform not in PLATFORMS:
+        raise XcodeError(
+            "Unknown platform `%s` passed with --platform." % platform,
+            code="bad_target_config",
+            remediation="Allowed platforms: %s." % ", ".join(PLATFORMS),
+            context={"flag": "--platform", "unknown": platform,
+                     "allowed": list(PLATFORMS)})
+
+
 def _build(name, spec, defaults, overrides):
+    _validate_overrides(overrides)
     merged = dict(DEFAULTS)
     merged.update(dict((k, v) for k, v in defaults.items() if v is not None))
     merged.update(dict((k, v) for k, v in spec.items() if v is not None))

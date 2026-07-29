@@ -104,6 +104,29 @@ def test_dry_run_reports_are_flagged_not_prose(capsys):
     assert payload["version"] == "1.0"
 
 
+# Les commandes outillage sont les seules à lire le bloc `targets:` d'andp.yml.
+XCODE_INVOCATIONS = [["targets"], ["build", "--all"], ["test", "--all"],
+                     ["run", "solo"]]
+
+
+@pytest.mark.parametrize("argv", XCODE_INVOCATIONS,
+                         ids=[" ".join(a) for a in XCODE_INVOCATIONS])
+@pytest.mark.parametrize("body", ["targets:\n  dev:\n   - [\n", "- a\n- b\n"],
+                         ids=["yaml-malforme", "yaml-non-mapping"])
+def test_a_broken_andp_yml_still_answers_in_json(argv, body, tmp_path, capsys):
+    """Un andp.yml illisible remontait une trace Python et rien sur stdout.
+
+    L'agent perdait l'enveloppe au moment précis où il en avait besoin : celui
+    où sa configuration est cassée et où le message doit lui dire quoi réparer.
+    """
+    (tmp_path / "andp.yml").write_text(body)
+    assert main(argv + ["--json"]) == 1
+    payload = json.loads(capsys.readouterr().out)      # ne doit pas lever
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "bad_config"
+    assert payload["error"]["remediation"]
+
+
 def test_usage_errors_keep_their_exit_code(capsys):
     """L'enveloppe ne doit pas écraser le 2 qui distingue l'usage de l'échec."""
     assert main(["upload", "--json"]) == 2
