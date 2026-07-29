@@ -105,6 +105,17 @@ def test_autodetect_multiple_schemes_with_override_succeeds(tmp_path):
     assert t.platform == "iOS"
 
 
+def test_an_explicit_scheme_never_lists_the_schemes(tmp_path):
+    """Lister les schemes lance xcodebuild — plusieurs secondes pour une réponse
+    que l'override rend inutile."""
+    def refuse(directory):
+        raise AssertionError("scheme_lister appelé malgré --scheme")
+
+    t = targets.resolve(None, str(tmp_path), scheme_lister=refuse,
+                        overrides={"scheme": "B"})
+    assert t.scheme == "B"
+
+
 def test_single_declared_target_needs_no_name(tmp_path):
     root = _write(tmp_path, "targets:\n  only:\n    scheme: S\n")
     assert targets.resolve(None, root).name == "only"
