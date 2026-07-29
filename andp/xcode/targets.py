@@ -124,6 +124,8 @@ def _autodetect(project_root, scheme_lister, overrides):
     if scheme_lister is None:
         from .runner import list_schemes as scheme_lister
     schemes = scheme_lister(project_dir(project_root))
+    if overrides and overrides.get("scheme"):
+        return _build("default", {"scheme": overrides["scheme"]}, {}, overrides)
     if len(schemes) == 1:
         return _build("default", {"scheme": schemes[0]}, {}, overrides)
     # Refusing is not enough: hand back the YAML to paste.
