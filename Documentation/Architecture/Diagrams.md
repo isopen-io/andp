@@ -1,148 +1,214 @@
-# ANDP Architecture
+# ANDP architecture
 
-## System Context Diagram
+## System context
+
 ```mermaid
 graph TD
-    User[Developer / Release Engineer]
-    ANDP[Apple Native Delivery Platform]
-    ASC[App Store Connect]
-    Git[Git Provider - GitHub/GitLab]
-    AppleDev[Apple Developer Portal]
+    Dev[Developer / Release engineer]
+    Agent[AI agent — Claude Code, Cursor, Codex]
+    ANDP[ANDP]
+    ASC[App Store Connect API]
+    Portal[Apple Developer Portal]
+    Xcode[Xcode toolchain]
 
-    User -->|Commands| ANDP
-    ANDP -->|Generates/Builds| Apps[iOS/macOS/visionOS Apps]
-    ANDP -->|Uploads| ASC
-    ANDP -->|Pulls Code| Git
-    ANDP -->|Manages Certs| AppleDev
+    Dev -->|CLI| ANDP
+    Agent -->|MCP / CLI --json| ANDP
+    ANDP -->|build, archive, sign| Xcode
+    ANDP -->|verify, upload, submit| ASC
+    ANDP -->|bundle ids, certs, profiles| Portal
 ```
 
-## Container Diagram
+Two front doors, one implementation. The agent is a first-class caller, not an
+afterthought wrapped around a human CLI.
+
+## Containers
+
 ```mermaid
 graph TD
-    subgraph ANDP
-        Core[Core Orchestrator - Bash/Python]
-        Gen[Project Generator - XcodeGen]
-        Build[Build Engine - xcodebuild]
-        Test[Test Platform - XCTest/Swift Testing]
-        Gov[Governance & Quality - ai-analyzer/sbom]
-        Sign[Signing Engine - codesign/security]
-        Dist[Distribution Manager - ASC API]
+    CLI["CLI — asc_manager.py<br/>parse · dispatch · render"]
+    MCP["MCP server — mcp.py<br/>JSON-RPC · annotations · policy"]
+    SVC["service.py<br/>pure functions returning envelopes"]
+
+    subgraph core["andp/core — machine"]
+        REL[release.py<br/>the release machine]
+        IPA[ipa.py<br/>metadata · compliance · bundle faults]
+        ST[state.py<br/>locked, atomic state store]
     end
 
-    Config[project.yml] --> Gen
-    Gen --> Build
-    Build --> Test
-    Test --> Gov
-    Gov --> Sign
-    Sign --> Dist
-    Dist --> ASC[App Store Connect]
+    subgraph asc["andp/asc — App Store Connect"]
+        AUTH[auth.py — ES256 JWT]
+        CLIENT[client.py — JSON:API, 429, audit]
+        MGRS[apps · builds · testflight · appstore<br/>pricing · availability · agerating · assets]
+    end
+
+    subgraph xcode["andp/xcode — local tooling"]
+        TGT[targets.py · destination.py]
+        RUN[runner.py · simulator.py · device.py]
+    end
+
+    CLI --> SVC
+    MCP --> SVC
+    CLI --> xcode
+    SVC --> core
+    SVC --> asc
+    core --> asc
+    MGRS --> CLIENT
+    CLIENT --> AUTH
 ```
 
-## Component Diagram - Build & Release
+**`service.py` is the single source of truth.** The CLI owns human rendering,
+the MCP server owns the JSON-RPC envelope; neither owns behaviour. That is what
+lets the MCP server drive the release machine directly instead of scraping a
+CLI's stdout — and what makes one test cover both surfaces.
+
+`andp/xcode` has no arrow to `asc`: a build never talks to Apple and never loads
+credentials.
+
+## The release machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> created
+    created --> app_resolved
+    app_resolved --> uploaded: reserve → transfer
+    uploaded --> processing
+    processing --> processing: retry_after 60s
+    processing --> valid: VALID
+    processing --> failed: FAILED / INVALID / timeout
+
+    valid --> group_linked: --group
+    valid --> done: no --ship
+    group_linked --> done: no --ship
+
+    valid --> version_ensured: --ship
+    group_linked --> version_ensured: --ship
+    version_ensured --> build_attached
+    build_attached --> compliance_set
+    compliance_set --> metadata_pending: --metadata
+    compliance_set --> prechecked
+    metadata_pending --> prechecked
+    prechecked --> prechecked: needs_precheck_fix
+    prechecked --> awaiting_approval: report ok
+    awaiting_approval --> awaiting_approval: gate closed
+    awaiting_approval --> submitted: approved / policy
+    submitted --> done
+
+    version_ensured --> review_canceling: in review + --replace-in-review
+    review_canceling --> review_canceling: not editable yet
+    review_canceling --> version_ensured: editable
+
+    done --> [*]
+    failed --> [*]
+```
+
+Self-loops are **waiting** states, not failures: a release parked there is
+healthy and never forces a re-upload. Reference: [Release.md](../Release.md).
+
+## Where validation happens
+
 ```mermaid
 graph LR
-    subgraph Infrastructure
-        build_sh[build.sh]
-        archive_sh[archive.sh]
-        sign_sh[sign.sh]
-        asc_mgr[asc-manager.sh]
-    end
+    A[credentials] -->|andp verify<br/>2 API calls| B[.ipa]
+    B -->|bundle gate<br/>offline, ~1s| C[upload]
+    C --> D[version metadata]
+    D -->|andp precheck<br/>read-only| E[submit]
 
-    subgraph Logic
-        PythonAPI[ASC Python Client]
-        BashHelpers[Common Utilities]
-    end
-
-    archive_sh --> build_sh
-    archive_sh --> sign_sh
-    asc_mgr --> PythonAPI
-    archive_sh --> asc_mgr
+    style B fill:#2d6,stroke:#1a4,color:#000
 ```
 
-## Deployment Diagram
-```mermaid
-graph TD
-    subgraph CI_Runner[macOS Runner]
-        ANDP_Scripts[ANDP Scripts]
-        Xcode[Xcode Toolchain]
-        Simulator[iOS/tvOS/watchOS Simulators]
-    end
+Ordered by how early each can run. The package gate is the cheapest check in the
+tool — no network, no account — and it catches the most expensive failure: an
+upload that reports success into silence.
+[Validation.md](../Validation.md).
 
-    ANDP_Scripts --> Xcode
-    Xcode --> Simulator
-    ANDP_Scripts --> ASC_Cloud[App Store Connect Cloud]
-```
+## A full delivery
 
-## Sequence Diagram - Full Release Pipeline
 ```mermaid
 sequenceDiagram
-    participant Dev as Developer
-    participant CI as CI/CD Pipeline
-    participant ANDP as ANDP Scripts
-    participant Xcode as xcodebuild
-    participant Gov as Governance (AI/SBOM)
-    participant ASC as App Store Connect
+    participant A as Agent / CI
+    participant N as ANDP
+    participant X as xcodebuild
+    participant S as App Store Connect
 
-    Dev->>CI: Push to main
-    CI->>ANDP: ./build-matrix.sh
-    ANDP->>Xcode: build
-    Xcode-->>ANDP: success
-    CI->>ANDP: ./test-matrix.sh
-    ANDP->>Xcode: test
-    Xcode-->>ANDP: success
-    CI->>ANDP: ./infrastructure/governance-report.sh
-    ANDP->>Gov: Validate Quality/Security
-    Gov-->>ANDP: Scorecard
-    CI->>ANDP: ./archive.sh
-    ANDP->>Xcode: archive
-    Xcode-->>ANDP: .xcarchive
-    CI->>ANDP: ./sign.sh
-    ANDP->>Xcode: exportArchive
-    Xcode-->>ANDP: .ipa
-    CI->>ANDP: ./asc-manager.sh upload
-    ANDP->>ASC: POST /v1/builds
-    ASC-->>ANDP: 201 Created
+    A->>N: andp verify me.app
+    N->>S: JWT → GET /v1/apps
+    S-->>N: 200
+    N-->>A: PREFLIGHT PASSED
+
+    A->>N: andp build prod --archive
+    N->>X: archive + exportArchive
+    X-->>N: .ipa
+
+    A->>N: release start --ship
+    Note over N: read embedded .appex plists — offline
+    N-->>A: bundle_invalid  ✗  (or continue)
+    N->>S: POST /v1/buildUploads
+    Note over N: persist upload_id BEFORE transfer
+    N->>S: PUT chunks → PATCH uploaded=true
+    N-->>A: state=uploaded
+
+    loop until VALID
+        A->>N: release poll
+        N->>S: GET /v1/builds
+        N-->>A: processing, retry_after=60
+    end
+
+    N->>S: attach build · compliance · metadata
+    N->>S: precheck (read-only)
+    N-->>A: awaiting_approval, needs_approval
+
+    A->>N: release approve
+    A->>N: release poll
+    N->>S: reviewSubmissions → items → submitted=true
+    N-->>A: state=done
 ```
 
-## Security Architecture Diagram
+Every arrow to App Store Connect is one `poll`. State is persisted before each
+returns, so killing the agent anywhere resumes exactly there.
+
+## Configuration and runtime namespace
+
 ```mermaid
 graph TD
-    subgraph Secret_Storage
-        SecretsFile[.andp/secrets.yml]
-        EnvVars[Environment Variables]
-    end
+    ENV["$ANDP_CONFIG_DIR/secrets.yml"] --> R{first found wins}
+    P["./.andp/secrets.yml"] --> R
+    G["~/.andp/secrets.yml"] --> R
+    T["./secrets.example.yml<br/>template → forces DRY-RUN"] --> R
+    R --> AC[AccountConfig]
+    AC -->|placeholders detected| DRY[DRY-RUN]
+    AC -->|complete| LIVE[live API]
 
-    subgraph Validation
-        SecAudit[security-auditor.sh]
-        SBOM[sbom-generator.sh]
-        GovReport[governance-report.sh]
-        SignVerify[codesign --verify]
-    end
+    L["./secrets.yml (legacy)"] -.->|refused: config_misplaced| R
 
-    subgraph Identity_Management
-        CertMgr[certificate-manager.sh]
-        Keychain[macOS Keychain]
-    end
-
-    SecretsFile --> SecAudit
-    EnvVars --> SecAudit
-    SecAudit --> GovReport
-    SBOM --> GovReport
-    Keychain --> CertMgr
-    CertMgr --> SignVerify
-    SignVerify --> Artifacts[.ipa / .pkg]
+    YML[andp.yml — versioned] --> POL[policy · compliance · store · targets]
 ```
 
-## Data Flow Diagram
+`.andp/` is the whole gitignored runtime namespace — secrets, release state,
+build output, metrics. `andp.yml` is declarative config and stays committed.
+[Configuration.md](../Configuration.md).
+
+## Deployment
+
 ```mermaid
-graph LR
-    Code[Source Code] -->|Input| Build[Build System]
-    Config[project.yml] -->|Input| Build
-    Secrets[.andp/secrets.yml] -->|Credentials| Build
-    Build -->|Artifacts| Sign[Signing System]
-    Sign -->|Signed IPA| Dist[Distribution System]
-    Build -->|Test Results| Gov[Governance System]
-    Gov -->|Compliance Data| Analytics[Analytics System]
-    Build -->|Metrics| Analytics
-    Analytics -->|Report| Dash[HTML Dashboard]
+graph TD
+    subgraph linux["Linux runner — no Xcode, cheap"]
+        VER[andp verify]
+        RDY[andp readiness]
+        PUB[andp upload / release / publish / store]
+    end
+    subgraph mac["macOS runner — Xcode"]
+        BLD[andp build / run / test]
+    end
+    BLD -->|.ipa artifact| PUB
+    VER --> S[App Store Connect]
+    RDY --> S
+    PUB --> S
 ```
+
+The publishing surface is pure HTTP and needs no macOS; only building does, and
+building needs no credentials. Gate PRs on Linux, spend macOS minutes on builds.
+
+## See also
+
+- [Release.md](../Release.md) · [Validation.md](../Validation.md) · [Developer.md](../Developer.md)
+- [Design/agentic-core.md](../Design/agentic-core.md) — the design record

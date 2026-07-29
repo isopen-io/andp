@@ -121,7 +121,25 @@ Returns a `release_id`. Flags:
 - `--ship` — continue past TestFlight to an App Store submission (gated).
 - `--metadata <dir>` — with `--ship`, push notes/screenshots/previews first (§6).
 - `--no-precheck` — with `--ship`, skip the built-in precheck stage.
+- `--replace-in-review` — with `--ship`, withdraw a *stale* pending submission so
+  this build can take its place (§8.1). Forfeits your slot in Apple's queue.
 - Starting the **same IPA** again *resumes* the existing release (idempotent).
+
+**Before any state is written**, `release start` reads the embedded app
+extensions out of the `.ipa` and refuses a package Apple would accept and then
+silently drop during processing:
+
+```json
+{"command":"release_start","ok":false,
+ "error":{"code":"bundle_invalid","retryable":false,
+          "message":"NSExtensionActivationRule sits directly under NSExtension in
+                     bundle Share.appex: it belongs inside NSExtensionAttributes…",
+          "remediation":"Fix the embedded extension's Info.plist and re-export the IPA."}}
+```
+
+There is nothing to poll and nothing to reset — the release never started. Fix
+the archive and call `release start` again. Why this check exists, and what it
+deliberately does not cover: [Validation.md §2](Validation.md#2-the-package-gate).
 
 ### Step 4 — `release poll` (the agent loop)
 Advance one non-blocking step at a time until terminal:
@@ -163,6 +181,9 @@ created → app_resolved → uploaded → processing → valid
    valid / group_linked → version_ensured → build_attached → compliance_set
         → metadata_pending → prechecked → awaiting_approval → submitted → done
 
+   --ship --replace-in-review, version already in review:
+        … → review_canceling ──(version becomes editable)──► version_ensured → …
+
  terminal states: done | failed
 ```
 
@@ -180,6 +201,7 @@ created → app_resolved → uploaded → processing → valid
 | `metadata_pending` | pushing `--metadata` folder (if any) | poll |
 | `prechecked` | precheck ran | if `needs_precheck_fix`: fix, poll. else poll |
 | `awaiting_approval` | **gate** | `approve` (or policy), then poll |
+| `review_canceling` | a stale submission was withdrawn; waiting it out | wait `retry_after`, poll |
 | `submitted` | review submission created & submitted | poll |
 | `done` | ✅ terminal success | stop |
 | `failed` | ❌ terminal failure | read `error`, remediate, maybe `reset` |
@@ -187,12 +209,15 @@ created → app_resolved → uploaded → processing → valid
 Guarantees: each `poll` performs **at most one external effect** and persists
 state to `.andp/state/<release_id>.json` *before* returning. Resumable across
 crashes; never re-uploads; a reused build number never resolves the wrong binary.
-`prechecked` and `awaiting_approval` are **non-terminal waiting** states — a read
-error there never bricks the release into a re-upload.
+`prechecked`, `awaiting_approval` and `review_canceling` are **non-terminal
+waiting** states — a read error there never bricks the release into a re-upload.
 
 Inspect without advancing: `andp release status <id> --json`,
 `andp release list --json`. Recover a stuck/terminal release:
 `andp release reset <id>` (discards its state so you can start over).
+
+Full reference for the machine — every guarantee, the state-file anatomy, and
+the recovery table: [Release.md](Release.md).
 
 ---
 
@@ -217,8 +242,19 @@ Inspect without advancing: `andp release status <id> --json`,
 | Set age rating | `store age-rating <bundle> [--config]` | `store_set_age_rating` | `configure_age_rating` |
 | Apply all store cfg | `store apply <bundle>` | `store_apply` | `configure_store` |
 | Submit (gated) | `submit <bundle> <ver>` | `submit` | — |
+| CI readiness gate | `readiness testflight\|appstore …` | — | `readiness_*` |
+| Next build number | `build-number [bundle] --strategy S` | — | `build_number` |
+| Config diagnostic | `config [path\|dir\|migrate]` | — | — |
+| Build / run / test | `build`, `run`, `test`, `targets` | — | — |
 
 Every CLI command accepts `--json` and `--account <name>`.
+
+**What is CLI-only, and why it matters to you.** `release_approve` has no MCP
+tool: an approval gate the agent behind it can open is not a gate. `release_reset`,
+`publish`, `readiness`, `build-number`, `config` and the whole local build surface
+are also CLI-only. And `release_start` over MCP takes `ipa_path`, `group`, `ship`,
+`metadata_dir`, `account` — **not** `--no-precheck` or `--replace-in-review`. If
+you need either, start the release from a shell.
 
 ### MCP tool annotations (2025-03-26)
 The host reads these to reason about risk *before* calling:
@@ -260,16 +296,27 @@ Common codes an agent should recognize:
 | code | regime | remediation |
 |---|---|---|
 | `rate_limited` | retryable | wait `retry_after`, poll |
-| `network_error` / 5xx | retryable | poll again |
+| `network_error` / `asc_unavailable` (5xx) | retryable | poll again |
+| `upload_incomplete` | retryable | reserved but not visible yet — poll again |
+| `bundle_invalid` | **refused at start** | fix the extension's Info.plist, re-export, start again |
+| `ipa_changed` | refused at start | different binary for this release id — bump the build, or `reset` |
+| `release_terminal` | refused at start | that release already finished — new build number, or `reset` |
 | `version_not_editable` | terminal | bump the marketing version |
+| `submission_not_found` | terminal | version and submission disagree — inspect in ASC |
+| `plan_changed` | terminal | build/version changed after approval — `release approve` again |
 | `compliance_undeclared` | terminal | set `compliance` in andp.yml or IPA plist |
 | `review_submission_conflict` | terminal | resolve the other open submission first |
+| `processing_failed` / `processing_timeout` | terminal | inspect the build in ASC |
 | `price_point_not_found` | terminal | use an exact base-territory price, or `free` |
 | `unknown_territory` | terminal | use ISO territory ids |
 | `empty_territories` | terminal | list ≥1 territory (delist is UI-only) |
 | `invalid_age_rating` | terminal | fix field name/value |
 | `bad_config` | terminal | fix andp.yml / config file |
+| `config_misplaced` / `config_not_found` | terminal | `andp config migrate`, or create `.andp/secrets.yml` |
 | `app_not_found` | terminal | create the app record in ASC |
+
+The three "refused at start" codes come back from `release start`, not from a
+poll: no state was written, so there is nothing to advance or reset.
 
 Required App Store metadata that ANDP can't fully pre-validate is checked by Apple
 *synchronously* at submit; its 409 detail is surfaced verbatim in `error.message`.
@@ -329,6 +376,35 @@ expose `submit` without policy) is a real barrier. A **shell-wielding** agent ca
 run `andp submit` or edit `andp.yml` itself — so effective enforcement is the
 host's permission prompt on the command, not ANDP. ANDP's job is to make the
 irreversible action explicit, annotated, gated, and audited.
+
+### 8.1 Replacing a build that is already in review
+
+By **default**, a version already sitting in `WAITING_FOR_REVIEW` / `IN_REVIEW`
+is left strictly alone: the machine transitions to `done` and touches nothing.
+Creating a second submission for the same version is an error, so the safe
+default is to keep Apple's queue exactly as it is.
+
+That default cannot express one real case: the pending submission is **stale**
+— you submitted, found a packaging bug, fixed it, rebuilt, and the queue is
+still holding the old binary.
+
+```bash
+andp release start build/App.ipa --ship --replace-in-review --json
+```
+
+The machine then cancels the pending submission, enters `review_canceling` and
+**polls** until the version becomes editable again, re-attaches the new build
+and resubmits. Three behaviours to expect:
+
+- Cancellation is **not instant** — ASC answers `CANCELING` first. Expect one or
+  more `review_canceling` polls with `retry_after`; that is the design, not a hang.
+- If the version reads as in-review but no pending submission exists, you get
+  `submission_not_found` rather than a guess at what to cancel.
+- **This forfeits your place in Apple's review queue.** It is opt-in for that
+  reason. An agent should treat it exactly like crossing the approval gate:
+  confirm intent before using it.
+
+There is no MCP tool for this — start such a release from a shell.
 
 ---
 
@@ -391,6 +467,9 @@ assert s["state"] == "done", s.get("error")     # submitted to App Review
 | Symptom | Likely cause → action |
 |---|---|
 | `verify` `ok:false`, `missing:[…]` | fill those fields in `.andp/secrets.yml` |
+| `release start` → `bundle_invalid` | an embedded `.appex` Info.plist is malformed → fix, re-export, start again |
+| upload "succeeded" but no build appears | the package gate would have caught it → run `release start`, read the error |
+| stuck on `review_canceling` | expected — cancellation is async; keep polling `retry_after` |
 | stuck on `processing` | normal — Apple ingest; keep polling `retry_after` |
 | `version_not_editable` | that version is published/in review → bump version |
 | `compliance_undeclared` | set `compliance.uses_non_exempt_encryption` in andp.yml |

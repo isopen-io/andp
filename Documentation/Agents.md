@@ -110,10 +110,12 @@ Claude Code / any MCP client configuration:
 }
 ```
 
-Exposed tools: `verify`, `release_start`, `release_poll`, `release_status`,
-`release_list`, `upload`, `status`, `testflight_add`, `submit`. The `release_*`
-tools drive the release machine **through the library directly** (not by
-scraping a CLI's stdout), and every result carries `structuredContent`.
+Exposed tools: `verify`, `precheck`, `release_start`, `release_poll`,
+`release_status`, `release_list`, `upload`, `status`, `testflight_add`,
+`submit`, `store_configure_pricing`, `store_configure_availability`,
+`store_set_age_rating`, `store_apply`. The `release_*` and `store_*` tools drive
+the service layer **directly** (not by scraping a CLI's stdout), and every
+result carries `structuredContent`.
 
 ### Tool annotations (MCP 2025-03-26)
 
@@ -121,12 +123,26 @@ Every tool is annotated so the host can reason about risk before calling:
 
 | tool | readOnly | destructive | idempotent |
 |---|---|---|---|
-| `verify`, `status`, `release_status`, `release_list` | ✅ | — | ✅ |
+| `verify`, `status`, `precheck`, `release_status`, `release_list` | ✅ | — | ✅ |
 | `release_start` | — | — | ✅ (same IPA resumes) |
 | `release_poll` | — | — | ❌ (advances the machine) |
 | `upload` | — | — | ❌ |
 | `testflight_add` | — | — | ✅ |
+| `store_configure_pricing`, `store_set_age_rating`, `store_apply` | — | — | ✅ |
+| `store_configure_availability` | — | ✅ | ✅ |
 | `submit` | — | ✅ | ❌ |
+
+`store_configure_availability` is destructive because shrinking the territory
+set **delists** the app where it is removed; an empty set is refused outright.
+
+### What is deliberately *not* an MCP tool
+
+`release_approve` is the load-bearing absence: an approval gate the agent behind
+it can open by itself is not a gate. `release_reset`, `publish`, `readiness`,
+`build-number`, `config` and the local build surface are CLI-only too. And
+`release_start` over MCP does not accept `--no-precheck` or
+`--replace-in-review` — both bypass a safety property, so both stay in a shell
+where the host prompts on the command.
 
 ### Guardrails (policy)
 
@@ -151,8 +167,9 @@ answer "what exactly did it do?".
 review submission:
 
 ```
-processing → valid → [testflight_group] → version → build_attached
-           → compliance → awaiting_approval → submitted → done
+processing → valid → [group_linked] → version_ensured → build_attached
+           → compliance_set → [metadata_pending] → [prechecked]
+           → awaiting_approval → submitted → done
 ```
 
 The submit is **gated**. `release poll` stops at `awaiting_approval` with
@@ -172,21 +189,39 @@ Guardrails on the App Store path: a non-editable version (already published /
 in review) fails `version_not_editable`; export compliance must be declared in
 `andp.yml` or the IPA's Info.plist (`compliance_undeclared` otherwise); a crash
 mid-submit is recovered idempotently, and an unrelated open submission escalates
-`review_submission_conflict` rather than submitting the wrong thing. Required
-App Store metadata (screenshots, description, age rating) is **not** prechecked
-— Apple validates it synchronously and its 409 detail is surfaced in the error.
+`review_submission_conflict` rather than submitting the wrong thing.
+
+Before the gate, the machine runs a read-only **precheck** (`prechecked` state):
+missing screenshots, an empty description, a version with no build attached, a
+non-editable version. A failing report **parks** the release with
+`needs_precheck_fix` instead of failing it — fix the content, poll again. What
+precheck can and cannot catch, and why `ok: true` is still not a guarantee of
+acceptance: [Validation.md §3](Validation.md#3-the-metadata-gate--precheck).
+
+A version already in review is left alone by default. `--replace-in-review`
+withdraws the stale submission so a rebuilt binary can take its place — at the
+cost of your slot in Apple's queue, which is why it is opt-in and CLI-only
+([AgentGuide §8.1](AgentGuide.md#81-replacing-a-build-that-is-already-in-review)).
 
 ## The full loop an agent can run today
 
 1. `verify <bundle-id>` — act only if `ok`
 2. build + sign (xcodebuild, or your own pipeline)
 3. `release start <ipa> --group Beta [--ship]` → `release_id`
+   *(the `.ipa` is read offline first; a package Apple would silently drop
+   during processing is refused here with `bundle_invalid`, before any upload)*
 4. `release poll <id>` in a loop — resumable, non-blocking, until `terminal`
 5. `release approve <id>` — human opens the submit gate (only with `--ship`)
 6. `testflight_add` — manage testers
 
 Every step: machine-readable output, typed/honest failure, resumable state,
 audit trail.
+
+That step-3 parenthesis is the fourth primitive, and the least glamorous: an
+upload that reports success into total silence is the worst failure mode in
+Apple delivery, because there is no build to inspect and no error to read. It is
+also, for a class of packaging faults, statically detectable from the archive —
+so ANDP detects it. See [Validation.md](Validation.md).
 
 ## Threat model of the approval gate (be honest)
 

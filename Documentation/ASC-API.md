@@ -47,8 +47,11 @@ Envoi : `Authorization: Bearer <token>`. ANDP régénère le token à 19 min ave
 | Screenshots | `appScreenshotSets` → `appScreenshots` (réservation → PUT chunks → commit **MD5**) | `assets.py` |
 | Rattacher le build | `PATCH /v1/appStoreVersions/{id}/relationships/build` | `appstore.py` |
 | **Soumission au review** | **Review Submissions** : `POST /v1/reviewSubmissions` → `reviewSubmissionItems` → `submitted=true` (l'ancien `appStoreVersionSubmissions` a été **supprimé** en ASC 4.0) | `appstore.py` |
+| **Retrait d'une soumission** | `PATCH /v1/reviewSubmissions/{id}` `canceled=true` — asynchrone : ASC répond `CANCELING`, la version ne redevient éditable qu'ensuite | `appstore.py` |
 | Release | `POST /v1/appStoreVersionReleaseRequests` ; phased release : `appStoreVersionPhasedReleases` | `appstore.py` |
-| Pricing / territoires | `POST /v1/appPriceSchedules`, `/v3/appPricePoints`, `POST /v2/appAvailabilities` | *(à venir)* |
+| Pricing | `GET /v3/appPricePoints` (filtre territoire) → `POST /v1/appPriceSchedules` (remplace le calendrier ; le système de tiers a disparu) | `pricing.py` |
+| Territoires | `POST /v2/appAvailabilities` — remplacement complet du jeu, `availableInNewTerritories` préservé si non spécifié | `availability.py` |
+| Classification d'âge | `PATCH /v1/ageRatingDeclarations/{id}` — modèle 2025 (descripteurs ternaires + booléens) | `agerating.py` |
 | Webhooks (ASC 4.0) | `POST /v1/webhooks` — 12 événements (`BUILD_UPLOAD_STATE_UPDATED`, `APP_STORE_VERSION_APP_VERSION_STATE_UPDATED`…), signature HMAC-SHA256 `X-Apple-Signature` | *(à venir)* |
 
 ## 4. Limites de l'API
@@ -62,21 +65,49 @@ Envoi : `Authorization: Bearer <token>`. ANDP régénère le token à 19 min ave
 ```bash
 # Renseigner .andp/secrets.yml (copie de secrets.example.yml) avec key_id, issuer_id, key_content
 
-./asc-manager.sh verify me.meeshy.app                        # préflight de publication
-./asc-manager.sh upload build/exported/Meeshy.ipa            # Build Upload API
-./asc-manager.sh status me.meeshy.app 42                     # polling processingState
-./asc-manager.sh testflight me.meeshy.app "Beta" add jc@x.co # groupes + testeurs
-./asc-manager.sh submit me.meeshy.app 1.2.0                  # Review Submission
-./metadata-manager.sh sync metadata.json                     # métadonnées localisées
+andp verify me.your.app                          # préflight de publication
+andp upload build/exported/App.ipa               # Build Upload API
+andp status me.your.app 42                       # polling processingState
+andp testflight me.your.app "Beta" add jc@x.co   # groupes + testeurs
+andp submit me.your.app 1.2.0                    # Review Submission
+andp publish me.your.app 1.2.0 ./metadata        # métadonnées + médias localisés
+andp store apply me.your.app                     # prix, territoires, âge
 ```
+
+Les wrappers shell historiques (`./asc-manager.sh`, `./metadata-manager.sh`)
+restent des enveloppes minces autour de ces mêmes commandes, pour les appelants
+CI existants.
+
+Pour une livraison complète et reprenable plutôt qu'une suite de commandes
+unitaires, c'est la machine de release : `andp release start … --ship` puis
+`andp release poll` — voir [Release.md](Release.md).
 
 Sans credentials réels (placeholders de `secrets.example.yml`), toutes les commandes passent en **DRY-RUN** (aucun appel réseau, exit 0) — c'est ce qui permet à la CI de rester verte.
 
 **Exception : `verify`.** C'est le préflight de publication ; son rôle est de dire la vérité sur la capacité à publier, donc il **échoue** (exit 1) tant que les credentials sont incomplets, en nommant précisément chaque champ manquant. Avec des credentials réels il enchaîne : signature JWT ES256 → authentification effective contre l'API (`GET /v1/apps`) → si un bundle id est fourni, vérification que la fiche app existe sur le compte. `PREFLIGHT PASSED` garantit que la chaîne upload/testflight/submit fonctionnera avec ces credentials.
 
-## 6. Tests
+## 6. Ce que l'API ne dit pas
 
-Suite TDD complète : `tests/` (pytest, 80 tests) — JWT, client JSON:API (pagination, 429, erreurs), provisioning, fiche app, Build Upload, TestFlight, Review Submissions, screenshots, CLI dry-run. Lancée par `infrastructure/tests/run_tests.sh` et par le pipeline GitHub Actions.
+Trois comportements de la Build Upload API ne figurent pas dans la documentation
+et font échouer un client conforme à la spec : la relation `app` obligatoire,
+`assetType: ASSET`, et le `uti` obligatoire. Les erreurs verbatim et le contrat
+réellement observé sont dans
+[articles/build-upload-api-observed-contract.md](articles/build-upload-api-observed-contract.md).
+
+Un paquet malformé, lui, n'est pas rejeté par l'API du tout : l'upload est
+acquitté, puis le build est écarté pendant le traitement, sans qu'aucun build
+n'apparaisse. ANDP lit les `.appex` embarquées dans l'`.ipa` avant l'envoi pour
+transformer ce rejet silencieux en erreur immédiate — voir
+[Validation.md §2](Validation.md#2-the-package-gate).
+
+## 7. Tests
+
+Suite TDD complète : `tests/` (pytest, **616 tests**) — JWT, client JSON:API
+(pagination, 429, erreurs), provisioning, fiche app, Build Upload, TestFlight,
+Review Submissions, annulation de soumission, screenshots et previews, pricing,
+territoires, classification d'âge, precheck, readiness, machine de release,
+validation de paquet, surface MCP, couche xcode, et le dry-run de la CLI.
+Lancée par `infrastructure/tests/run_tests.sh` et par le pipeline GitHub Actions.
 
 ## Sources
 

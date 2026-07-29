@@ -1,4 +1,34 @@
 ## Unreleased
+### Documentation — every feature, the why and the how
+- Four new pages fill what had no home: **`Documentation/Release.md`** (the
+  release machine: every state, its guarantees, the state-file anatomy, the
+  recovery table, `--replace-in-review`), **`Documentation/Validation.md`** (the
+  four gates — credentials, package, metadata, CI — each with what it explicitly
+  *cannot* catch), **`Documentation/CLI.md`** (every command, flag and exit code
+  in one place, including what is deliberately absent from the MCP surface), and
+  **`Documentation/README.md`** (an index with reading paths).
+- The README gains a real Quickstart — install → credentials → prove it →
+  build → ship — and a **"why not just let the agent do it by hand?"** section
+  costed from the 2026-07-28 delivery that motivated the two features above:
+  ~70 agent turns and 4 h by hand versus ~8 turns and ~12 min, with the honest
+  conclusion that the token saving is ~5 % of the benefit and the four hours are
+  the rest.
+- Corrected drift the docs had accumulated: `Agents.md` was missing `precheck`
+  and the four `store_*` tools from the MCP surface, showed a stale ship
+  diagram, and still claimed App Store metadata was "not prechecked";
+  `ASC-API.md` listed pricing and availability as *à venir* when both ship, and
+  counted 80 tests when there are 616; `AgentGuide.md` lacked `bundle_invalid`,
+  `review_canceling` and half the error taxonomy.
+- Rewrote the pages that still described the pre-Python era: `Troubleshooting.md`
+  (now symptom → cause → fix across config, build, upload, the machine and CI),
+  `Developer.md` (the layering rule, the release-machine invariants, how to add
+  a command or an error code), `Operations.md` (credential injection, the
+  runtime namespace, what is safe to delete, monitoring), `Security.md` (secret
+  handling plus an honest threat model of the approval gate), `Migration.md`
+  (mapped to the actual CLI, and explicit about what you *lose* leaving
+  Fastlane), `Governance.md` and `Architecture/Diagrams.md`.
+- Root `AGENT_GUIDE.md` no longer contradicts the repository it describes.
+
 ### Bundle validation before the upload
 - `release start` now reads the embedded app extensions out of the .ipa and
   refuses (`bundle_invalid`) a package App Store Connect would accept and then

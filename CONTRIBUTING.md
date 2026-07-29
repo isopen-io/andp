@@ -24,9 +24,12 @@ value, so contributions follow a few strict rules.
 
 ```bash
 pip install -e . pytest
-python3 -m pytest tests/          # 80+ tests, sub-second
+python3 -m pytest tests/ -q       # 616 tests, sub-second
 ./infrastructure/tests/run_tests.sh   # full pipeline suite (needs macOS for some steps)
 ```
+
+The architecture behind these rules — the layering, how to add a command, the
+release-machine invariants — is [`Documentation/Developer.md`](Documentation/Developer.md).
 
 ## Pull requests
 
