@@ -99,6 +99,12 @@ def test_autodetect_multiple_schemes_is_ambiguous(tmp_path):
     assert "targets:" in excinfo.value.remediation
 
 
+def test_autodetect_multiple_schemes_with_override_succeeds(tmp_path):
+    t = targets.resolve(None, str(tmp_path), scheme_lister=lambda d: ["A", "B"], overrides={"scheme": "B"})
+    assert t.scheme == "B"
+    assert t.platform == "iOS"
+
+
 def test_single_declared_target_needs_no_name(tmp_path):
     root = _write(tmp_path, "targets:\n  only:\n    scheme: S\n")
     assert targets.resolve(None, root).name == "only"
