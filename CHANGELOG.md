@@ -1,4 +1,11 @@
 ## Unreleased
+### Fixed
+- `--scheme` is now honoured when auto-detecting a target: a multi-scheme
+  project with no `targets:` block raised `ambiguous_scheme` even when the
+  caller had named the scheme explicitly. That broke exactly the callers
+  `./build.sh SCHEME CONFIG SDK` exists for. The refusal still stands when no
+  scheme is named. (Thanks @google-labs-jules.)
+
 ### Documentation — every feature, the why and the how
 - Four new pages fill what had no home: **`Documentation/Release.md`** (the
   release machine: every state, its guarantees, the state-file anatomy, the

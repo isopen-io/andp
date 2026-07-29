@@ -90,6 +90,11 @@ ANDP asks the project. One application scheme becomes an implicit target named
 `default`. Several schemes raise `ambiguous_scheme`, whose remediation hands
 back the YAML to paste.
 
+Unless you name one: `--scheme` answers the very question the project is being
+asked, so an explicit scheme is honoured instead of the refusal. That is what
+makes `./build.sh MyScheme Release iphoneos` work on a multi-scheme workspace
+with no `andp.yml` — the case existing CI callers are in.
+
 ## Overrides
 
 `--scheme`, `--configuration`, `--platform`, `--destination` and `--os` override
