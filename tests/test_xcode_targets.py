@@ -237,15 +237,24 @@ def test_project_block_must_be_a_mapping(tmp_path):
 # --- validation des surcharges de la ligne de commande -----------------------
 
 
-def test_unknown_platform_from_a_flag_is_refused(tmp_path):
-    """--platform ne passait par aucune validation : `Android` atteignait
-    xcodebuild sous la forme `platform=Android Simulator`."""
+@pytest.mark.parametrize("typed", ["iphoneos", "ios", "macos", "xros"])
+def test_an_sdk_name_from_a_flag_is_refused(tmp_path, typed):
+    """--platform ne passait par aucune validation.
+
+    Le cas réel n'est pas une plateforme exotique : build.sh prenait `iphoneos`
+    en troisième argument et andp-release.yml le passe encore. Qui migre cet
+    appel écrit `--platform iphoneos`, qui atteignait xcodebuild tel quel sous
+    la forme `generic/platform=iphoneos`.
+    """
     root = _write(tmp_path, "targets:\n  dev:\n    scheme: S\n")
     with pytest.raises(XcodeError) as excinfo:
-        targets.resolve("dev", root, overrides={"platform": "Android"})
+        targets.resolve("dev", root, overrides={"platform": typed})
     assert excinfo.value.code == "bad_target_config"
     assert excinfo.value.context["flag"] == "--platform"
-    assert excinfo.value.context["unknown"] == "Android"
+    assert excinfo.value.context["unknown"] == typed
+    # La remédiation doit porter les six valeurs acceptées, pas seulement un refus.
+    for allowed in targets.PLATFORMS:
+        assert allowed in excinfo.value.remediation
 
 
 def test_a_valid_platform_from_a_flag_passes(tmp_path):
@@ -257,7 +266,7 @@ def test_a_valid_platform_from_a_flag_passes(tmp_path):
 def test_the_flag_guard_also_covers_autodetection(tmp_path):
     with pytest.raises(XcodeError) as excinfo:
         targets.resolve(None, str(tmp_path), scheme_lister=lambda d: ["Solo"],
-                        overrides={"platform": "Android"})
+                        overrides={"platform": "iphoneos"})
     assert excinfo.value.code == "bad_target_config"
 
 

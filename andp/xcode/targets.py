@@ -143,9 +143,11 @@ def _validate(name, spec):
 def _validate_overrides(overrides):
     """Command-line overrides bypass andp.yml, and so bypassed its validation.
 
-    Without this, `--platform Android` travelled all the way to xcodebuild as
-    `platform=Android Simulator`: the failure then names a destination, never
-    the flag that was mistyped.
+    What gets typed here is an SDK name, not a made-up platform: build.sh took
+    `iphoneos` as its third argument and andp-release.yml still passes it, so
+    whoever migrates that call reaches for `--platform iphoneos`. It used to
+    travel untouched to xcodebuild as `generic/platform=iphoneos`, whose failure
+    names a destination and never the flag. Same for a lowercase `ios`.
     """
     platform = (overrides or {}).get("platform")
     if platform is not None and platform not in PLATFORMS:
