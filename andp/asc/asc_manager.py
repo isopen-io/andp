@@ -290,15 +290,22 @@ def _cmd_release_sub(account, sub, args, json_mode):
     if "--no-precheck" in args:
         skip_precheck = True
         args.remove("--no-precheck")
+    # Withdraw the version's pending submission so this build can take its place.
+    # Off by default: it forfeits the slot in Apple's review queue.
+    replace_in_review = False
+    if "--replace-in-review" in args:
+        replace_in_review = True
+        args.remove("--replace-in-review")
 
     if sub == "start":
         if not args:
             print("Usage: release start <ipa_path> [--group <name>] [--ship] "
-                  "[--metadata <dir>] [--no-precheck]")
+                  "[--metadata <dir>] [--no-precheck] [--replace-in-review]")
             return 2
         result = service.release_start(args[0], account=account.account_id,
                                        group=group, ship=ship, metadata_dir=metadata_dir,
-                                       skip_precheck=skip_precheck)
+                                       skip_precheck=skip_precheck,
+                                       replace_in_review=replace_in_review)
     elif sub == "poll":
         if not args:
             print("Usage: release poll <release_id>")

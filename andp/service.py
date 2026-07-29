@@ -71,7 +71,7 @@ def _snapshot_view(snap):
 
 
 def release_start(ipa_path, account="primary", group=None, ship=False,
-                  metadata_dir=None, skip_precheck=False,
+                  metadata_dir=None, skip_precheck=False, replace_in_review=False,
                   project_root=".", clock=time.time, reset=False):
     if not os.path.exists(ipa_path):
         return {"command": "release_start", "ok": False,
@@ -103,6 +103,7 @@ def release_start(ipa_path, account="primary", group=None, ship=False,
             _store(project_root), managers, ipa_path,
             account=account, group=group, ship=ship, metadata_dir=metadata_dir,
             skip_precheck=skip_precheck,
+            replace_in_review=replace_in_review,
             allow_submit=policy["allow_submit"],
             uses_non_exempt_encryption=policy["uses_non_exempt_encryption"],
             clock=clock, reset=reset,

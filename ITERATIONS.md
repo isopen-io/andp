@@ -85,3 +85,14 @@ This document tracks the evolution of the Apple Native Delivery Platform.
 - [x] Distributed build preparation with pre-emptive package resolution.
 - [x] Advanced AI smells detection (SwiftUI nesting depth, dead code heuristics).
 - [x] Consolidated platform state from all optimization workstreams.
+
+## Iteration 12: Delivery Without a Human Rescue (Completed)
+**Goal:** Close the two gaps that forced an operator to finish a delivery by hand.
+- [x] Pre-upload bundle validation: embedded `.appex` Info.plists are read from
+      the .ipa and a package Apple would drop during processing is refused with
+      `bundle_invalid`, instead of an upload that "succeeds" into silence.
+- [x] `--replace-in-review`: withdraw a stale review submission, wait out the
+      cancellation, re-attach the build and resubmit — the manoeuvre that had no
+      expression in the machine when a version sat in `WAITING_FOR_REVIEW`.
+- [x] `find_in_review_submission` / `cancel_review_submission` on
+      `AppStoreManager`; new `review_canceling` polling state.

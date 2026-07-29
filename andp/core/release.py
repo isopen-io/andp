@@ -19,7 +19,7 @@ from ..asc.appstore import (
 )
 from ..asc.client import ASCAPIError
 from ..errors import AndpError, from_asc_error, from_unexpected
-from .ipa import read_export_compliance, read_metadata, sha256
+from .ipa import read_export_compliance, read_metadata, sha256, validate_bundle
 
 SCHEMA_VERSION = 1
 TERMINAL = ("done", "failed")
@@ -47,6 +47,8 @@ _FIELD_DEFAULTS = {
     "submission_id": None,
     "metadata_dir": None,
     "skip_precheck": False,
+    "replace_in_review": False,
+    "replaced_submission_id": None,
 }
 
 
@@ -78,7 +80,7 @@ class ReleaseMachine:
     @classmethod
     def start(cls, store, managers, ipa_path, *, account="primary", group=None,
               ship=False, allow_submit=False, uses_non_exempt_encryption=None,
-              metadata_dir=None, skip_precheck=False,
+              metadata_dir=None, skip_precheck=False, replace_in_review=False,
               clock=time.time, poll_budget=_DEFAULT_POLL_BUDGET, reset=False,
               allow_submit_fn=None):
         bundle_id, version, build_number = read_metadata(ipa_path)
@@ -90,6 +92,21 @@ class ReleaseMachine:
                 remediation=(
                     "Ensure the path points to a valid signed .ipa. To resume an "
                     "existing release without the file, use `release poll <id>`."
+                ),
+            )
+        # Refuse a package App Store Connect would accept then drop during
+        # processing. That rejection is asynchronous and near-silent — the upload
+        # reports success, no build ever appears — so the only cheap moment to
+        # catch it is before the bytes leave.
+        faults = validate_bundle(ipa_path)
+        if faults:
+            raise AndpError(
+                code="bundle_invalid",
+                message="; ".join(f["message"] for f in faults),
+                retryable=False,
+                remediation=(
+                    "Fix the embedded extension's Info.plist and re-export the IPA. "
+                    "Uploading as-is succeeds, then the build silently never appears."
                 ),
             )
         rid = release_id(account, bundle_id, version, build_number)
@@ -140,6 +157,8 @@ class ReleaseMachine:
             "ipa_compliance": read_export_compliance(ipa_path),
             "metadata_dir": metadata_dir,
             "skip_precheck": skip_precheck,
+            "replace_in_review": replace_in_review,
+            "replaced_submission_id": None,
             "approved": False,
             "app_id": None,
             "upload_attempted": False,
@@ -333,9 +352,38 @@ class ReleaseMachine:
         )
         state = version_state(version)
         if state in IN_REVIEW_VERSION_STATES:
-            # This version was already submitted on a previous run — nothing to do.
             self._state["version_id"] = version["id"]
-            self._transition("done")
+            if not self._state.get("replace_in_review"):
+                # Already submitted on a previous run — nothing to do. Creating a
+                # second submission for the same version is an error, so the
+                # default is to leave Apple's queue alone.
+                self._transition("done")
+                return
+            # Opt-in: the pending submission is stale (a packaging fix, a rebuilt
+            # binary). Withdraw it so the version becomes editable again; the
+            # position in Apple's review queue is forfeited, which is the whole
+            # point of making this explicit.
+            pending = self.managers.appstore.find_in_review_submission(
+                self._state["app_id"]
+            )
+            if pending is None:
+                self._fail(AndpError(
+                    code="submission_not_found",
+                    message=(
+                        f"Version {self._state['version']} reads as {state!r} but no "
+                        "pending review submission was found to cancel."
+                    ),
+                    retryable=False,
+                    remediation=(
+                        "Inspect the submission in App Store Connect; the version and "
+                        "the submission disagree, so nothing is safe to cancel here."
+                    ),
+                ))
+                return
+            self.managers.appstore.cancel_review_submission(pending["id"])
+            self._state["replaced_submission_id"] = pending["id"]
+            self._state["poll_count"] = 0
+            self._transition("review_canceling")
             return
         if state not in EDITABLE_VERSION_STATES:
             # Includes an absent/unknown state: never guess, reject defensively.
@@ -348,6 +396,23 @@ class ReleaseMachine:
             return
         self._state["version_id"] = version["id"]
         self._transition("version_ensured")
+
+    def _do_review_canceling(self):
+        """Wait for a withdrawn submission to release its hold on the version.
+
+        Cancellation is not instant: ASC reports CANCELING and only then moves
+        the version to DEVELOPER_REJECTED. Acting before that lands would fail on
+        a still-locked version, so this polls like `processing` does.
+        """
+        version = self.managers.appstore.ensure_version(
+            self._state["app_id"], self._state["version"]
+        )
+        state = version_state(version)
+        if state in EDITABLE_VERSION_STATES:
+            self._state["version_id"] = version["id"]
+            self._transition("version_ensured")
+            return
+        self._tick_or_timeout()
 
     def _do_version_ensured(self):
         self.managers.appstore.attach_build(

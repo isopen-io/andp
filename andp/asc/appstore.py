@@ -19,6 +19,11 @@ IN_REVIEW_VERSION_STATES = frozenset({
     "WAITING_FOR_REVIEW", "IN_REVIEW", "PENDING_APPLE_RELEASE",
     "PENDING_DEVELOPER_RELEASE", "PROCESSING_FOR_APP_STORE",
 })
+# Review-submission states that are live: sent to Apple and not yet resolved.
+# These are the ones a replacement has to cancel first. READY_FOR_REVIEW is
+# excluded on purpose — that submission was never sent, so
+# `find_open_review_submission` reuses it instead of cancelling it.
+PENDING_SUBMISSION_STATES = ("WAITING_FOR_REVIEW", "IN_REVIEW", "UNRESOLVED_ISSUES")
 
 
 def version_state(version):
@@ -145,6 +150,42 @@ class AppStoreManager:
         )
         data = response.get("data", [])
         return data[0] if data else None
+
+    def find_in_review_submission(self, app_id, platform="IOS"):
+        """The app's live submission — sent to Apple, not yet resolved — or None.
+
+        Distinct from `find_open_review_submission`, which only matches the
+        READY_FOR_REVIEW draft. A submission that has actually been sent sits in
+        WAITING_FOR_REVIEW or IN_REVIEW, and was therefore invisible to every
+        lookup here until now.
+        """
+        response = self.client.get(
+            f"/v1/apps/{app_id}/reviewSubmissions",
+            params={
+                "filter[state]": ",".join(PENDING_SUBMISSION_STATES),
+                "filter[platform]": platform,
+            },
+        )
+        data = response.get("data", [])
+        return data[0] if data else None
+
+    def cancel_review_submission(self, submission_id):
+        """Withdraw a submission from review.
+
+        The version stays locked for a moment afterwards: ASC answers CANCELING
+        and only then moves the version to DEVELOPER_REJECTED, so callers must
+        poll for an editable state rather than act on the return value.
+        """
+        return self.client.patch(
+            f"/v1/reviewSubmissions/{submission_id}",
+            {
+                "data": {
+                    "type": "reviewSubmissions",
+                    "id": submission_id,
+                    "attributes": {"canceled": True},
+                }
+            },
+        )["data"]
 
     def submission_version_ids(self, submission_id):
         """The appStoreVersion ids referenced by a submission's items."""

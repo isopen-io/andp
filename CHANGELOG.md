@@ -1,4 +1,32 @@
 ## Unreleased
+### Bundle validation before the upload
+- `release start` now reads the embedded app extensions out of the .ipa and
+  refuses (`bundle_invalid`) a package App Store Connect would accept and then
+  drop during processing. That rejection is asynchronous and near-silent — the
+  upload reports success, no build ever appears, and only an email says why.
+  Caught: an `NSExtensionActivationRule` declared directly under `NSExtension`
+  instead of inside `NSExtensionAttributes`, and a missing `NSExtensionAttributes`
+  on an extension point that requires one. Verified against the two real IPAs of
+  a delivery that hit this: the rejected build is refused, the accepted one
+  passes. Pure Python (`zipfile` + `plistlib`) — no altool, no Transporter.
+
+### Replacing the build of a version already in review
+- `release start --ship --replace-in-review` withdraws the version's pending
+  review submission, waits for the version to fall back to an editable state,
+  re-attaches the build and resubmits. Until now a version in
+  `WAITING_FOR_REVIEW` was a dead end: the machine reported `done` and there was
+  no way to say "that submission is stale, this build supersedes it" — the exact
+  situation after a packaging rejection. Off by default, because it forfeits the
+  slot in Apple's review queue.
+- `find_in_review_submission` and `cancel_review_submission` join
+  `AppStoreManager`. The former fills a real gap: `find_open_review_submission`
+  only matches the `READY_FOR_REVIEW` draft, so a submission actually sent to
+  Apple was invisible to every lookup.
+- New `review_canceling` state: cancellation is not instant (ASC answers
+  `CANCELING` first), so the machine polls instead of acting on a still-locked
+  version. `submission_not_found` refuses to guess when the version claims to be
+  in review but no submission is pending.
+
 ### `.andp/` configuration namespace
 - **BREAKING** — credentials are now read from `.andp/secrets.yml` (project),
   `~/.andp/secrets.yml` (global) or `$ANDP_CONFIG_DIR/secrets.yml`, first match
