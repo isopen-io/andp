@@ -110,12 +110,15 @@ Claude Code / any MCP client configuration:
 }
 ```
 
-Exposed tools: `verify`, `precheck`, `release_start`, `release_poll`,
-`release_status`, `release_list`, `upload`, `status`, `testflight_add`,
-`submit`, `unlock`, `store_configure_pricing`, `store_configure_availability`,
-`store_set_age_rating`, `store_apply`. The `release_*`, `store_*` and `unlock`
-tools drive the service layer **directly** (not by scraping a CLI's stdout),
-and every result carries `structuredContent`.
+Exposed tools — the whole pipeline, end to end: `targets`, `build`, `test`,
+`run`, `build_number`, `config`, `verify`, `upload`, `status`, `publish`,
+`precheck`, `readiness_testflight`, `readiness_appstore`, `release_start`,
+`release_poll`, `release_status`, `release_list`, `release_reset`,
+`testflight_add`, `submit`, `unlock`, `store_configure_pricing`,
+`store_configure_availability`, `store_set_age_rating`, `store_apply`.
+The ASC-facing tools drive the service layer **directly** (not by scraping a
+CLI's stdout); the local Xcode tools reuse the CLI in `--json` mode. Every
+result carries `structuredContent`.
 
 ### Tool annotations (MCP 2025-03-26)
 
@@ -130,8 +133,11 @@ Every tool is annotated so the host can reason about risk before calling:
 | `testflight_add` | — | — | ✅ |
 | `store_configure_pricing`, `store_set_age_rating`, `store_apply` | — | — | ✅ |
 | `store_configure_availability` | — | ✅ | ✅ |
-| `unlock` | — | ✅ | ✅ |
+| `unlock`, `release_reset` | — | ✅ | ✅ |
 | `submit` | — | ✅ | ❌ |
+| `readiness_*`, `config`, `targets`, `build_number` | ✅ | — | ✅ (`build_number` timestamp varies) |
+| `publish`, `build`, `test` | — | — | ✅ |
+| `run` | — | — | ❌ |
 
 `store_configure_availability` is destructive because shrinking the territory
 set **delists** the app where it is removed; an empty set is refused outright.
@@ -143,20 +149,22 @@ to decide in a shell.
 ### What is deliberately *not* an MCP tool
 
 `release_approve` is the load-bearing absence: an approval gate the agent behind
-it can open by itself is not a gate. `release_reset`, `publish`, `readiness`,
-`build-number`, `config` and the local build surface are CLI-only too. And
-`release_start` over MCP does not accept `--no-precheck` or
-`--replace-in-review` — both bypass a safety property, so both stay in a shell
-where the host prompts on the command.
+it can open by itself is not a gate. Everything else is exposed — end-to-end
+automation is the point — but the *bypasses* stay out: `release_start` over MCP
+does not accept `--no-precheck` or `--replace-in-review`, `unlock` carries no
+per-call `-y`, and `config migrate` (which moves files) is CLI-only. Standing
+consent goes through policy, never through a tool argument.
 
 ### Guardrails (policy)
 
-Agents must not be able to ship to App Review by accident. `submit` is
-**refused by default**; enable it explicitly per project in `andp.yml`:
+Agents must not be able to ship to App Review — or forfeit a review queue
+position — by accident. Both gates are **refused by default** and enabled
+explicitly, durably and auditable, per project in `andp.yml`:
 
 ```yaml
 policy:
-  allow_submit: true   # default: false
+  allow_submit: true         # default: false — App Review submission
+  allow_stale_unlock: true   # default: false — cancel a >1 h review submission
 ```
 
 ### Audit trail

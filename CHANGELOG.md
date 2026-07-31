@@ -1,5 +1,18 @@
 ## Unreleased
 ### Added
+- **The MCP surface now defines the whole pipeline** — agent-first, end to
+  end: `targets`, `build`, `test`, `run`, `build_number`, `config` (read-only
+  report), `publish`, `readiness_testflight`, `readiness_appstore` and
+  `release_reset` join the existing tools (25 total). ASC-facing tools drive
+  the service layer directly; local Xcode tools reuse the CLI in `--json`
+  mode; `run` never streams logs (it would block the stdio server). The one
+  deliberate absence stands: `release_approve` — an approval gate an agent can
+  open by itself is not a gate. Bypasses stay CLI-only (`--no-precheck`,
+  `--replace-in-review`, `unlock -y`, `config migrate`).
+- **`policy.allow_stale_unlock`** — standing, auditable consent (andp.yml)
+  for cancelling a >1 h review submission over MCP, the unlock counterpart of
+  `allow_submit`. Default false: without it, MCP `unlock` returns the typed
+  refusal `stale_submission_unconfirmed` for a human to decide.
 - **`andp unlock <bundle_id> <version>`** — withdraw the pending review
   submission so a `WAITING_FOR_REVIEW`/`IN_REVIEW` version becomes editable
   (screenshots, metadata, build), then resubmit with `submit`. Motivated by a

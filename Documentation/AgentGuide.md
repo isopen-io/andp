@@ -232,10 +232,10 @@ the recovery table: [Release.md](Release.md).
 | Advance release | `release poll <id>` | `release_poll` | `release_poll` |
 | Read release | `release status <id>` | `release_status` | `release_status` |
 | List releases | `release list` | `release_list` | `release_list` |
-| Reset release | `release reset <id>` | — | `release_reset_by_id` |
+| Reset release | `release reset <id>` | `release_reset` | `release_reset_by_id` |
 | Approve gate | `release approve <id>` | — | `release_approve` |
 | TestFlight testers | `testflight <bundle> <group> add <emails…>` | `testflight_add` | — |
-| Push metadata/media | `publish <bundle> <ver> <dir>` | — | `publish` |
+| Push metadata/media | `publish <bundle> <ver> <dir>` | `publish` | `publish` |
 | Precheck | `precheck <bundle> <ver>` | `precheck` | `precheck` |
 | Set price | `store pricing <bundle> [--price]` | `store_configure_pricing` | `configure_pricing` |
 | Set territories | `store availability <bundle> [--all]` | `store_configure_availability` | `configure_availability` |
@@ -243,19 +243,20 @@ the recovery table: [Release.md](Release.md).
 | Apply all store cfg | `store apply <bundle>` | `store_apply` | `configure_store` |
 | Submit (gated) | `submit <bundle> <ver>` | `submit` | — |
 | Unlock version (edit + resubmit) | `unlock <bundle> <ver> [-y\|--yes]` | `unlock` (no `-y`) | `unlock` |
-| CI readiness gate | `readiness testflight\|appstore …` | — | `readiness_*` |
-| Next build number | `build-number [bundle] --strategy S` | — | `build_number` |
-| Config diagnostic | `config [path\|dir\|migrate]` | — | — |
-| Build / run / test | `build`, `run`, `test`, `targets` | — | — |
+| CI readiness gate | `readiness testflight\|appstore …` | `readiness_testflight` / `readiness_appstore` | `readiness_*` |
+| Next build number | `build-number [bundle] --strategy S` | `build_number` | `build_number` |
+| Config diagnostic | `config [path\|dir\|migrate]` | `config` (read-only report) | — |
+| Build / run / test | `build`, `run`, `test`, `targets` | `build`, `run`, `test`, `targets` | — |
 
 Every CLI command accepts `--json` and `--account <name>`.
 
 **What is CLI-only, and why it matters to you.** `release_approve` has no MCP
-tool: an approval gate the agent behind it can open is not a gate. `release_reset`,
-`publish`, `readiness`, `build-number`, `config` and the whole local build surface
-are also CLI-only. And `release_start` over MCP takes `ipa_path`, `group`, `ship`,
-`metadata_dir`, `account` — **not** `--no-precheck` or `--replace-in-review`. If
-you need either, start the release from a shell.
+tool: an approval gate the agent behind it can open is not a gate. The
+*bypasses* are CLI-only too: `release_start` over MCP takes `ipa_path`,
+`group`, `ship`, `metadata_dir`, `account` — **not** `--no-precheck` or
+`--replace-in-review`; `unlock` over MCP has no per-call `-y` (standing consent
+is `policy.allow_stale_unlock`); `config migrate` moves files and stays in a
+shell. Everything else is an MCP tool — the pipeline is drivable end to end.
 
 ### MCP tool annotations (2025-03-26)
 The host reads these to reason about risk *before* calling:

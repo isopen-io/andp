@@ -302,22 +302,27 @@ python3 -m andp.mcp
 | MCP tool | readOnly | destructive | idempotent |
 |---|---|---|---|
 | `verify`, `status`, `release_status`, `release_list`, `precheck` | ✅ | — | ✅ |
-| `release_start`, `testflight_add` | — | — | ✅ |
+| `readiness_testflight`, `readiness_appstore`, `config`, `targets` | ✅ | — | ✅ |
+| `build_number` | ✅ | — | ❌ (timestamp varies) |
+| `release_start`, `testflight_add`, `publish`, `build`, `test` | — | — | ✅ |
 | `store_configure_pricing`, `store_set_age_rating`, `store_apply` | — | — | ✅ |
 | `store_configure_availability` | — | ✅ | ✅ |
-| `unlock` | — | ✅ | ✅ |
-| `release_poll`, `upload` | — | — | ❌ |
+| `unlock`, `release_reset` | — | ✅ | ✅ |
+| `release_poll`, `upload`, `run` | — | — | ❌ |
 | `submit` | — | ✅ | ❌ |
 
-`submit` is refused outright unless `policy.allow_submit: true`. `unlock` over
-MCP never carries the `-y`/`--yes` consent bypass: a submission older than an
-hour always comes back as `stale_submission_unconfirmed` — forfeiting a queue
-position is a human decision, taken in a shell.
+The surface defines every operation of the end-to-end pipeline — targets →
+build → test → run → build_number → verify → upload → status → publish →
+precheck → readiness → submit/release → unlock → store — so an agent can drive
+it without a shell. Consent stays durable and auditable in `andp.yml`:
+`submit` is refused unless `policy.allow_submit: true`, and `unlock` refuses a
+>1 h submission (`stale_submission_unconfirmed`) unless
+`policy.allow_stale_unlock: true` — over MCP there is no per-call `-y`.
 
-**Not exposed over MCP** — CLI and library only: `release_approve`,
-`release_reset`, `publish`, `readiness`, `build-number`, `config`, and the whole
-local build surface. `release_approve`'s absence is the load-bearing one: an
-approval gate an agent can open by itself is not a gate.
+**Not exposed over MCP** — CLI and library only: `release_approve` (the
+load-bearing absence: an approval gate an agent can open by itself is not a
+gate) and `config migrate` (moves files; the MCP `config` tool is the
+read-only report).
 
 `release_start` over MCP accepts `ipa_path`, `group`, `ship`, `metadata_dir` and
 `account`. `--no-precheck` and `--replace-in-review` have no MCP equivalent —

@@ -11,9 +11,11 @@ _POLICY_CACHE = {}
 
 
 def load_policy(path="andp.yml"):
-    """Return {allow_submit: bool, uses_non_exempt_encryption: bool|None, store: dict}."""
+    """Return {allow_submit: bool, allow_stale_unlock: bool,
+    uses_non_exempt_encryption: bool|None, store: dict}."""
     if not os.path.exists(path):
-        return {"allow_submit": False, "uses_non_exempt_encryption": None, "store": {}}
+        return {"allow_submit": False, "allow_stale_unlock": False,
+                "uses_non_exempt_encryption": None, "store": {}}
 
     # Absolute path as the key, so a change of working directory cannot serve
     # one project's policy to another. Any change of mtime invalidates — not
@@ -27,13 +29,18 @@ def load_policy(path="andp.yml"):
         # mutable would let one command's edit leak into the next.
         return copy.deepcopy(cached["policy"])
 
-    policy = {"allow_submit": False, "uses_non_exempt_encryption": None, "store": {}}
+    policy = {"allow_submit": False, "allow_stale_unlock": False,
+              "uses_non_exempt_encryption": None, "store": {}}
     with open(path, "r") as f:
         loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
         data = yaml.load(f, Loader=loader) or {}
     pol = data.get("policy") or {}
     if "allow_submit" in pol:
         policy["allow_submit"] = bool(pol["allow_submit"])
+    # Standing, auditable consent for cancelling a >1 h review submission over
+    # MCP (forfeits its queue position) — the unlock counterpart of allow_submit.
+    if "allow_stale_unlock" in pol:
+        policy["allow_stale_unlock"] = bool(pol["allow_stale_unlock"])
     compliance = data.get("compliance") or {}
     if "uses_non_exempt_encryption" in compliance:
         policy["uses_non_exempt_encryption"] = bool(

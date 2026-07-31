@@ -176,10 +176,11 @@ TOOLS = [
             "editable again (screenshots, metadata, build), then resubmit with "
             "`submit`. Apple locks every WAITING_FOR_REVIEW/IN_REVIEW version: "
             "asset writes answer 409 STATE_ERROR until the submission is "
-            "cancelled. Submissions older than one hour are REFUSED here "
-            "(stale_submission_unconfirmed): forfeiting that queue position is "
-            "a human decision — surface it; a human runs `andp unlock --yes` "
-            "in a shell."
+            "cancelled. Submissions older than one hour are refused here "
+            "(stale_submission_unconfirmed) unless the project grants standing "
+            "consent with `policy.allow_stale_unlock: true` in andp.yml — "
+            "forfeiting a queue position is a human decision; without the "
+            "policy, surface the refusal and a human runs `andp unlock --yes`."
         ),
         "inputSchema": {
             "type": "object",
@@ -269,6 +270,141 @@ TOOLS = [
         },
         "annotations": {"title": "Apply store config", **_ann(idempotent=True)},
     },
+    {
+        "name": "publish",
+        "description": (
+            "Push localized release notes, screenshots and preview videos from a "
+            "folder tree (deliver-style: <dir>/<locale>/screenshots/<DISPLAY_TYPE>/). "
+            "Idempotent per file — a retry uploads only what is missing."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "bundle_id": {"type": "string"},
+                "version": {"type": "string"},
+                "metadata_dir": {"type": "string"},
+                "account": {"type": "string"},
+            },
+            "required": ["bundle_id", "version", "metadata_dir"],
+        },
+        "annotations": {"title": "Publish metadata & media", **_ann(idempotent=True)},
+    },
+    {
+        "name": "readiness_testflight",
+        "description": "Can this app be delivered to TestFlight cleanly? Read-only verdict in `ready`.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"bundle_id": {"type": "string"}, "account": {"type": "string"}},
+            "required": ["bundle_id"],
+        },
+        "annotations": {"title": "TestFlight readiness",
+                        **_ann(read_only=True, idempotent=True)},
+    },
+    {
+        "name": "readiness_appstore",
+        "description": (
+            "Can this version go to the App Store cleanly? Read-only verdict in "
+            "`ready` with the exact blockers. `ready: false` is a verdict, not a "
+            "tool error."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {"bundle_id": {"type": "string"},
+                           "version": {"type": "string"},
+                           "account": {"type": "string"}},
+            "required": ["bundle_id", "version"],
+        },
+        "annotations": {"title": "App Store readiness",
+                        **_ann(read_only=True, idempotent=True)},
+    },
+    {
+        "name": "build_number",
+        "description": (
+            "Next iOS build number (CFBundleVersion). Strategies: max-build "
+            "(max global ASC + 1, needs credentials), timestamp, commit. "
+            "Reads only; nothing is written anywhere."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "strategy": {"type": "string", "enum": ["max-build", "timestamp", "commit"]},
+                "bundle_id": {"type": "string"},
+                "floor": {"type": "integer"},
+                "fmt": {"type": "string"},
+                "sha": {"type": "string"},
+                "digits": {"type": "integer"},
+                "account": {"type": "string"},
+            },
+            "required": ["strategy"],
+        },
+        "annotations": {"title": "Next build number", **_ann(read_only=True)},
+    },
+    {
+        "name": "release_reset",
+        "description": (
+            "Delete a release's LOCAL state file (recovery escape hatch). Does not "
+            "un-upload a build or un-submit a review."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {"release_id": {"type": "string"}},
+            "required": ["release_id"],
+        },
+        "annotations": {"title": "Reset release state",
+                        **_ann(destructive=True, idempotent=True, open_world=False)},
+    },
+    {
+        "name": "config",
+        "description": "Where ANDP reads its configuration — diagnostic report, read-only.",
+        "inputSchema": {"type": "object", "properties": {}},
+        "annotations": {"title": "Configuration diagnostic",
+                        **_ann(read_only=True, idempotent=True, open_world=False)},
+    },
+    {
+        "name": "targets",
+        "description": "List the build targets declared in andp.yml and their resolved destinations.",
+        "inputSchema": {"type": "object", "properties": {}},
+        "annotations": {"title": "List build targets",
+                        **_ann(read_only=True, idempotent=True, open_world=False)},
+    },
+    {
+        "name": "build",
+        "description": (
+            "Compile a target declared in andp.yml (or all of them). "
+            "`archive: true` produces the signed archive/IPA path."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "target": {"type": "string"},
+                "all": {"type": "boolean"},
+                "archive": {"type": "boolean"},
+            },
+        },
+        "annotations": {"title": "Build target", **_ann(idempotent=True, open_world=False)},
+    },
+    {
+        "name": "test",
+        "description": "Run a target's test suite (or every target's with `all: true`).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"target": {"type": "string"}, "all": {"type": "boolean"}},
+        },
+        "annotations": {"title": "Run tests", **_ann(idempotent=True, open_world=False)},
+    },
+    {
+        "name": "run",
+        "description": (
+            "Build, install and launch a target on its simulator/device. Never "
+            "streams logs (that would block the stdio server)."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {"target": {"type": "string"}},
+            "required": ["target"],
+        },
+        "annotations": {"title": "Run app", **_ann(open_world=False)},
+    },
 ]
 
 _CLI_JSON_TOOLS = {"upload"}
@@ -338,6 +474,29 @@ def _cli_argv(name, args):
         argv = ["testflight", args["bundle_id"], args["group"], "add"] + list(args.get("emails") or [])
     elif name == "submit":
         argv = ["submit", args["bundle_id"], args["version"]]
+    elif name == "config":
+        argv = ["config", "--json"]
+    elif name == "targets":
+        argv = ["targets", "--json"]
+    elif name == "build":
+        argv = ["build"]
+        if args.get("target"):
+            argv.append(args["target"])
+        if args.get("all"):
+            argv.append("--all")
+        if args.get("archive"):
+            argv.append("--archive")
+        argv.append("--json")
+    elif name == "test":
+        argv = ["test"]
+        if args.get("target"):
+            argv.append(args["target"])
+        if args.get("all"):
+            argv.append("--all")
+        argv.append("--json")
+    elif name == "run":
+        # Never --logs: streaming would block the stdio server.
+        argv = ["run", args["target"], "--json"]
     else:
         return None
     return argv
@@ -381,13 +540,34 @@ def _dispatch_tool(name, args):
             "isError": True,
         }
     if name == "unlock":
-        # Library-first, and WITHOUT the consent bypass: assume_yes stays in a
-        # shell where the host prompts on the command (same doctrine as
-        # --replace-in-review). Stale submissions come back as the typed
-        # refusal `stale_submission_unconfirmed` for a human to decide.
+        # Library-first, and no per-call consent bypass: standing consent is
+        # policy.allow_stale_unlock in andp.yml — durable and auditable, like
+        # allow_submit. Without it, a stale submission comes back as the typed
+        # refusal `stale_submission_unconfirmed` for a human to decide
+        # (`andp unlock --yes` in a shell).
         return _release_result(service.unlock(
             args["bundle_id"], str(args["version"]),
+            account=args.get("account", "primary"),
+            assume_yes=bool(load_policy().get("allow_stale_unlock"))))
+    if name == "publish":
+        return _release_result(service.publish(
+            args["bundle_id"], str(args["version"]), args["metadata_dir"],
             account=args.get("account", "primary")))
+    if name == "readiness_testflight":
+        return _release_result(service.readiness_testflight(
+            args["bundle_id"], account=args.get("account", "primary")))
+    if name == "readiness_appstore":
+        return _release_result(service.readiness_appstore(
+            args["bundle_id"], str(args["version"]),
+            account=args.get("account", "primary")))
+    if name == "build_number":
+        return _release_result(service.build_number(
+            args["strategy"], bundle_id=args.get("bundle_id"),
+            floor=int(args.get("floor") or 0), fmt=args.get("fmt"),
+            sha=args.get("sha"), digits=int(args.get("digits") or 7),
+            account=args.get("account", "primary")))
+    if name == "release_reset":
+        return _release_result(service.release_reset_by_id(args["release_id"]))
     if name.startswith("release_"):
         result = _call_release_tool(name, args)
         if result is not None:
