@@ -303,6 +303,7 @@ Common codes an agent should recognize:
 | `release_terminal` | refused at start | that release already finished — new build number, or `reset` |
 | `version_not_editable` | terminal | bump the marketing version |
 | `submission_not_found` | terminal | version and submission disagree — inspect in ASC |
+| `unlock_timeout` | retryable | ASC is still releasing the version lock — run `unlock` again |
 | `plan_changed` | terminal | build/version changed after approval — `release approve` again |
 | `compliance_undeclared` | terminal | set `compliance` in andp.yml or IPA plist |
 | `review_submission_conflict` | terminal | resolve the other open submission first |

@@ -153,6 +153,112 @@ def publish(bundle_id, version, metadata_dir, account="primary"):
     return {"command": "publish", "ok": True, "dry_run": False, **summary}
 
 
+def _submission_age_seconds(submitted_at, clock):
+    """Seconds since `submittedDate`, or None when ASC omitted/garbled it."""
+    if not submitted_at:
+        return None
+    from datetime import datetime, timezone
+    try:
+        moment = datetime.fromisoformat(str(submitted_at).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return clock() - moment.timestamp()
+
+
+# Past this age, cancelling a submission stops being a free do-over: the review
+# may already be underway and the queue position was probably worth keeping.
+STALE_SUBMISSION_SECONDS = 3600.0
+
+
+def unlock(bundle_id, version, account="primary", clock=time.time,
+           sleep=time.sleep, poll_interval=5.0, timeout=180.0):
+    """Withdraw the pending review submission so `version` becomes editable.
+
+    Answers "when was this submitted?" (`submitted_at`, `age_seconds`) and
+    flags `stale` once the submission has sat in Apple's queue for more than
+    `STALE_SUBMISSION_SECONDS` — cancelling then forfeits a position that was
+    probably worth keeping. Cancellation is asynchronous (ASC answers
+    CANCELING), so this polls until the version reads as editable.
+    Resubmission stays a separate, deliberate step: `andp submit`.
+    """
+    from .asc.appstore import EDITABLE_VERSION_STATES, version_state
+    from .asc.client import ASCAPIError
+    from .errors import from_asc_error, from_unexpected
+
+    try:
+        managers, account_cfg, dry_run = _managers_for(account)
+    except AndpError as err:
+        return _error_result("unlock", err)
+    if dry_run:
+        return {"command": "unlock", "ok": True, "dry_run": True,
+                "bundle_id": bundle_id, "version": version}
+
+    try:
+        app = managers.apps.find_app(bundle_id)
+        if app is None:
+            return _app_not_found("unlock", bundle_id)
+        found = managers.appstore.find_version(app["id"], version)
+        if found is None:
+            return {"command": "unlock", "ok": False,
+                    "error": {"code": "version_not_found",
+                              "message": f"No App Store version {version} for {bundle_id}.",
+                              "retryable": False,
+                              "remediation": "Check the version string in App Store Connect."}}
+        state = version_state(found)
+        if state in EDITABLE_VERSION_STATES:
+            return {"command": "unlock", "ok": True, "dry_run": False,
+                    "bundle_id": bundle_id, "version": version,
+                    "submission_id": None, "submitted_at": None,
+                    "age_seconds": None, "stale": False,
+                    "already_editable": True, "version_state": state}
+
+        pending = managers.appstore.find_in_review_submission(app["id"])
+        if pending is None:
+            return {"command": "unlock", "ok": False,
+                    "error": {"code": "submission_not_found",
+                              "message": (f"Version {version} reads as {state!r} but no "
+                                          "pending review submission was found to cancel."),
+                              "retryable": False,
+                              "remediation": ("Inspect the submission in App Store Connect; "
+                                              "the version and the submission disagree, so "
+                                              "nothing is safe to cancel here.")}}
+
+        submitted_at = (pending.get("attributes") or {}).get("submittedDate")
+        age_seconds = _submission_age_seconds(submitted_at, clock)
+        stale = bool(age_seconds is not None and age_seconds > STALE_SUBMISSION_SECONDS)
+
+        managers.appstore.cancel_review_submission(pending["id"])
+
+        deadline = clock() + timeout
+        while True:
+            current = managers.appstore.find_version(app["id"], version)
+            state = version_state(current) if current else None
+            if state in EDITABLE_VERSION_STATES:
+                break
+            if clock() >= deadline:
+                return _error_result("unlock", AndpError(
+                    code="unlock_timeout",
+                    message=(f"Submission {pending['id']} was canceled but version "
+                             f"{version} still reads as {state!r} after {int(timeout)}s."),
+                    retryable=True,
+                    remediation="Run `andp unlock` again — ASC is still releasing the version lock."))
+            sleep(poll_interval)
+
+        return {"command": "unlock", "ok": True, "dry_run": False,
+                "bundle_id": bundle_id, "version": version,
+                "submission_id": pending["id"], "submitted_at": submitted_at,
+                "age_seconds": age_seconds, "stale": stale,
+                "already_editable": False, "version_state": state}
+    except AndpError as err:
+        return _error_result("unlock", err)
+    except ASCAPIError as err:
+        return _error_result("unlock", from_asc_error(err))
+    except Exception as err:  # network — always return a dict, never raise
+        return _error_result("unlock", from_unexpected(err))
+
+
 def _retryable_status(status):
     """A 429 or any 5xx is transient — the call can be retried unchanged."""
     return status == 429 or (isinstance(status, int) and 500 <= status < 600)

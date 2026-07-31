@@ -9,6 +9,19 @@ if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
 
+@pytest.fixture(autouse=True)
+def _no_global_config_leak(monkeypatch, tmp_path_factory):
+    """`~/.andp` du poste de dev ne doit pas fuir dans la suite.
+
+    La cascade de résolution (paths._candidates) finit sur ~/.andp/secrets.yml :
+    sur une machine où il contient de vrais identifiants, chaque test « DRY-RUN »
+    devenait un vrai appel App Store Connect. CI n'a pas ce fichier — la suite
+    doit être aussi hermétique en local.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
+    monkeypatch.delenv("ANDP_CONFIG_DIR", raising=False)
+
+
 @pytest.fixture(scope="session")
 def ec_private_key_pem():
     """A throwaway P-256 key, same curve as App Store Connect API keys."""

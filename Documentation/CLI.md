@@ -140,6 +140,30 @@ Submit a version for App Review, attaching the latest `VALID` build first
 Prefer `release start --ship`, which is resumable, precheck'd and gated. This
 command is the direct, unguarded form.
 
+## `unlock <bundle_id> <version>`
+
+Withdraw the version's pending review submission so it becomes editable again
+(screenshots, metadata, build), then resubmit with `submit`. Apple locks every
+version in `WAITING_FOR_REVIEW`/`IN_REVIEW`: any metadata write answers
+`409 STATE_ERROR` until the submission is cancelled.
+
+The command first answers *when was this submitted?* — the submission's
+`submittedDate` is printed as a precise UTC stamp with its age. Past one hour
+the line becomes an alert (`⚠️`): the review may already be underway, and
+cancelling forfeits a queue position that was probably worth keeping.
+
+```
+Submitted 12m ago — 2026-07-31 09:48:00 UTC.
+⚠️  Submitted 2h 09m ago — 2026-07-31 08:00:00 UTC — more than an hour in
+    Apple's queue; that position is now forfeited.
+```
+
+Cancellation is asynchronous (ASC answers `CANCELING`), so the command polls
+until the version reads as editable (`DEVELOPER_REJECTED`) and only then
+returns. Already-editable versions are a no-op. Errors: `version_not_found`,
+`submission_not_found` (version and submission disagree — inspect in ASC),
+`unlock_timeout` (retryable — ASC is still releasing the lock).
+
 ## `precheck <bundle_id> <version>`
 
 Read-only pre-submission validation. Never mutates. Exit 0 when zero errors.

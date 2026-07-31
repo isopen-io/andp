@@ -1,5 +1,22 @@
 ## Unreleased
+### Added
+- **`andp unlock <bundle_id> <version>`** — withdraw the pending review
+  submission so a `WAITING_FOR_REVIEW`/`IN_REVIEW` version becomes editable
+  (screenshots, metadata, build), then resubmit with `submit`. Motivated by a
+  live delivery (2026-07-31): enriching a fiche mid-review answers
+  `409 STATE_ERROR` on every asset write until the submission is cancelled.
+  The command prints when the submission was sent — a precise UTC stamp plus
+  age — and switches to an alert line (`⚠️`) past one hour, when cancelling
+  starts costing a queue position worth keeping. Cancellation being
+  asynchronous (`CANCELING`), it polls until the version reads as editable;
+  a still-locked version after the timeout returns the retryable
+  `unlock_timeout`. Already-editable versions are a no-op.
+
 ### Fixed
+- The test suite is now hermetic on a workstation with real credentials in
+  `~/.andp/secrets.yml`: the resolution cascade made every "DRY-RUN" test on
+  such a machine perform real App Store Connect calls (and fail). An autouse
+  fixture isolates `HOME`; CI, which has no global config, is unchanged.
 - `--scheme` is now honoured when auto-detecting a target: a multi-scheme
   project with no `targets:` block raised `ambiguous_scheme` even when the
   caller had named the scheme explicitly. That broke exactly the callers

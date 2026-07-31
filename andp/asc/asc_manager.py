@@ -32,6 +32,9 @@ Commands (all accept --json for a structured, agent-friendly envelope):
   status <bundle_id> <build_number>              Poll build processing state
   testflight <bundle_id> <group> add [emails...] Manage TestFlight group testers
   submit <bundle_id> <version>                   Submit a version for App Review
+  unlock <bundle_id> <version>                   Withdraw the pending review submission (its age is
+                                                 logged, alert past 1 h) so the version can be edited,
+                                                 then resubmitted with `submit`
   precheck <bundle_id> <version>                 Read-only App Store pre-submission validation
   readiness testflight <bundle_id>               Can this app go to TestFlight cleanly? (0/1/3)
   readiness appstore <bundle_id> <version>       Can this version go to the App Store cleanly?
@@ -443,6 +446,76 @@ def _cmd_submit(account, managers, dry_run, args, json_mode=False):
 
     submission = managers.appstore.submit_for_review(app["id"], app_store_version["id"])
     print(f"Review submission {submission['id']}: {submission['attributes'].get('state')}")
+    return 0
+
+
+def _human_age(seconds):
+    """45s / 12m / 2h 09m — the shape a human scans for "how long ago"."""
+    seconds = int(seconds)
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes}m"
+    return f"{minutes // 60}h {minutes % 60:02d}m"
+
+
+def _utc_stamp(iso_date):
+    """ASC's ISO-8601 date rendered as a precise, unambiguous UTC stamp."""
+    from datetime import datetime, timezone
+
+    moment = datetime.fromisoformat(str(iso_date).replace("Z", "+00:00"))
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
+def _cmd_unlock(account, managers, dry_run, args, json_mode=False):
+    """Withdraw the pending review submission; the version becomes editable.
+
+    Library-first: the behaviour lives in service.unlock; this handler owns
+    only the human rendering — including the submission-age line, which turns
+    into an alert once the submission is more than an hour old."""
+    from .. import service
+
+    if len(args) < 2:
+        return _fail("unlock", "bad_usage", "bundle_id and version required.",
+                     "andp unlock <bundle_id> <version>", json_mode, rc=2)
+    bundle_id, version = args[0], args[1]
+
+    result = service.unlock(bundle_id, version, account=account.account_id)
+    if json_mode:
+        print(json.dumps(result))
+        return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        err = result.get("error", {})
+        print(f"❌ unlock: {err.get('message', 'failed')}")
+        if err.get("remediation"):
+            print(f"   → {err['remediation']}")
+        return 1
+    if result.get("dry_run"):
+        print(f"[DRY-RUN] Would cancel the pending review submission for "
+              f"{bundle_id} {version} and wait until the version is editable.")
+        return 0
+    if result.get("already_editable"):
+        print(f"Version {version} is already editable "
+              f"({result.get('version_state')}) — nothing to unlock.")
+        return 0
+
+    submitted_at = result.get("submitted_at")
+    if submitted_at is None:
+        print("Submission date unknown — ASC did not report submittedDate.")
+    else:
+        age = _human_age(result.get("age_seconds") or 0)
+        when = _utc_stamp(submitted_at)
+        if result.get("stale"):
+            print(f"⚠️  Submitted {age} ago — {when} — more than an hour in "
+                  "Apple's queue; that position is now forfeited.")
+        else:
+            print(f"Submitted {age} ago — {when}.")
+    print(f"Review submission {result.get('submission_id')} canceled — "
+          f"version {version} is {result.get('version_state')} (editable).")
+    print(f"Edit the version, then resubmit with: andp submit {bundle_id} {version}")
     return 0
 
 
@@ -907,6 +980,7 @@ COMMANDS = {
     "status": _cmd_status,
     "testflight": _cmd_testflight,
     "submit": _cmd_submit,
+    "unlock": _cmd_unlock,
     "publish": _cmd_publish,
     "precheck": _cmd_precheck,
     "readiness": _cmd_readiness,

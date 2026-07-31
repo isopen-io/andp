@@ -32,6 +32,8 @@ INVOCATIONS = [
     ["status", "me.app", "42"],
     ["submit"],
     ["submit", "me.app", "1.0"],
+    ["unlock"],
+    ["unlock", "me.app", "1.0"],
     ["publish", "app.ipa"],
     ["precheck", "me.app", "1.0"],
     ["readiness", "testflight", "me.app"],
