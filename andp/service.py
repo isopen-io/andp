@@ -322,13 +322,25 @@ def version_list(bundle_id, account="primary"):
             "bundle_id": bundle_id, "versions": versions}
 
 
-def version_set(bundle_id, version, platform="IOS", account="primary"):
+def version_set(bundle_id, version, platform="IOS", account="primary",
+                sync_files=True, project_root="."):
     """Reconcile one platform's version record to `version`.
 
     Already right → changed=False. An editable record with another string is
     RENAMED (that is how a hand-typed MAC_OS `1.0` rejoins an iOS `1.0.0`).
     No record → created. A locked record with another string → typed
     `version_not_editable`; this never mutates blindly.
+
+    The repository is reconciled too (`sync_files`, on by default): every file
+    carrying MARKETING_VERSION is rewritten under `project_root`. Reconciling
+    only ASC leaves the repo behind, and the drift is silent until the upload is
+    rejected — lived 2026-07-31 on me.meeshy.app, where ASC moved to 1.0.1 while
+    apps/ios/project.yml stayed at 1.0.0.
+
+    The repo is synced even when ASC needs no change: a no-op on ASC does NOT
+    mean the repo agrees, and that is precisely the case where the drift would
+    survive the very command meant to fix it. It is NOT synced when ASC refuses
+    — the repo must never run ahead of the store.
     """
     from .asc.client import ASCAPIError
     from .errors import from_asc_error, from_unexpected
@@ -356,24 +368,32 @@ def version_set(bundle_id, version, platform="IOS", account="primary"):
         records = [_version_view(v)
                    for v in managers.appstore.list_versions(app["id"], platform=platform)]
 
+        def _with_local(payload):
+            if sync_files:
+                from .versionfiles import sync_marketing_version
+                payload["local_files"] = sync_marketing_version(project_root, version)
+            return payload
+
         exact = next((r for r in records if r["version_string"] == version), None)
         if exact is not None:
-            return {"command": "version_set", "ok": True, "dry_run": False,
-                    "bundle_id": bundle_id, "platform": platform,
-                    "version_string": version, "changed": False,
-                    "created": False, "previous_version_string": None,
-                    "state": exact["state"]}
+            return _with_local({
+                "command": "version_set", "ok": True, "dry_run": False,
+                "bundle_id": bundle_id, "platform": platform,
+                "version_string": version, "changed": False,
+                "created": False, "previous_version_string": None,
+                "state": exact["state"]})
 
         editable = next((r for r in records if r["editable"]), None)
         if editable is not None:
             renamed = managers.appstore.update_version_string(editable["id"], version)
             view = _version_view(renamed)
-            return {"command": "version_set", "ok": True, "dry_run": False,
-                    "bundle_id": bundle_id, "platform": platform,
-                    "version_string": version, "changed": True,
-                    "created": False,
-                    "previous_version_string": editable["version_string"],
-                    "state": view["state"]}
+            return _with_local({
+                "command": "version_set", "ok": True, "dry_run": False,
+                "bundle_id": bundle_id, "platform": platform,
+                "version_string": version, "changed": True,
+                "created": False,
+                "previous_version_string": editable["version_string"],
+                "state": view["state"]})
 
         if records:
             states = ", ".join(f"{r['version_string']} ({r['state']})" for r in records)
@@ -386,10 +406,11 @@ def version_set(bundle_id, version, platform="IOS", account="primary"):
 
         created = managers.appstore.ensure_version(app["id"], version, platform=platform)
         view = _version_view(created)
-        return {"command": "version_set", "ok": True, "dry_run": False,
-                "bundle_id": bundle_id, "platform": platform,
-                "version_string": version, "changed": True, "created": True,
-                "previous_version_string": None, "state": view["state"]}
+        return _with_local({
+            "command": "version_set", "ok": True, "dry_run": False,
+            "bundle_id": bundle_id, "platform": platform,
+            "version_string": version, "changed": True, "created": True,
+            "previous_version_string": None, "state": view["state"]})
     except AndpError as err:
         return _error_result("version_set", err)
     except ASCAPIError as err:

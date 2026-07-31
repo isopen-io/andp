@@ -199,20 +199,46 @@ def test_cli_version_set_passes_platform_and_renders_rename(monkeypatch, capsys)
     _cli(monkeypatch)
     captured = {}
 
-    def fake_set(bundle_id, version, platform="IOS", account="primary"):
-        captured.update(platform=platform, version=version)
+    def fake_set(bundle_id, version, platform="IOS", account="primary",
+                 sync_files=True):
+        captured.update(platform=platform, version=version, sync_files=sync_files)
         return {"command": "version_set", "ok": True, "dry_run": False,
                 "bundle_id": bundle_id, "platform": platform,
                 "version_string": version, "changed": True, "created": False,
                 "previous_version_string": "1.0",
-                "state": "PREPARE_FOR_SUBMISSION"}
+                "state": "PREPARE_FOR_SUBMISSION",
+                "local_files": {"ok": True, "changed": True,
+                                "files": [{"path": "apps/ios/project.yml",
+                                           "occurrences": 1}]}}
 
     monkeypatch.setattr(service, "version_set", fake_set)
     code = asc_manager.main(
         ["version", "set", "me.demo.app", "1.0.0", "--platform", "MAC_OS"])
     assert code == 0
-    assert captured == {"platform": "MAC_OS", "version": "1.0.0"}
-    assert "1.0 → 1.0.0" in capsys.readouterr().out
+    assert captured == {"platform": "MAC_OS", "version": "1.0.0", "sync_files": True}
+    out = capsys.readouterr().out
+    assert "1.0 → 1.0.0" in out
+    assert "apps/ios/project.yml" in out          # les fichiers touchés sont rendus
+
+
+def test_cli_version_set_no_sync_files_flag(monkeypatch, capsys):
+    _cli(monkeypatch)
+    captured = {}
+
+    def fake_set(bundle_id, version, platform="IOS", account="primary",
+                 sync_files=True):
+        captured.update(sync_files=sync_files)
+        return {"command": "version_set", "ok": True, "dry_run": False,
+                "bundle_id": bundle_id, "platform": platform,
+                "version_string": version, "changed": False, "created": False,
+                "previous_version_string": None,
+                "state": "PREPARE_FOR_SUBMISSION"}
+
+    monkeypatch.setattr(service, "version_set", fake_set)
+    code = asc_manager.main(
+        ["version", "set", "me.demo.app", "1.0.0", "--no-sync-files"])
+    assert code == 0
+    assert captured == {"sync_files": False}
 
 
 def test_cli_version_json_envelope_verbatim(monkeypatch, capsys):
@@ -256,3 +282,86 @@ def test_mcp_version_tools_are_library_first(monkeypatch):
     _mcp_call("version_set", {"bundle_id": "me.demo.app", "version": "1.0.0",
                               "platform": "MAC_OS"})
     assert captured["platform"] == "MAC_OS"
+
+
+# -- propagation de la version commerciale vers le depot ---------------------
+#
+# Vecu 2026-07-31 : `andp version set me.meeshy.app 1.0.1` a bien renomme
+# l'enregistrement ASC, mais apps/ios/project.yml est reste a 1.0.0 — tout
+# build local produisait alors un CFBundleShortVersionString en desaccord avec
+# la version qui attend le binaire.
+
+
+def _project_yml(tmp_path, version="1.0.0"):
+    d = tmp_path / "apps" / "ios"
+    d.mkdir(parents=True)
+    f = d / "project.yml"
+    f.write_text(f'settings:\n  MARKETING_VERSION: "{version}"\n')
+    return f
+
+
+def test_version_set_propagates_to_project_yml(tmp_path, monkeypatch, ec_private_key_pem):
+    _wire(
+        tmp_path, monkeypatch, ec_private_key_pem,
+        FakeResponse(200, APP),
+        FakeResponse(200, {"data": [
+            _version("IOS", "1.0.0", "PREPARE_FOR_SUBMISSION", "ver-ios")]}),
+        FakeResponse(200, {"data": _version("IOS", "1.0.1",
+                                            "PREPARE_FOR_SUBMISSION", "ver-ios")}),
+    )
+    f = _project_yml(tmp_path)
+    result = service.version_set("me.demo.app", "1.0.1", platform="IOS")
+    assert result["ok"] is True
+    assert 'MARKETING_VERSION: "1.0.1"' in f.read_text()
+    assert result["local_files"]["changed"] is True
+    assert result["local_files"]["files"][0]["path"] == "apps/ios/project.yml"
+
+
+def test_version_set_syncs_the_repo_even_when_asc_is_already_right(
+        tmp_path, monkeypatch, ec_private_key_pem):
+    """Le cas vecu : ASC porte deja 1.0.1, mais le depot est reste en arriere.
+
+    Un no-op cote ASC ne doit PAS dispenser de reconcilier les fichiers, sinon
+    la derive survit exactement a la commande censee la corriger.
+    """
+    _wire(
+        tmp_path, monkeypatch, ec_private_key_pem,
+        FakeResponse(200, APP),
+        FakeResponse(200, {"data": [
+            _version("IOS", "1.0.1", "PREPARE_FOR_SUBMISSION", "ver-ios")]}),
+    )
+    f = _project_yml(tmp_path, "1.0.0")
+    result = service.version_set("me.demo.app", "1.0.1", platform="IOS")
+    assert result["changed"] is False              # rien a faire cote ASC
+    assert result["local_files"]["changed"] is True  # mais le depot, si
+    assert 'MARKETING_VERSION: "1.0.1"' in f.read_text()
+
+
+def test_version_set_can_skip_the_repo(tmp_path, monkeypatch, ec_private_key_pem):
+    _wire(
+        tmp_path, monkeypatch, ec_private_key_pem,
+        FakeResponse(200, APP),
+        FakeResponse(200, {"data": [
+            _version("IOS", "1.0.1", "PREPARE_FOR_SUBMISSION", "ver-ios")]}),
+    )
+    f = _project_yml(tmp_path, "1.0.0")
+    result = service.version_set("me.demo.app", "1.0.1", platform="IOS",
+                                 sync_files=False)
+    assert result["ok"] is True
+    assert "local_files" not in result
+    assert '"1.0.0"' in f.read_text()
+
+
+def test_version_set_does_not_touch_the_repo_when_asc_refuses(
+        tmp_path, monkeypatch, ec_private_key_pem):
+    """Un enregistrement verrouille = echec : le depot ne doit pas partir devant."""
+    _wire(
+        tmp_path, monkeypatch, ec_private_key_pem,
+        FakeResponse(200, APP),
+        FakeResponse(200, {"data": [
+            _version("IOS", "1.0.0", "WAITING_FOR_REVIEW", "ver-ios")]}),
+    )
+    f = _project_yml(tmp_path, "1.0.0")
+    result = service.version_set("me.demo.app", "2.0.0", platform="IOS")
+    assert result["ok"] is False
+    assert '"1.0.0"' in f.read_text()

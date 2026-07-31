@@ -39,6 +39,8 @@ Commands (all accept --json for a structured, agent-friendly envelope):
   version list <bundle_id>                       Every platform's version record, state, editability
   version set <bundle_id> <ver> [--platform P]   Reconcile one platform's version string (rename the
                                                  editable record / create; never touches a locked one)
+                                                 AND rewrite MARKETING_VERSION in the repo's project.yml
+                                                 / project.pbxproj / Info.plist — --no-sync-files opts out
   precheck <bundle_id> <version>                 Read-only App Store pre-submission validation
   readiness testflight <bundle_id>               Can this app go to TestFlight cleanly? (0/1/3)
   readiness appstore <bundle_id> <version>       Can this version go to the App Store cleanly?
@@ -575,15 +577,24 @@ def _cmd_version(account, managers, dry_run, args, json_mode=False):
                          json_mode, rc=2)
         del args[idx:idx + 2]
 
+    # `set` reconcilie AUSSI les fichiers du dépôt qui portent MARKETING_VERSION.
+    # --no-sync-files rend la commande purement App Store Connect (utile en CI,
+    # où l'arbre de travail doit rester intact).
+    sync_files = True
+    if "--no-sync-files" in args:
+        sync_files = False
+        args.remove("--no-sync-files")
+
     sub = args[0] if args else None
     if sub == "list" and len(args) >= 2:
         result = service.version_list(args[1], account=account.account_id)
     elif sub == "set" and len(args) >= 3:
         result = service.version_set(args[1], args[2], platform=platform,
-                                     account=account.account_id)
+                                     account=account.account_id,
+                                     sync_files=sync_files)
     else:
         return _fail("version", "bad_usage",
-                     "usage: version list <bundle_id> | version set <bundle_id> <version> [--platform P]",
+                     "usage: version list <bundle_id> | version set <bundle_id> <version> [--platform P] [--no-sync-files]",
                      "andp version list me.your.app", json_mode, rc=2)
 
     if json_mode:
@@ -613,6 +624,12 @@ def _cmd_version(account, managers, dry_run, args, json_mode=False):
     else:
         print(f"{result['platform']} already reads {result['version_string']} "
               f"— {result['state']}; nothing to do.")
+    local = result.get("local_files")
+    if local and local.get("ok") and local.get("changed"):
+        for f in local["files"]:
+            print(f"  ↳ {f['path']} ({f['occurrences']}×)")
+    elif local and local.get("ok"):
+        print("  ↳ repository already in sync.")
     return 0
 
 
