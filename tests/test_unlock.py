@@ -54,7 +54,7 @@ def test_service_unlock_cancels_and_waits_until_editable(
         FakeResponse(200, _version("DEVELOPER_REJECTED")),         # poll 2: editable
     )
     naps = []
-    result = service.unlock("me.demo.app", "1.0",
+    result = service.unlock("me.demo.app", "1.0", assume_yes=True,
                             clock=lambda: NOW, sleep=naps.append)
 
     assert result["ok"] is True
@@ -167,7 +167,7 @@ def test_service_unlock_times_out_retryably(tmp_path, monkeypatch, ec_private_ke
     _wire(tmp_path, monkeypatch, ec_private_key_pem, *responses)
 
     ticking = iter(range(0, 10_000, 60))           # each look at the clock = +60 s
-    result = service.unlock("me.demo.app", "1.0",
+    result = service.unlock("me.demo.app", "1.0", assume_yes=True,
                             clock=lambda: NOW + next(ticking),
                             sleep=lambda s: None, timeout=180)
     assert result["ok"] is False
@@ -183,6 +183,174 @@ def test_service_unlock_dry_run(tmp_path, monkeypatch):
     result = service.unlock("me.demo.app", "1.0")
     assert result["ok"] is True
     assert result["dry_run"] is True
+
+
+# -- stale gate: cancelling a >1 h submission needs explicit consent ------
+
+
+def test_service_unlock_stale_without_consent_refuses_before_cancelling(
+        tmp_path, monkeypatch, ec_private_key_pem):
+    """Non-interactive surfaces (--json, piped stdin) get a typed refusal —
+    and the cancel request is never sent."""
+    session = _wire(
+        tmp_path, monkeypatch, ec_private_key_pem,
+        FakeResponse(200, APP),
+        FakeResponse(200, _version("WAITING_FOR_REVIEW")),
+        FakeResponse(200, _submission()),                          # 2 h old
+    )
+    result = service.unlock("me.demo.app", "1.0",
+                            clock=lambda: NOW, sleep=lambda s: None)
+    assert result["ok"] is False
+    assert result["error"]["code"] == "stale_submission_unconfirmed"
+    assert result["error"]["retryable"] is False
+    assert result["error"]["context"]["submitted_at"] == "2026-07-31T08:00:00+00:00"
+    assert not session.responses or all(
+        r is not None for r in session.responses)  # queue untouched past the find
+    assert len(session.requests) == 3              # no PATCH went out
+
+
+def test_service_unlock_stale_confirm_yes_proceeds(
+        tmp_path, monkeypatch, ec_private_key_pem):
+    _wire(
+        tmp_path, monkeypatch, ec_private_key_pem,
+        FakeResponse(200, APP),
+        FakeResponse(200, _version("WAITING_FOR_REVIEW")),
+        FakeResponse(200, _submission()),
+        FakeResponse(200, {"data": {"id": "sub-1", "attributes": {"state": "CANCELING"}}}),
+        FakeResponse(200, _version("DEVELOPER_REJECTED")),
+    )
+    seen = []
+    result = service.unlock("me.demo.app", "1.0",
+                            confirm=lambda facts: seen.append(facts) or True,
+                            clock=lambda: NOW, sleep=lambda s: None)
+    assert result["ok"] is True
+    assert seen and seen[0]["submission_id"] == "sub-1"
+    assert seen[0]["age_seconds"] == pytest.approx(7200)
+
+
+def test_service_unlock_stale_confirm_no_aborts(
+        tmp_path, monkeypatch, ec_private_key_pem):
+    session = _wire(
+        tmp_path, monkeypatch, ec_private_key_pem,
+        FakeResponse(200, APP),
+        FakeResponse(200, _version("WAITING_FOR_REVIEW")),
+        FakeResponse(200, _submission()),
+    )
+    result = service.unlock("me.demo.app", "1.0",
+                            confirm=lambda facts: False,
+                            clock=lambda: NOW, sleep=lambda s: None)
+    assert result["ok"] is False
+    assert result["error"]["code"] == "stale_submission_unconfirmed"
+    assert len(session.requests) == 3              # nothing was cancelled
+
+
+def test_service_unlock_fresh_never_asks(tmp_path, monkeypatch, ec_private_key_pem):
+    _wire(
+        tmp_path, monkeypatch, ec_private_key_pem,
+        FakeResponse(200, APP),
+        FakeResponse(200, _version("WAITING_FOR_REVIEW")),
+        FakeResponse(200, _submission("2026-07-31T09:50:00+00:00")),   # 10 min
+        FakeResponse(200, {"data": {"id": "sub-1", "attributes": {"state": "CANCELING"}}}),
+        FakeResponse(200, _version("DEVELOPER_REJECTED")),
+    )
+    asked = []
+    result = service.unlock("me.demo.app", "1.0",
+                            confirm=lambda facts: asked.append(facts) or False,
+                            clock=lambda: NOW, sleep=lambda s: None)
+    assert result["ok"] is True
+    assert not asked                               # fresh → the gate stays silent
+
+
+def test_cli_unlock_yes_flag_bypasses_the_prompt(monkeypatch, capsys):
+    captured = {}
+
+    def fake_unlock(bundle_id, version, **kwargs):
+        captured.update(kwargs)
+        return {"command": "unlock", "ok": True, "dry_run": False,
+                "bundle_id": bundle_id, "version": version,
+                "submission_id": "sub-1",
+                "submitted_at": "2026-07-31T08:00:00+00:00",
+                "age_seconds": 7754.0, "stale": True,
+                "already_editable": False, "version_state": "DEVELOPER_REJECTED"}
+
+    monkeypatch.setattr(service, "unlock", fake_unlock)
+    monkeypatch.setattr(asc_manager, "load_account", lambda a: _FakeAccount())
+    monkeypatch.setattr(asc_manager, "make_managers", lambda a: None)
+
+    assert asc_manager.main(["unlock", "me.demo.app", "1.0", "-y"]) == 0
+    assert captured["assume_yes"] is True
+    assert captured["confirm"] is None
+    out = capsys.readouterr().out
+    assert "⚠️" in out                              # consented, but still told
+
+
+def test_cli_unlock_prompt_accepts_yes(monkeypatch, capsys):
+    def fake_unlock(bundle_id, version, assume_yes=False, confirm=None, **kwargs):
+        assert confirm is not None
+        assert confirm({"submission_id": "sub-1",
+                        "submitted_at": "2026-07-31T08:00:00+00:00",
+                        "age_seconds": 7754.0}) is True
+        return {"command": "unlock", "ok": True, "dry_run": False,
+                "bundle_id": bundle_id, "version": version,
+                "submission_id": "sub-1",
+                "submitted_at": "2026-07-31T08:00:00+00:00",
+                "age_seconds": 7754.0, "stale": True,
+                "already_editable": False, "version_state": "DEVELOPER_REJECTED"}
+
+    monkeypatch.setattr(service, "unlock", fake_unlock)
+    monkeypatch.setattr(asc_manager, "load_account", lambda a: _FakeAccount())
+    monkeypatch.setattr(asc_manager, "make_managers", lambda a: None)
+    monkeypatch.setattr(asc_manager, "_stdin_is_interactive", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt: "y")
+
+    assert asc_manager.main(["unlock", "me.demo.app", "1.0"]) == 0
+    out = capsys.readouterr().out
+    # The alert lived in the prompt; the epilogue must not repeat it.
+    assert out.count("⚠️") == 0
+    assert "canceled" in out
+
+
+def test_cli_unlock_prompt_defaults_to_no(monkeypatch, capsys):
+    def fake_unlock(bundle_id, version, assume_yes=False, confirm=None, **kwargs):
+        assert confirm is not None
+        if not confirm({"submission_id": "sub-1",
+                        "submitted_at": "2026-07-31T08:00:00+00:00",
+                        "age_seconds": 7754.0}):
+            return {"command": "unlock", "ok": False,
+                    "error": {"code": "stale_submission_unconfirmed",
+                              "message": "declined", "retryable": False,
+                              "remediation": "Re-run with --yes."}}
+        raise AssertionError("an empty answer must mean No")
+
+    monkeypatch.setattr(service, "unlock", fake_unlock)
+    monkeypatch.setattr(asc_manager, "load_account", lambda a: _FakeAccount())
+    monkeypatch.setattr(asc_manager, "make_managers", lambda a: None)
+    monkeypatch.setattr(asc_manager, "_stdin_is_interactive", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt: "")
+
+    assert asc_manager.main(["unlock", "me.demo.app", "1.0"]) == 1
+
+
+def test_cli_unlock_json_mode_never_prompts(monkeypatch, capsys):
+    captured = {}
+
+    def fake_unlock(bundle_id, version, **kwargs):
+        captured.update(kwargs)
+        return {"command": "unlock", "ok": False,
+                "error": {"code": "stale_submission_unconfirmed",
+                          "message": "needs consent", "retryable": False,
+                          "remediation": "Re-run with --yes."}}
+
+    monkeypatch.setattr(service, "unlock", fake_unlock)
+    monkeypatch.setattr(asc_manager, "load_account", lambda a: _FakeAccount())
+    monkeypatch.setattr(asc_manager, "make_managers", lambda a: None)
+    monkeypatch.setattr(asc_manager, "_stdin_is_interactive", lambda: True)
+
+    code = asc_manager.main(["unlock", "me.demo.app", "1.0", "--json"])
+    assert code == 1
+    assert captured["confirm"] is None             # an agent is never prompted
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["error"]["code"] == "stale_submission_unconfirmed"
 
 
 # -- CLI rendering --------------------------------------------------------

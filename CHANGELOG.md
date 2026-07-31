@@ -11,6 +11,13 @@
   asynchronous (`CANCELING`), it polls until the version reads as editable;
   a still-locked version after the timeout returns the retryable
   `unlock_timeout`. Already-editable versions are a no-op.
+  A submission older than an hour needs **explicit consent before anything is
+  cancelled** — the review may already be underway and the queue position was
+  probably worth keeping: `-y`/`--yes` consents up front, a real terminal gets
+  a `[y/N]` prompt (default No), and non-interactive surfaces (`--json`,
+  piped stdin) get the typed refusal `stale_submission_unconfirmed` with
+  `submitted_at`/`age_seconds` in context — never a hang. Fresh submissions
+  never ask.
 
 ### Fixed
 - The test suite is now hermetic on a workstation with real credentials in

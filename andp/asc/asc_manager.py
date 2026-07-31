@@ -32,9 +32,10 @@ Commands (all accept --json for a structured, agent-friendly envelope):
   status <bundle_id> <build_number>              Poll build processing state
   testflight <bundle_id> <group> add [emails...] Manage TestFlight group testers
   submit <bundle_id> <version>                   Submit a version for App Review
-  unlock <bundle_id> <version>                   Withdraw the pending review submission (its age is
-                                                 logged, alert past 1 h) so the version can be edited,
-                                                 then resubmitted with `submit`
+  unlock <bundle_id> <version> [-y|--yes]        Withdraw the pending review submission (its age is
+                                                 logged) so the version can be edited, then resubmitted
+                                                 with `submit`. Past 1 h in the queue it asks first;
+                                                 -y/--yes consents up front
   precheck <bundle_id> <version>                 Read-only App Store pre-submission validation
   readiness testflight <bundle_id>               Can this app go to TestFlight cleanly? (0/1/3)
   readiness appstore <bundle_id> <version>       Can this version go to the App Store cleanly?
@@ -470,20 +471,51 @@ def _utc_stamp(iso_date):
     return moment.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
+def _stdin_is_interactive():
+    """Prompting a pipe would hang it — only a real terminal gets asked."""
+    return sys.stdin.isatty()
+
+
 def _cmd_unlock(account, managers, dry_run, args, json_mode=False):
     """Withdraw the pending review submission; the version becomes editable.
 
     Library-first: the behaviour lives in service.unlock; this handler owns
     only the human rendering — including the submission-age line, which turns
-    into an alert once the submission is more than an hour old."""
+    into an alert once the submission is more than an hour old. Cancelling a
+    >1 h submission forfeits a queue position, so it asks first: `-y`/`--yes`
+    consents up front, a real terminal gets a [y/N] prompt, and every
+    non-interactive surface (--json, piped stdin) gets the typed refusal
+    `stale_submission_unconfirmed` instead of a hang."""
     from .. import service
 
+    args = list(args)
+    assume_yes = False
+    for flag in ("-y", "--yes"):
+        while flag in args:
+            args.remove(flag)
+            assume_yes = True
     if len(args) < 2:
         return _fail("unlock", "bad_usage", "bundle_id and version required.",
-                     "andp unlock <bundle_id> <version>", json_mode, rc=2)
+                     "andp unlock <bundle_id> <version> [-y|--yes]", json_mode, rc=2)
     bundle_id, version = args[0], args[1]
 
-    result = service.unlock(bundle_id, version, account=account.account_id)
+    prompted = {"shown": False}
+
+    def _prompt(facts):
+        prompted["shown"] = True
+        age = _human_age(facts.get("age_seconds") or 0)
+        when = _utc_stamp(facts["submitted_at"]) if facts.get("submitted_at") else "unknown date"
+        answer = input(
+            f"⚠️  Submitted {age} ago — {when} — more than an hour in Apple's "
+            "queue; cancelling forfeits that position. Continue? [y/N] ")
+        return answer.strip().lower() in ("y", "yes")
+
+    confirm = None
+    if not assume_yes and not json_mode and _stdin_is_interactive():
+        confirm = _prompt
+
+    result = service.unlock(bundle_id, version, account=account.account_id,
+                            assume_yes=assume_yes, confirm=confirm)
     if json_mode:
         print(json.dumps(result))
         return 0 if result.get("ok") else 1
@@ -505,6 +537,8 @@ def _cmd_unlock(account, managers, dry_run, args, json_mode=False):
     submitted_at = result.get("submitted_at")
     if submitted_at is None:
         print("Submission date unknown — ASC did not report submittedDate.")
+    elif prompted["shown"]:
+        pass                # the age line already lived in the prompt itself
     else:
         age = _human_age(result.get("age_seconds") or 0)
         when = _utc_stamp(submitted_at)

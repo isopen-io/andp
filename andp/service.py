@@ -173,15 +173,22 @@ STALE_SUBMISSION_SECONDS = 3600.0
 
 
 def unlock(bundle_id, version, account="primary", clock=time.time,
-           sleep=time.sleep, poll_interval=5.0, timeout=180.0):
+           sleep=time.sleep, poll_interval=5.0, timeout=180.0,
+           assume_yes=False, confirm=None):
     """Withdraw the pending review submission so `version` becomes editable.
 
     Answers "when was this submitted?" (`submitted_at`, `age_seconds`) and
     flags `stale` once the submission has sat in Apple's queue for more than
     `STALE_SUBMISSION_SECONDS` — cancelling then forfeits a position that was
-    probably worth keeping. Cancellation is asynchronous (ASC answers
-    CANCELING), so this polls until the version reads as editable.
-    Resubmission stays a separate, deliberate step: `andp submit`.
+    probably worth keeping. That is why a stale submission needs explicit
+    consent BEFORE anything is cancelled: `assume_yes=True` (the CLI's
+    `-y`/`--yes`), or a `confirm(facts)` callable answering True (the CLI's
+    interactive prompt). Neither → typed refusal `stale_submission_unconfirmed`
+    and the cancel request is never sent. Fresh submissions never ask.
+
+    Cancellation is asynchronous (ASC answers CANCELING), so this polls until
+    the version reads as editable. Resubmission stays a separate, deliberate
+    step: `andp submit`.
     """
     from .asc.appstore import EDITABLE_VERSION_STATES, version_state
     from .asc.client import ASCAPIError
@@ -228,6 +235,19 @@ def unlock(bundle_id, version, account="primary", clock=time.time,
         submitted_at = (pending.get("attributes") or {}).get("submittedDate")
         age_seconds = _submission_age_seconds(submitted_at, clock)
         stale = bool(age_seconds is not None and age_seconds > STALE_SUBMISSION_SECONDS)
+
+        if stale and not assume_yes:
+            facts = {"submission_id": pending["id"], "submitted_at": submitted_at,
+                     "age_seconds": age_seconds}
+            if confirm is None or not confirm(facts):
+                return _error_result("unlock", AndpError(
+                    code="stale_submission_unconfirmed",
+                    message=(f"Submission {pending['id']} has been in Apple's queue "
+                             f"for more than an hour (submitted {submitted_at}); "
+                             "cancelling forfeits that position."),
+                    retryable=False,
+                    remediation="Confirm at the prompt, or re-run with --yes/-y.",
+                    context=facts))
 
         managers.appstore.cancel_review_submission(pending["id"])
 

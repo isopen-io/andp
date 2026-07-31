@@ -304,6 +304,7 @@ Common codes an agent should recognize:
 | `version_not_editable` | terminal | bump the marketing version |
 | `submission_not_found` | terminal | version and submission disagree — inspect in ASC |
 | `unlock_timeout` | retryable | ASC is still releasing the version lock — run `unlock` again |
+| `stale_submission_unconfirmed` | terminal | the submission is >1 h old; a human decides — `unlock --yes` |
 | `plan_changed` | terminal | build/version changed after approval — `release approve` again |
 | `compliance_undeclared` | terminal | set `compliance` in andp.yml or IPA plist |
 | `review_submission_conflict` | terminal | resolve the other open submission first |

@@ -140,7 +140,7 @@ Submit a version for App Review, attaching the latest `VALID` build first
 Prefer `release start --ship`, which is resumable, precheck'd and gated. This
 command is the direct, unguarded form.
 
-## `unlock <bundle_id> <version>`
+## `unlock <bundle_id> <version> [-y|--yes]`
 
 Withdraw the version's pending review submission so it becomes editable again
 (screenshots, metadata, build), then resubmit with `submit`. Apple locks every
@@ -148,21 +148,35 @@ version in `WAITING_FOR_REVIEW`/`IN_REVIEW`: any metadata write answers
 `409 STATE_ERROR` until the submission is cancelled.
 
 The command first answers *when was this submitted?* — the submission's
-`submittedDate` is printed as a precise UTC stamp with its age. Past one hour
-the line becomes an alert (`⚠️`): the review may already be underway, and
-cancelling forfeits a queue position that was probably worth keeping.
+`submittedDate` is printed as a precise UTC stamp with its age:
 
 ```
 Submitted 12m ago — 2026-07-31 09:48:00 UTC.
-⚠️  Submitted 2h 09m ago — 2026-07-31 08:00:00 UTC — more than an hour in
-    Apple's queue; that position is now forfeited.
 ```
 
-Cancellation is asynchronous (ASC answers `CANCELING`), so the command polls
-until the version reads as editable (`DEVELOPER_REJECTED`) and only then
-returns. Already-editable versions are a no-op. Errors: `version_not_found`,
-`submission_not_found` (version and submission disagree — inspect in ASC),
-`unlock_timeout` (retryable — ASC is still releasing the lock).
+Past one hour, cancelling stops being a free do-over — the review may already
+be underway, and the queue position was probably worth keeping. So a stale
+submission requires **explicit consent before anything is cancelled**:
+
+- `-y`/`--yes` consents up front (the alert line is still printed);
+- otherwise a real terminal is asked, default **No**:
+
+  ```
+  ⚠️  Submitted 2h 09m ago — 2026-07-31 08:00:00 UTC — more than an hour in
+      Apple's queue; cancelling forfeits that position. Continue? [y/N]
+  ```
+
+- every non-interactive surface (`--json`, piped stdin) is never prompted: it
+  gets the typed refusal `stale_submission_unconfirmed` (context carries
+  `submitted_at` and `age_seconds`) and the cancel request is not sent.
+  Agents re-run with `--yes` once a human — or their policy — has decided.
+
+Fresh submissions (< 1 h) never ask. Cancellation is asynchronous (ASC answers
+`CANCELING`), so the command polls until the version reads as editable
+(`DEVELOPER_REJECTED`) and only then returns. Already-editable versions are a
+no-op. Errors: `version_not_found`, `submission_not_found` (version and
+submission disagree — inspect in ASC), `stale_submission_unconfirmed` (consent
+missing), `unlock_timeout` (retryable — ASC is still releasing the lock).
 
 ## `precheck <bundle_id> <version>`
 
