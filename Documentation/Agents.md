@@ -112,7 +112,8 @@ Claude Code / any MCP client configuration:
 
 Exposed tools — the whole pipeline, end to end: `targets`, `build`, `test`,
 `run`, `build_number`, `config`, `verify`, `upload`, `status`, `publish`,
-`precheck`, `readiness_testflight`, `readiness_appstore`, `release_start`,
+`precheck`, `readiness_testflight`, `readiness_appstore`, `version_list`,
+`version_set`, `release_start`,
 `release_poll`, `release_status`, `release_list`, `release_reset`,
 `testflight_add`, `submit`, `unlock`, `store_configure_pricing`,
 `store_configure_availability`, `store_set_age_rating`, `store_apply`.
@@ -135,8 +136,8 @@ Every tool is annotated so the host can reason about risk before calling:
 | `store_configure_availability` | — | ✅ | ✅ |
 | `unlock`, `release_reset` | — | ✅ | ✅ |
 | `submit` | — | ✅ | ❌ |
-| `readiness_*`, `config`, `targets`, `build_number` | ✅ | — | ✅ (`build_number` timestamp varies) |
-| `publish`, `build`, `test` | — | — | ✅ |
+| `readiness_*`, `config`, `targets`, `build_number`, `version_list` | ✅ | — | ✅ (`build_number` timestamp varies) |
+| `publish`, `build`, `test`, `version_set` | — | — | ✅ |
 | `run` | — | — | ❌ |
 
 `store_configure_availability` is destructive because shrinking the territory

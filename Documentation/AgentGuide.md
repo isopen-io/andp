@@ -237,6 +237,7 @@ the recovery table: [Release.md](Release.md).
 | TestFlight testers | `testflight <bundle> <group> add <emails…>` | `testflight_add` | — |
 | Push metadata/media | `publish <bundle> <ver> <dir>` | `publish` | `publish` |
 | Precheck | `precheck <bundle> <ver>` | `precheck` | `precheck` |
+| Platform versions | `version list\|set <bundle> [<ver>] [--platform P]` | `version_list` / `version_set` | `version_list` / `version_set` |
 | Set price | `store pricing <bundle> [--price]` | `store_configure_pricing` | `configure_pricing` |
 | Set territories | `store availability <bundle> [--all]` | `store_configure_availability` | `configure_availability` |
 | Set age rating | `store age-rating <bundle> [--config]` | `store_set_age_rating` | `configure_age_rating` |
@@ -313,6 +314,7 @@ Common codes an agent should recognize:
 | `processing_failed` / `processing_timeout` | terminal | inspect the build in ASC |
 | `price_point_not_found` | terminal | use an exact base-territory price, or `free` |
 | `unknown_territory` | terminal | use ISO territory ids |
+| `unknown_platform` | terminal | use IOS, MAC_OS, TV_OS or VISION_OS |
 | `empty_territories` | terminal | list ≥1 territory (delist is UI-only) |
 | `invalid_age_rating` | terminal | fix field name/value |
 | `bad_config` | terminal | fix andp.yml / config file |

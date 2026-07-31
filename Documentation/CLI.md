@@ -178,6 +178,27 @@ no-op. Errors: `version_not_found`, `submission_not_found` (version and
 submission disagree — inspect in ASC), `stale_submission_unconfirmed` (consent
 missing), `unlock_timeout` (retryable — ASC is still releasing the lock).
 
+## `version list <bundle_id>` / `version set <bundle_id> <version> [--platform P]`
+
+ASC keeps **one version record per platform** (IOS, MAC_OS, TV_OS, VISION_OS)
+and nothing synchronises their strings — an iOS `1.0.0` can quietly coexist
+with a hand-created macOS `1.0` (lived 2026-07-31). `list` shows every
+platform's record, state and editability; `set` reconciles one platform to the
+wanted string:
+
+```
+$ andp version list me.your.app
+  IOS 1.0.0 — WAITING_FOR_REVIEW
+  MAC_OS 1.0 — PREPARE_FOR_SUBMISSION (editable)
+$ andp version set me.your.app 1.0.0 --platform MAC_OS
+MAC_OS 1.0 → 1.0.0 (renamed) — PREPARE_FOR_SUBMISSION.
+```
+
+Already right → `changed: false`. No record → created. A locked record with a
+different string → `version_not_editable` (published/in-review versions are
+immutable — create the next version instead). Unknown platform →
+`unknown_platform`, refused before any network call.
+
 ## `precheck <bundle_id> <version>`
 
 Read-only pre-submission validation. Never mutates. Exit 0 when zero errors.
@@ -302,7 +323,8 @@ python3 -m andp.mcp
 | MCP tool | readOnly | destructive | idempotent |
 |---|---|---|---|
 | `verify`, `status`, `release_status`, `release_list`, `precheck` | ✅ | — | ✅ |
-| `readiness_testflight`, `readiness_appstore`, `config`, `targets` | ✅ | — | ✅ |
+| `readiness_testflight`, `readiness_appstore`, `config`, `targets`, `version_list` | ✅ | — | ✅ |
+| `version_set` | — | — | ✅ |
 | `build_number` | ✅ | — | ❌ (timestamp varies) |
 | `release_start`, `testflight_add`, `publish`, `build`, `test` | — | — | ✅ |
 | `store_configure_pricing`, `store_set_age_rating`, `store_apply` | — | — | ✅ |

@@ -271,6 +271,42 @@ TOOLS = [
         "annotations": {"title": "Apply store config", **_ann(idempotent=True)},
     },
     {
+        "name": "version_list",
+        "description": (
+            "Every platform's App Store version record (IOS, MAC_OS, TV_OS, "
+            "VISION_OS) with its version string, state and editability. ASC "
+            "keeps one record per platform and nothing synchronises them — "
+            "this is how version drift becomes visible."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {"bundle_id": {"type": "string"}, "account": {"type": "string"}},
+            "required": ["bundle_id"],
+        },
+        "annotations": {"title": "List platform versions",
+                        **_ann(read_only=True, idempotent=True)},
+    },
+    {
+        "name": "version_set",
+        "description": (
+            "Reconcile one platform's version record to the wanted string: "
+            "renames the editable record, creates one when absent, refuses a "
+            "locked one (version_not_editable). Already right = changed:false."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "bundle_id": {"type": "string"},
+                "version": {"type": "string"},
+                "platform": {"type": "string",
+                             "enum": ["IOS", "MAC_OS", "TV_OS", "VISION_OS"]},
+                "account": {"type": "string"},
+            },
+            "required": ["bundle_id", "version"],
+        },
+        "annotations": {"title": "Set platform version", **_ann(idempotent=True)},
+    },
+    {
         "name": "publish",
         "description": (
             "Push localized release notes, screenshots and preview videos from a "
@@ -549,6 +585,14 @@ def _dispatch_tool(name, args):
             args["bundle_id"], str(args["version"]),
             account=args.get("account", "primary"),
             assume_yes=bool(load_policy().get("allow_stale_unlock"))))
+    if name == "version_list":
+        return _release_result(service.version_list(
+            args["bundle_id"], account=args.get("account", "primary")))
+    if name == "version_set":
+        return _release_result(service.version_set(
+            args["bundle_id"], str(args["version"]),
+            platform=args.get("platform", "IOS"),
+            account=args.get("account", "primary")))
     if name == "publish":
         return _release_result(service.publish(
             args["bundle_id"], str(args["version"]), args["metadata_dir"],

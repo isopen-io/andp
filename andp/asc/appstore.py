@@ -75,6 +75,26 @@ class AppStoreManager:
     def get_version(self, version_id):
         return (self.client.get(f"/v1/appStoreVersions/{version_id}") or {}).get("data")
 
+    def list_versions(self, app_id, platform=None):
+        """Every appStoreVersion of the app, optionally one platform's."""
+        params = {"limit": 200}
+        if platform:
+            params["filter[platform]"] = platform
+        return self.client.get_all(f"/v1/apps/{app_id}/appStoreVersions", params=params)
+
+    def update_version_string(self, version_id, version_string):
+        """Rename an (editable) version record; ASC rejects locked ones."""
+        return self.client.patch(
+            f"/v1/appStoreVersions/{version_id}",
+            {
+                "data": {
+                    "type": "appStoreVersions",
+                    "id": version_id,
+                    "attributes": {"versionString": version_string},
+                }
+            },
+        )["data"]
+
     def get_version_build(self, version_id):
         """The build attached to the version, or None."""
         return (self.client.get(f"/v1/appStoreVersions/{version_id}/build") or {}).get("data")

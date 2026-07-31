@@ -279,6 +279,125 @@ def unlock(bundle_id, version, account="primary", clock=time.time,
         return _error_result("unlock", from_unexpected(err))
 
 
+# ASC's appStoreVersions platforms. One version record exists PER platform and
+# nothing synchronises their strings — `version_list` makes drift visible,
+# `version_set` reconciles one platform.
+KNOWN_PLATFORMS = ("IOS", "MAC_OS", "TV_OS", "VISION_OS")
+
+
+def _version_view(resource):
+    from .asc.appstore import EDITABLE_VERSION_STATES, version_state
+    attrs = resource.get("attributes", {}) or {}
+    state = version_state(resource)
+    return {"id": resource.get("id"), "platform": attrs.get("platform"),
+            "version_string": attrs.get("versionString"), "state": state,
+            "editable": state in EDITABLE_VERSION_STATES}
+
+
+def version_list(bundle_id, account="primary"):
+    """Every platform's App Store version record, with state and editability."""
+    from .asc.client import ASCAPIError
+    from .errors import from_asc_error, from_unexpected
+
+    try:
+        managers, account_cfg, dry_run = _managers_for(account)
+    except AndpError as err:
+        return _error_result("version_list", err)
+    if dry_run:
+        return {"command": "version_list", "ok": True, "dry_run": True,
+                "bundle_id": bundle_id}
+    try:
+        app = managers.apps.find_app(bundle_id)
+        if app is None:
+            return _app_not_found("version_list", bundle_id)
+        versions = [_version_view(v)
+                    for v in managers.appstore.list_versions(app["id"])]
+    except AndpError as err:
+        return _error_result("version_list", err)
+    except ASCAPIError as err:
+        return _error_result("version_list", from_asc_error(err))
+    except Exception as err:
+        return _error_result("version_list", from_unexpected(err))
+    return {"command": "version_list", "ok": True, "dry_run": False,
+            "bundle_id": bundle_id, "versions": versions}
+
+
+def version_set(bundle_id, version, platform="IOS", account="primary"):
+    """Reconcile one platform's version record to `version`.
+
+    Already right → changed=False. An editable record with another string is
+    RENAMED (that is how a hand-typed MAC_OS `1.0` rejoins an iOS `1.0.0`).
+    No record → created. A locked record with another string → typed
+    `version_not_editable`; this never mutates blindly.
+    """
+    from .asc.client import ASCAPIError
+    from .errors import from_asc_error, from_unexpected
+
+    platform = (platform or "IOS").upper()
+    if platform not in KNOWN_PLATFORMS:
+        return _error_result("version_set", AndpError(
+            code="unknown_platform",
+            message=f"Unknown platform {platform!r}.",
+            retryable=False,
+            remediation=f"Use one of: {', '.join(KNOWN_PLATFORMS)}."))
+
+    try:
+        managers, account_cfg, dry_run = _managers_for(account)
+    except AndpError as err:
+        return _error_result("version_set", err)
+    if dry_run:
+        return {"command": "version_set", "ok": True, "dry_run": True,
+                "bundle_id": bundle_id, "platform": platform,
+                "version_string": version}
+    try:
+        app = managers.apps.find_app(bundle_id)
+        if app is None:
+            return _app_not_found("version_set", bundle_id)
+        records = [_version_view(v)
+                   for v in managers.appstore.list_versions(app["id"], platform=platform)]
+
+        exact = next((r for r in records if r["version_string"] == version), None)
+        if exact is not None:
+            return {"command": "version_set", "ok": True, "dry_run": False,
+                    "bundle_id": bundle_id, "platform": platform,
+                    "version_string": version, "changed": False,
+                    "created": False, "previous_version_string": None,
+                    "state": exact["state"]}
+
+        editable = next((r for r in records if r["editable"]), None)
+        if editable is not None:
+            renamed = managers.appstore.update_version_string(editable["id"], version)
+            view = _version_view(renamed)
+            return {"command": "version_set", "ok": True, "dry_run": False,
+                    "bundle_id": bundle_id, "platform": platform,
+                    "version_string": version, "changed": True,
+                    "created": False,
+                    "previous_version_string": editable["version_string"],
+                    "state": view["state"]}
+
+        if records:
+            states = ", ".join(f"{r['version_string']} ({r['state']})" for r in records)
+            return _error_result("version_set", AndpError(
+                code="version_not_editable",
+                message=(f"No editable {platform} version to rename to {version}; "
+                         f"existing: {states}."),
+                retryable=False,
+                remediation="Published/in-review versions are immutable — create the next version instead."))
+
+        created = managers.appstore.ensure_version(app["id"], version, platform=platform)
+        view = _version_view(created)
+        return {"command": "version_set", "ok": True, "dry_run": False,
+                "bundle_id": bundle_id, "platform": platform,
+                "version_string": version, "changed": True, "created": True,
+                "previous_version_string": None, "state": view["state"]}
+    except AndpError as err:
+        return _error_result("version_set", err)
+    except ASCAPIError as err:
+        return _error_result("version_set", from_asc_error(err))
+    except Exception as err:
+        return _error_result("version_set", from_unexpected(err))
+
+
 def _retryable_status(status):
     """A 429 or any 5xx is transient — the call can be retried unchanged."""
     return status == 429 or (isinstance(status, int) and 500 <= status < 600)

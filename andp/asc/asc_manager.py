@@ -36,6 +36,9 @@ Commands (all accept --json for a structured, agent-friendly envelope):
                                                  logged) so the version can be edited, then resubmitted
                                                  with `submit`. Past 1 h in the queue it asks first;
                                                  -y/--yes consents up front
+  version list <bundle_id>                       Every platform's version record, state, editability
+  version set <bundle_id> <ver> [--platform P]   Reconcile one platform's version string (rename the
+                                                 editable record / create; never touches a locked one)
   precheck <bundle_id> <version>                 Read-only App Store pre-submission validation
   readiness testflight <bundle_id>               Can this app go to TestFlight cleanly? (0/1/3)
   readiness appstore <bundle_id> <version>       Can this version go to the App Store cleanly?
@@ -553,6 +556,66 @@ def _cmd_unlock(account, managers, dry_run, args, json_mode=False):
     return 0
 
 
+def _cmd_version(account, managers, dry_run, args, json_mode=False):
+    """Per-platform version records: `list` shows drift, `set` reconciles.
+
+    Library-first: behaviour in service.version_list / service.version_set;
+    this handler owns parsing (`--platform`) and the human rendering."""
+    from .. import service
+
+    args = list(args)
+    platform = "IOS"
+    if "--platform" in args:
+        idx = args.index("--platform")
+        try:
+            platform = args[idx + 1]
+        except IndexError:
+            return _fail("version", "bad_usage", "--platform needs a value.",
+                         "andp version set <bundle_id> <version> --platform MAC_OS",
+                         json_mode, rc=2)
+        del args[idx:idx + 2]
+
+    sub = args[0] if args else None
+    if sub == "list" and len(args) >= 2:
+        result = service.version_list(args[1], account=account.account_id)
+    elif sub == "set" and len(args) >= 3:
+        result = service.version_set(args[1], args[2], platform=platform,
+                                     account=account.account_id)
+    else:
+        return _fail("version", "bad_usage",
+                     "usage: version list <bundle_id> | version set <bundle_id> <version> [--platform P]",
+                     "andp version list me.your.app", json_mode, rc=2)
+
+    if json_mode:
+        print(json.dumps(result))
+        return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        err = result.get("error", {})
+        print(f"❌ version: {err.get('message', 'failed')}")
+        if err.get("remediation"):
+            print(f"   → {err['remediation']}")
+        return 1
+    if result.get("dry_run"):
+        print(f"[DRY-RUN] Would inspect/reconcile App Store versions for {args[1]}.")
+        return 0
+    if result["command"] == "version_list":
+        for v in result.get("versions", []):
+            suffix = " (editable)" if v.get("editable") else ""
+            print(f"  {v['platform']} {v['version_string']} — {v['state']}{suffix}")
+        if not result.get("versions"):
+            print("  (no App Store version records)")
+        return 0
+    if result.get("created"):
+        print(f"{result['platform']} {result['version_string']} created — {result['state']}.")
+    elif result.get("changed"):
+        print(f"{result['platform']} {result['previous_version_string']} → "
+              f"{result['version_string']} (renamed) — {result['state']}.")
+    else:
+        print(f"{result['platform']} already reads {result['version_string']} "
+              f"— {result['state']}; nothing to do.")
+    return 0
+
+
 def _cmd_publish(account, managers, dry_run, args, json_mode=False):
     """Push release notes + screenshots + previews from a folder tree."""
     from .. import service
@@ -1015,6 +1078,7 @@ COMMANDS = {
     "testflight": _cmd_testflight,
     "submit": _cmd_submit,
     "unlock": _cmd_unlock,
+    "version": _cmd_version,
     "publish": _cmd_publish,
     "precheck": _cmd_precheck,
     "readiness": _cmd_readiness,

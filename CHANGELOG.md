@@ -1,5 +1,15 @@
 ## Unreleased
 ### Added
+- **`andp version list` / `andp version set … [--platform P]`** (+ MCP tools
+  `version_list`/`version_set`). ASC keeps one version record per platform and
+  nothing synchronises their strings — an iOS `1.0.0` coexisted silently with
+  a hand-created macOS `1.0` (lived 2026-07-31, fixed at the raw API). `list`
+  makes the drift visible (platform, string, state, editability); `set`
+  reconciles one platform: renames the editable record, creates one when
+  absent, refuses a locked one (`version_not_editable`) and never mutates
+  blindly; unknown platforms are refused before any network call
+  (`unknown_platform`). Until now the whole tool was implicitly iOS-only —
+  the `platform` parameter existed in the ASC layer but no caller passed it.
 - **The MCP surface now defines the whole pipeline** — agent-first, end to
   end: `targets`, `build`, `test`, `run`, `build_number`, `config` (read-only
   report), `publish`, `readiness_testflight`, `readiness_appstore` and
