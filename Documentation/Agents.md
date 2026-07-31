@@ -112,10 +112,10 @@ Claude Code / any MCP client configuration:
 
 Exposed tools: `verify`, `precheck`, `release_start`, `release_poll`,
 `release_status`, `release_list`, `upload`, `status`, `testflight_add`,
-`submit`, `store_configure_pricing`, `store_configure_availability`,
-`store_set_age_rating`, `store_apply`. The `release_*` and `store_*` tools drive
-the service layer **directly** (not by scraping a CLI's stdout), and every
-result carries `structuredContent`.
+`submit`, `unlock`, `store_configure_pricing`, `store_configure_availability`,
+`store_set_age_rating`, `store_apply`. The `release_*`, `store_*` and `unlock`
+tools drive the service layer **directly** (not by scraping a CLI's stdout),
+and every result carries `structuredContent`.
 
 ### Tool annotations (MCP 2025-03-26)
 
@@ -130,10 +130,15 @@ Every tool is annotated so the host can reason about risk before calling:
 | `testflight_add` | — | — | ✅ |
 | `store_configure_pricing`, `store_set_age_rating`, `store_apply` | — | — | ✅ |
 | `store_configure_availability` | — | ✅ | ✅ |
+| `unlock` | — | ✅ | ✅ |
 | `submit` | — | ✅ | ❌ |
 
 `store_configure_availability` is destructive because shrinking the territory
 set **delists** the app where it is removed; an empty set is refused outright.
+`unlock` is destructive because withdrawing a review submission forfeits its
+queue position — and over MCP it never carries the `-y` consent bypass: past
+one hour in the queue it returns `stale_submission_unconfirmed` for a human
+to decide in a shell.
 
 ### What is deliberately *not* an MCP tool
 

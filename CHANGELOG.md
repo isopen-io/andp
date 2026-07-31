@@ -18,6 +18,11 @@
   piped stdin) get the typed refusal `stale_submission_unconfirmed` with
   `submitted_at`/`age_seconds` in context — never a hang. Fresh submissions
   never ask.
+  Agent-first parity: `unlock` is also an **MCP tool** (library-first,
+  destructive+idempotent annotations, `structuredContent`) — but WITHOUT the
+  consent bypass, same doctrine as `--replace-in-review`: over MCP a stale
+  submission always returns the typed refusal; `-y` stays in a shell where
+  the host prompts on the command.
 
 ### Fixed
 - The test suite is now hermetic on a workstation with real credentials in

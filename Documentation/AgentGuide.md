@@ -242,6 +242,7 @@ the recovery table: [Release.md](Release.md).
 | Set age rating | `store age-rating <bundle> [--config]` | `store_set_age_rating` | `configure_age_rating` |
 | Apply all store cfg | `store apply <bundle>` | `store_apply` | `configure_store` |
 | Submit (gated) | `submit <bundle> <ver>` | `submit` | — |
+| Unlock version (edit + resubmit) | `unlock <bundle> <ver> [-y\|--yes]` | `unlock` (no `-y`) | `unlock` |
 | CI readiness gate | `readiness testflight\|appstore …` | — | `readiness_*` |
 | Next build number | `build-number [bundle] --strategy S` | — | `build_number` |
 | Config diagnostic | `config [path\|dir\|migrate]` | — | — |

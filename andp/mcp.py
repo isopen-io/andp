@@ -170,6 +170,30 @@ TOOLS = [
         "annotations": {"title": "Submit for App Review", **_ann(destructive=True, idempotent=False)},
     },
     {
+        "name": "unlock",
+        "description": (
+            "Withdraw a version's pending review submission so it becomes "
+            "editable again (screenshots, metadata, build), then resubmit with "
+            "`submit`. Apple locks every WAITING_FOR_REVIEW/IN_REVIEW version: "
+            "asset writes answer 409 STATE_ERROR until the submission is "
+            "cancelled. Submissions older than one hour are REFUSED here "
+            "(stale_submission_unconfirmed): forfeiting that queue position is "
+            "a human decision — surface it; a human runs `andp unlock --yes` "
+            "in a shell."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "bundle_id": {"type": "string"},
+                "version": {"type": "string"},
+                "account": {"type": "string"},
+            },
+            "required": ["bundle_id", "version"],
+        },
+        "annotations": {"title": "Unlock version for editing",
+                        **_ann(destructive=True, idempotent=True)},
+    },
+    {
         "name": "store_configure_pricing",
         "description": (
             "Set the app's price (modern appPriceSchedules) or make it free. "
@@ -356,6 +380,14 @@ def _dispatch_tool(name, args):
             )}],
             "isError": True,
         }
+    if name == "unlock":
+        # Library-first, and WITHOUT the consent bypass: assume_yes stays in a
+        # shell where the host prompts on the command (same doctrine as
+        # --replace-in-review). Stale submissions come back as the typed
+        # refusal `stale_submission_unconfirmed` for a human to decide.
+        return _release_result(service.unlock(
+            args["bundle_id"], str(args["version"]),
+            account=args.get("account", "primary")))
     if name.startswith("release_"):
         result = _call_release_tool(name, args)
         if result is not None:

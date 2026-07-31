@@ -305,10 +305,14 @@ python3 -m andp.mcp
 | `release_start`, `testflight_add` | — | — | ✅ |
 | `store_configure_pricing`, `store_set_age_rating`, `store_apply` | — | — | ✅ |
 | `store_configure_availability` | — | ✅ | ✅ |
+| `unlock` | — | ✅ | ✅ |
 | `release_poll`, `upload` | — | — | ❌ |
 | `submit` | — | ✅ | ❌ |
 
-`submit` is refused outright unless `policy.allow_submit: true`.
+`submit` is refused outright unless `policy.allow_submit: true`. `unlock` over
+MCP never carries the `-y`/`--yes` consent bypass: a submission older than an
+hour always comes back as `stale_submission_unconfirmed` — forfeiting a queue
+position is a human decision, taken in a shell.
 
 **Not exposed over MCP** — CLI and library only: `release_approve`,
 `release_reset`, `publish`, `readiness`, `build-number`, `config`, and the whole

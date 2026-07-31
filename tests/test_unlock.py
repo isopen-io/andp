@@ -353,6 +353,65 @@ def test_cli_unlock_json_mode_never_prompts(monkeypatch, capsys):
     assert payload["error"]["code"] == "stale_submission_unconfirmed"
 
 
+# -- MCP: agent-first surface ---------------------------------------------
+# The tool is exposed library-first, WITHOUT the consent bypass: assume_yes
+# stays in a shell where the host prompts on the command (same doctrine as
+# --replace-in-review). A stale submission therefore always comes back as the
+# typed refusal — the agent surfaces it, a human decides.
+
+
+def _mcp_call(name, arguments):
+    from andp import mcp
+    return mcp.handle_message({
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": name, "arguments": arguments}})
+
+
+def test_mcp_lists_unlock_with_destructive_annotation():
+    from andp import mcp
+    response = mcp.handle_message(
+        {"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+    tools = {t["name"]: t for t in response["result"]["tools"]}
+    assert "unlock" in tools
+    assert tools["unlock"]["annotations"]["destructiveHint"] is True
+    assert tools["unlock"]["annotations"]["idempotentHint"] is True
+    assert "bundle_id" in tools["unlock"]["inputSchema"]["properties"]
+
+
+def test_mcp_unlock_never_carries_the_consent_bypass(monkeypatch):
+    captured = {}
+
+    def fake_unlock(bundle_id, version, **kwargs):
+        captured.update(kwargs, bundle_id=bundle_id, version=version)
+        return {"command": "unlock", "ok": True, "dry_run": False,
+                "bundle_id": bundle_id, "version": version,
+                "submission_id": "sub-1",
+                "submitted_at": "2026-07-31T09:50:00+00:00",
+                "age_seconds": 600.0, "stale": False,
+                "already_editable": False, "version_state": "DEVELOPER_REJECTED"}
+
+    monkeypatch.setattr(service, "unlock", fake_unlock)
+    response = _mcp_call("unlock", {"bundle_id": "me.demo.app", "version": "1.0"})
+    result = response["result"]
+    assert result.get("isError") is not True
+    assert result["structuredContent"]["ok"] is True
+    assert captured["bundle_id"] == "me.demo.app"
+    assert not captured.get("assume_yes")           # the bypass stays in the shell
+    assert captured.get("confirm") is None          # and no prompt can reach stdio
+
+
+def test_mcp_unlock_stale_refusal_is_a_typed_error(monkeypatch):
+    monkeypatch.setattr(service, "unlock", lambda *a, **k: {
+        "command": "unlock", "ok": False,
+        "error": {"code": "stale_submission_unconfirmed",
+                  "message": "needs a human", "retryable": False,
+                  "remediation": "Run `andp unlock --yes` in a shell."}})
+    response = _mcp_call("unlock", {"bundle_id": "me.demo.app", "version": "1.0"})
+    result = response["result"]
+    assert result["isError"] is True
+    assert result["structuredContent"]["error"]["code"] == "stale_submission_unconfirmed"
+
+
 # -- CLI rendering --------------------------------------------------------
 
 
