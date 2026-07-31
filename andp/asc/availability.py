@@ -6,6 +6,14 @@ partial-delist failure mode). Reads paginate; the available set filters on
 attributes.available == true so a listed-but-unavailable territory is excluded.
 """
 
+# Reads MUST ask for the territory relationship. Without ?include=territory the
+# API returns each territoryAvailability with type/id/attributes/links ONLY — no
+# `relationships` block at all — so the territory id is unrecoverable and every
+# read silently yields an empty set. Observed 2026-07-31 on a live app: 175 rows
+# returned, 174 of them available, `list_available_territories()` -> set(), and
+# precheck wrongly reporting "App is available in zero territories".
+TERRITORY_INCLUDE = {"include": "territory"}
+
 
 class AvailabilityManager:
     def __init__(self, client):
@@ -28,7 +36,8 @@ class AvailabilityManager:
         if availability is None:
             return set()
         items = self.client.get_all(
-            f"/v2/appAvailabilities/{availability['id']}/territoryAvailabilities")
+            f"/v2/appAvailabilities/{availability['id']}/territoryAvailabilities",
+            params=TERRITORY_INCLUDE)
         available = set()
         for item in items:
             if not item.get("attributes", {}).get("available"):
@@ -47,7 +56,8 @@ class AvailabilityManager:
         if availability is None:
             return None
         items = self.client.get_all(
-            f"/v2/appAvailabilities/{availability['id']}/territoryAvailabilities")
+            f"/v2/appAvailabilities/{availability['id']}/territoryAvailabilities",
+            params=TERRITORY_INCLUDE)
         territories = set()
         for item in items:
             if not item.get("attributes", {}).get("available"):

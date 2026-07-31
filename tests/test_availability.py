@@ -40,6 +40,53 @@ def test_list_available_territories_filters_unavailable_and_paginates():
     assert len(terrs) == 51
 
 
+def _first_territory_read(session):
+    """La requête de lecture des territoires (la 2e : la 1re est get_availability)."""
+    reads = [r for r in session.requests
+             if r["method"] == "GET" and "territoryAvailabilities" in r["url"]]
+    assert reads, "aucune lecture de territoryAvailabilities"
+    return reads[0]
+
+
+def test_list_available_territories_requests_the_territory_include():
+    """Sans ?include=territory l'API n'envoie AUCUN bloc `relationships`.
+
+    Le helper `_ta()` ci-dessus en fabrique toujours un, ce que la vraie API ne
+    fait pas : c'est ce qui a masqué le défaut jusqu'ici. Vérifié en production
+    le 2026-07-31 sur me.meeshy.app — 175 territoires renvoyés, aucun
+    `relationships`, donc `list_available_territories()` retournait un ensemble
+    VIDE pour une app disponible dans 174 pays, et `precheck` avertissait
+    faussement « App is available in zero territories ».
+    """
+    session = FakeSession()
+    session.queue(FakeResponse(200, {"data": {"id": "av-1", "attributes": {}}}))
+    session.queue(FakeResponse(200, {"data": [_ta("USA")], "links": {}}))
+    make_test_managers(session).availability.list_available_territories("APP")
+    assert (_first_territory_read(session).get("params") or {}).get("include") == "territory"
+
+
+def test_availability_snapshot_requests_the_territory_include():
+    session = FakeSession()
+    session.queue(FakeResponse(200, {"data": {"id": "av-1", "attributes": {}}}))
+    session.queue(FakeResponse(200, {"data": [_ta("USA")], "links": {}}))
+    make_test_managers(session).availability.availability_snapshot("APP")
+    assert (_first_territory_read(session).get("params") or {}).get("include") == "territory"
+
+
+def test_territories_are_empty_when_relationships_are_absent():
+    """Le comportement réel de l'API SANS include — figé pour documenter le piège.
+
+    Aucune donnée de territoire n'est extractible : c'est précisément pourquoi
+    l'include ci-dessus est obligatoire, et non un confort.
+    """
+    session = FakeSession()
+    session.queue(FakeResponse(200, {"data": {"id": "av-1", "attributes": {}}}))
+    bare = {"id": "ta-USA", "type": "territoryAvailabilities",
+            "attributes": {"available": True}}   # pas de "relationships" — comme la vraie API
+    session.queue(FakeResponse(200, {"data": [bare], "links": {}}))
+    assert make_test_managers(session).availability.list_available_territories("APP") == set()
+
+
 def test_list_all_territories_paginates():
     session = FakeSession()
     page1 = {"data": [{"id": f"T{i}", "type": "territories"} for i in range(50)],
