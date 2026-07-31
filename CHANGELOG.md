@@ -1,3 +1,36 @@
+## 1.15.0 - 2026-07-31
+### Added
+- **`version set` propagates the marketing version into the repository.** It
+  used to reconcile App Store Connect only, leaving the repo behind — and the
+  drift stayed silent until the upload was rejected (lived 2026-07-31 on
+  me.meeshy.app: ASC moved to 1.0.1 while `apps/ios/project.yml` stayed at
+  1.0.0, so every local build produced a mismatched
+  `CFBundleShortVersionString`). New module `andp/versionfiles.py` rewrites
+  `project.yml`/`project.yaml` (XcodeGen), `project.pbxproj` and `Info.plist`.
+  `--no-sync-files` opts out (CI, where the worktree must stay untouched).
+  Three invariants: only the marketing version is touched
+  (`CURRENT_PROJECT_VERSION`/`CFBundleVersion` keep their own cycle); a build
+  setting reference such as `<string>$(MARKETING_VERSION)</string>` is never
+  replaced by a literal; YAML values are always requoted, since unquoted `1.10`
+  parses as the float `1.1`. The repo is synced even when ASC needs no change —
+  a no-op on ASC does not mean the repo agrees — but never when ASC refuses.
+  Two defects surfaced only by running it against a real repository: the scan
+  descended into `.claude/worktrees/<branch>/` (another session's working copy,
+  which it would have overwritten), and `rglob` walked into an 8.7 GB build
+  directory before filtering, taking over 2 minutes — now `os.walk` with
+  in-place pruning, 0.8 s on the same repo.
+
+### Fixed
+- **Territory reads asked for the wrong shape.** Without `?include=territory`
+  the API returns each `territoryAvailability` with `type`/`id`/`attributes`/
+  `links` only — no `relationships` block — so `AvailabilityManager` never
+  recovered a territory id and every read yielded an empty set. An app live in
+  174 territories reported zero, and `precheck` warned "App is available in
+  zero territories". The defect escaped the tests because the `_ta()` helper
+  always fabricated a `relationships` block the real API does not send.
+  No delisting risk: `configure_availability` computes its target from the
+  arguments, never from the snapshot.
+
 ## Unreleased
 ### Added
 - **`andp version list` / `andp version set … [--platform P]`** (+ MCP tools
