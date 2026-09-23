@@ -1,126 +1,95 @@
 #!/bin/bash
-APP_DIR="${ANDP_APP_DIR:-examples/meeshy}"
+
+# ANDP Software Bill of Materials (SBOM) Generator (Bolt Optimized)
+# Generates a CycloneDX-compatible JSON SBOM for the project in a single Python pass.
 
 set -e
 
-# ANDP Software Bill of Materials (SBOM) Generator
-# Generates a CycloneDX-compatible JSON SBOM for the project.
-
-# The .andp namespace — generate-dashboard.sh reads sbom.json from there, so
-# writing to a bare "metrics/" meant the dashboard never found it.
+APP_DIR="${ANDP_APP_DIR:-examples/meeshy}"
 OUTPUT_DIR="${ANDP_CONFIG_DIR:-.andp}/metrics"
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_FILE="${OUTPUT_DIR}/sbom.json"
 
-# Project metadata from project.yml
-PROJECT_NAME=$(grep "name:" "$APP_DIR/project.yml" | head -n 1 | awk '{print $2}')
-[ -z "$PROJECT_NAME" ] && PROJECT_NAME="UnknownProject"
-
-echo "Generating SBOM for $PROJECT_NAME..."
-
-# Basic SBOM metadata
-cat << EOM > "$OUTPUT_FILE"
-{
-  "bomFormat": "CycloneDX",
-  "specVersion": "1.5",
-  "serialNumber": "urn:uuid:$(tr -dc 'a-f0-9' < /dev/urandom | head -c 8)-$(tr -dc 'a-f0-9' < /dev/urandom | head -c 4)-$(tr -dc 'a-f0-9' < /dev/urandom | head -c 4)-$(tr -dc 'a-f0-9' < /dev/urandom | head -c 4)-$(tr -dc 'a-f0-9' < /dev/urandom | head -c 12)",
-  "version": 1,
-  "metadata": {
-    "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-    "tools": [
-      {
-        "vendor": "Apple Native Delivery Platform",
-        "name": "ANDP SBOM Generator",
-        "version": "1.0.0"
-      }
-    ],
-    "component": {
-      "name": "$PROJECT_NAME",
-      "type": "application"
-    }
-  },
-  "components": []
-}
-EOM
-
-# Function to add a component to the SBOM
-add_component() {
-    local name=$1
-    local version=$2
-    local url=$3
-    local type=$4
-
-    python3 - "$OUTPUT_FILE" "$name" "$version" "$url" "$type" << 'END'
+# Bolt Optimization: Single-process Python execution eliminates process forks,
+# tr/urandom broken pipes, and repeated disk re-reads per component.
+ANDP_APP_DIR="$APP_DIR" ANDP_OUTPUT_FILE="$OUTPUT_FILE" python3 - << 'EOF_PY'
+import os
 import sys
 import json
-
-file_path = sys.argv[1]
-name = sys.argv[2]
-version = sys.argv[3]
-url = sys.argv[4]
-type_val = sys.argv[5]
-
-with open(file_path, 'r') as f:
-    data = json.load(f)
-
-component = {
-    "name": name,
-    "version": version,
-    "type": type_val,
-    "externalReferences": [
-        {
-            "type": "vcs",
-            "url": url
-        }
-    ]
-}
-data['components'].append(component)
-
-with open(file_path, 'w') as f:
-    json.dump(data, f, indent=2)
-END
-}
-
-# Parse project.yml for dependencies
-echo "Analyzing dependencies from project.yml..."
-
-# Extract all packages
-# Use python to parse YAML to avoid brittle grep/awk
-DEPS=$(python3 - << 'END'
-import sys
-import os
+import uuid
+import datetime
 import yaml
 
-try:
-    app_dir = os.environ.get('ANDP_APP_DIR', 'examples/meeshy')
-    project_path = os.path.join(app_dir, 'project.yml')
-    with open(project_path, 'r', encoding='utf-8') as f:
-        # Bolt Optimization: Use PyYAML's LibYAML-backed CSafeLoader if available (~8x speedup)
-        loader = getattr(yaml, 'CSafeLoader', yaml.SafeLoader)
-        config = yaml.load(f, Loader=loader)
+app_dir = os.environ.get("ANDP_APP_DIR", "examples/meeshy")
+output_file = os.environ.get("ANDP_OUTPUT_FILE", ".andp/metrics/sbom.json")
 
-    packages = config.get('packages', {}) or {}
-    for name, details in packages.items():
-        if not details:
-            continue
-        if 'url' in details:
-            print(f"DEP_REMOTE|{name}|{details.get('from', 'unknown')}|{details['url']}")
-        elif 'path' in details:
-            print(f"DEP_LOCAL|{name}|local|{details['path']}")
-except Exception as e:
-    sys.stderr.write(f"Error parsing project.yml: {e}\n")
-END
-)
+project_path = os.path.join(app_dir, "project.yml")
+project_name = "UnknownProject"
+packages = {}
 
-echo "$DEPS" | while IFS='|' read -r type name version url; do
-    [ -z "$type" ] && continue
-    if [ "$type" == "DEP_REMOTE" ]; then
-        echo "Adding remote dependency: $name ($version)..."
-        add_component "$name" "$version" "$url" "library"
-    elif [ "$type" == "DEP_LOCAL" ]; then
-        echo "Adding local package: $name..."
-        add_component "$name" "$version" "$url" "library"
-    fi
-done
+if os.path.exists(project_path):
+    try:
+        with open(project_path, "r", encoding="utf-8") as f:
+            loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+            config = yaml.load(f, Loader=loader) or {}
+            project_name = config.get("name", "UnknownProject")
+            packages = config.get("packages", {}) or {}
+    except Exception as e:
+        sys.stderr.write(f"Error parsing project.yml: {e}\n")
 
-echo "✅ SBOM generated: $OUTPUT_FILE"
+print(f"Generating SBOM for {project_name}...")
+print("Analyzing dependencies from project.yml...")
+
+now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+components = []
+for name, details in packages.items():
+    if not details:
+        continue
+    if "url" in details:
+        version = details.get("from", "unknown")
+        url = details["url"]
+        print(f"Adding remote dependency: {name} ({version})...")
+        components.append({
+            "name": name,
+            "version": version,
+            "type": "library",
+            "externalReferences": [{"type": "vcs", "url": url}]
+        })
+    elif "path" in details:
+        url = details["path"]
+        print(f"Adding local package: {name}...")
+        components.append({
+            "name": name,
+            "version": "local",
+            "type": "library",
+            "externalReferences": [{"type": "vcs", "url": url}]
+        })
+
+sbom = {
+    "bomFormat": "CycloneDX",
+    "specVersion": "1.5",
+    "serialNumber": f"urn:uuid:{uuid.uuid4()}",
+    "version": 1,
+    "metadata": {
+        "timestamp": now,
+        "tools": [
+            {
+                "vendor": "Apple Native Delivery Platform",
+                "name": "ANDP SBOM Generator",
+                "version": "1.0.0"
+            }
+        ],
+        "component": {
+            "name": project_name,
+            "type": "application"
+        }
+    },
+    "components": components
+}
+
+with open(output_file, "w", encoding="utf-8") as f:
+    json.dump(sbom, f, indent=2)
+
+print(f"✅ SBOM generated: {output_file}")
+EOF_PY
