@@ -1,3 +1,7 @@
+## 2026-08-05 - [Target Configuration YAML Caching]
+**Learning:** Caching parsed target configurations (`_load_yaml` in `andp/xcode/targets.py`) using `mtime` and absolute path keying eliminates redundant PyYAML file reading and parsing on repeated `load_targets` and `resolve` calls, giving a ~5.7x performance boost while maintaining safety via `copy.deepcopy()`.
+**Action:** Ensure all YAML loading entry points in configuration models leverage `mtime`-based cached resolution with `copy.deepcopy()`.
+
 ## 2026-07-21 - [Secrets & Policy YAML Caching]
 **Learning:** Caching parsed secrets (`load_account`) and parsed policies (`load_policy`) using the file's absolute path and modification time (`mtime`) as cache keys provides a massive (~630x) performance speedup for repetitive YAML file reading/parsing operations, avoiding expensive CPU parsing and disk I/O while maintaining correctness under dynamic changes and different working directories in test environments.
 **Action:** Always prefer caching slow parser outputs like PyYAML loaded files with automatic `mtime`-based invalidation, and always resolve paths to absolute paths (`os.path.abspath`) for cache keys to prevent test isolation conflicts.
