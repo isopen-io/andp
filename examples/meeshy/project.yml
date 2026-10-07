@@ -41,6 +41,11 @@ targets:
       ENABLE_PREVIEWS: YES
       CODE_SIGN_STYLE: Automatic
       CODE_SIGN_ENTITLEMENTS: Apps/Meeshy/Meeshy.entitlements
+      UISupportedInterfaceOrientations~ipad:
+        - UIInterfaceOrientationPortrait
+        - UIInterfaceOrientationPortraitUpsideDown
+        - UIInterfaceOrientationLandscapeLeft
+        - UIInterfaceOrientationLandscapeRight
     dependencies:
       - target: MeeshyWidgets
       - target: MeeshyNotificationExtension
