@@ -44,7 +44,7 @@ def test_tools_list_defines_the_whole_pipeline():
         "release_reset",
         # store configuration
         "store_configure_pricing", "store_configure_availability",
-        "store_set_age_rating", "store_apply",
+        "store_set_age_rating", "store_apply", "store_plan",
         # testers
         "testflight_add",
     }

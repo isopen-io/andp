@@ -241,7 +241,7 @@ TOOLS = [
         "name": "store_set_age_rating",
         "description": (
             "Set the app's age rating declaration (2025 model). Pass a declaration "
-            "object of content descriptors (NONE|INFREQUENT_OR_MILD|FREQUENT_OR_INTENSE) "
+            "object of content descriptors (NONE|INFREQUENT|FREQUENT) "
             "and booleans. PATCHes only the fields that differ; validates field "
             "names/values first."
         ),
@@ -257,15 +257,48 @@ TOOLS = [
         "annotations": {"title": "Set age rating", **_ann(idempotent=True)},
     },
     {
-        "name": "store_apply",
+        "name": "store_plan",
         "description": (
-            "Apply every configured store block (pricing/availability/age_rating) "
-            "from andp.yml. Best-effort: independent idempotent blocks; a re-run "
-            "heals a partially-applied state."
+            "READ-ONLY diff between the listing declared in andp.yml (store:) plus "
+            "the metadata folder (deliver or andp layout) and App Store Connect: app "
+            "attributes (content rights, accessibility URL…), categories, names, "
+            "subtitles, privacy URLs, version texts and attributes, App Review "
+            "details, age rating, accessibility labels, encryption declaration, "
+            "EULA, price, territories. One entry per field that would change; "
+            "secrets are masked. Without credentials it validates offline. Writes "
+            "nothing — run it before store_apply."
         ),
         "inputSchema": {
             "type": "object",
-            "properties": {"bundle_id": {"type": "string"}, "account": {"type": "string"}},
+            "properties": {
+                "bundle_id": {"type": "string"},
+                "version": {"type": "string",
+                            "description": "Version string; default: the editable version"},
+                "metadata_dir": {"type": "string",
+                                 "description": "Overrides store.metadata_dir"},
+                "account": {"type": "string"},
+            },
+            "required": ["bundle_id"],
+        },
+        "annotations": {"title": "Plan the App Store listing",
+                        **_ann(read_only=True, idempotent=True)},
+    },
+    {
+        "name": "store_apply",
+        "description": (
+            "Apply every configured store block from andp.yml: pricing, "
+            "availability, age rating, then the listing (same scope as store_plan). "
+            "Best-effort: independent idempotent blocks; a re-run heals a "
+            "partially-applied state. Refuses a listing with validation errors."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "bundle_id": {"type": "string"},
+                "version": {"type": "string"},
+                "metadata_dir": {"type": "string"},
+                "account": {"type": "string"},
+            },
             "required": ["bundle_id"],
         },
         "annotations": {"title": "Apply store config", **_ann(idempotent=True)},
@@ -490,8 +523,15 @@ def _call_store_tool(name, args):
     if name == "store_set_age_rating":
         return _release_result(service.configure_age_rating(
             args["bundle_id"], account=acct, declaration=args.get("declaration")))
+    if name == "store_plan":
+        from . import listing_service
+        return _release_result(listing_service.store_plan(
+            args["bundle_id"], account=acct, version=args.get("version"),
+            metadata_dir=args.get("metadata_dir")))
     if name == "store_apply":
-        return _release_result(service.configure_store(args["bundle_id"], account=acct))
+        return _release_result(service.configure_store(
+            args["bundle_id"], account=acct, version=args.get("version"),
+            metadata_dir=args.get("metadata_dir")))
     return None
 
 

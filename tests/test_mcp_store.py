@@ -73,3 +73,33 @@ def test_store_apply_dispatches(cfg):
     res = _call("tools/call", {"name": "store_apply",
                                "arguments": {"bundle_id": "me.demo.app"}})["result"]
     assert res["structuredContent"]["blocks"]["pricing"]["ok"] is True
+
+
+def test_store_plan_tool_is_read_only_and_library_first(monkeypatch):
+    from andp import listing_service
+    tools = {t["name"]: t for t in _call("tools/list")["result"]["tools"]}
+    assert tools["store_plan"]["annotations"]["readOnlyHint"] is True
+    seen = {}
+
+    def fake_plan(bundle_id, **kwargs):
+        seen.update(bundle_id=bundle_id, **kwargs)
+        return {"command": "store_plan", "ok": True, "written": False, "changes": []}
+    monkeypatch.setattr(listing_service, "store_plan", fake_plan)
+    res = _call("tools/call", {"name": "store_plan", "arguments": {
+        "bundle_id": "me.demo.app", "version": "1.2.0",
+        "metadata_dir": "fastlane/metadata"}})["result"]
+    assert res["structuredContent"]["written"] is False
+    assert seen == {"bundle_id": "me.demo.app", "account": "primary", "version": "1.2.0",
+                    "metadata_dir": "fastlane/metadata"}
+
+
+def test_store_apply_forwards_version_and_metadata(monkeypatch):
+    seen = {}
+
+    def fake_store(bundle_id, **kwargs):
+        seen.update(kwargs)
+        return {"command": "configure_store", "ok": True, "blocks": {}}
+    monkeypatch.setattr(service, "configure_store", fake_store)
+    _call("tools/call", {"name": "store_apply", "arguments": {
+        "bundle_id": "me.demo.app", "version": "1.2.0", "metadata_dir": "md"}})
+    assert seen["version"] == "1.2.0" and seen["metadata_dir"] == "md"
