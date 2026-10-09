@@ -123,11 +123,7 @@ def _tree(metadata_dir):
             continue
         if entry != "default" and not _LOCALE_DIR.match(entry):
             continue
-        values = {}
-        for stem, key in _LOCALE_FILES.items():
-            text = _non_empty_text(os.path.join(folder, f"{stem}.txt"))
-            if text is not None:
-                values[key] = text
+        values = read_locale_files(folder)
         if entry == "default":
             default = values
         elif values:
@@ -137,6 +133,26 @@ def _tree(metadata_dir):
             locale: _with_defaults(default, values)
             for locale, values in tree["localizations"].items()}
     return tree
+
+
+def read_locale_files(folder):
+    """Raw {config key: text} of one locale folder (deliver and andp names)."""
+    values = {}
+    for stem, key in _LOCALE_FILES.items():
+        text = _non_empty_text(os.path.join(folder, f"{stem}.txt"))
+        if text is not None:
+            values[key] = text
+    return values
+
+
+def version_localization_files(folder):
+    """(attributes, errors) of the version-localization fields of one locale
+    folder — the app-info files (name, subtitle, privacy URLs) are left out."""
+    keys = {k for f in spec.VERSION_LOCALIZATION_FIELDS for k in f.keys}
+    raw = {k: v for k, v in read_locale_files(folder).items() if k in keys}
+    attrs, errors, _ = spec.pick(spec.VERSION_LOCALIZATION_FIELDS, raw,
+                                 where=os.path.basename(folder))
+    return attrs, errors
 
 
 def _with_defaults(default, values):

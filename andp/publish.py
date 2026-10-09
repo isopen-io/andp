@@ -3,6 +3,9 @@
 Layout (deliver-style):
     <root>/<locale>/whatsNew.txt | description.txt | keywords.txt |
                     promotionalText.txt | supportUrl.txt | marketingUrl.txt
+    (or deliver's release_notes.txt, promotional_text.txt, support_url.txt,
+    marketing_url.txt — the same fields; app-info files such as name.txt are
+    `andp store apply`'s)
     <root>/<locale>/screenshots/<DISPLAY_TYPE>/*.png|jpg|jpeg
     <root>/<locale>/previews/<DISPLAY_TYPE>/*.mp4|mov|m4v
 
@@ -16,16 +19,8 @@ from .asc.appstore import (
     EDITABLE_VERSION_STATES, IN_REVIEW_VERSION_STATES, version_state,
 )
 from .errors import AndpError
+from .listing_source import version_localization_files
 
-# file name (without .txt) -> appStoreVersionLocalization attribute
-_TEXT_FIELDS = {
-    "whatsNew": "whatsNew",
-    "description": "description",
-    "keywords": "keywords",
-    "promotionalText": "promotionalText",
-    "supportUrl": "supportUrl",
-    "marketingUrl": "marketingUrl",
-}
 _IMAGE_EXT = (".png", ".jpg", ".jpeg")
 _VIDEO_EXT = (".mp4", ".mov", ".m4v")
 
@@ -36,14 +31,10 @@ def _is_locale_dir(name):
 
 
 def _read_text_fields(locale_dir):
-    attributes = {}
-    for stem, attr in _TEXT_FIELDS.items():
-        path = os.path.join(locale_dir, f"{stem}.txt")
-        if os.path.isfile(path):
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read().strip()
-            if content:  # an empty file must NOT overwrite the field with ""
-                attributes[attr] = content
+    attributes, errors = version_localization_files(locale_dir)
+    if errors:
+        raise AndpError(code="invalid_metadata", message="; ".join(errors), retryable=False,
+                        remediation="Shorten or fix the metadata files listed.")
     return attributes
 
 

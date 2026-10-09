@@ -96,3 +96,29 @@ def test_publish_missing_dir_raises(tmp_path):
     import pytest
     with pytest.raises(FileNotFoundError):
         publish_metadata(managers, "app-9", "1.0", str(tmp_path / "nope"))
+
+
+def test_publish_reads_deliver_file_names_and_ignores_app_info_files(tmp_path):
+    """A fastlane `deliver` tree (release_notes.txt, support_url.txt, …) used to
+    lose every snake_case field silently: only description/keywords got through.
+    App-info files (name.txt, privacy_url.txt) belong to `store apply`, not to
+    the version localization, and must not be sent here."""
+    root = tmp_path / "metadata" / "fr-FR"
+    root.mkdir(parents=True)
+    (root / "release_notes.txt").write_text("Corrections.\n")
+    (root / "promotional_text.txt").write_text("Nouveau\n")
+    (root / "support_url.txt").write_text("https://acme.io/help\n")
+    (root / "marketing_url.txt").write_text("https://acme.io\n")
+    (root / "name.txt").write_text("Acme\n")
+    (root / "privacy_url.txt").write_text("https://acme.io/privacy\n")
+    session = FakeSession()
+    session.queue(
+        FakeResponse(200, {"data": [{"id": "ver-1", "attributes": {
+            "appVersionState": "PREPARE_FOR_SUBMISSION"}}]}),
+        FakeResponse(200, {"data": [{"id": "loc-fr", "attributes": {"locale": "fr-FR"}}]}),
+        FakeResponse(200, {"data": {"id": "loc-fr"}}),
+    )
+    publish_metadata(make_test_managers(session), "app-9", "1.0", str(tmp_path / "metadata"))
+    assert session.requests[2]["json"]["data"]["attributes"] == {
+        "whatsNew": "Corrections.", "promotionalText": "Nouveau",
+        "supportUrl": "https://acme.io/help", "marketingUrl": "https://acme.io"}
