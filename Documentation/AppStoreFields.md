@@ -78,7 +78,7 @@ L'appInfo « en ligne » (`READY_FOR_DISTRIBUTION`) refuse les écritures. andp 
 | `supportUrl` | page menant à de vraies coordonnées | URL | **oui** | `support_url` · `support_url.txt` · `supportUrl.txt` |
 | `marketingUrl` | site de l'app | URL | non | `marketing_url` · `marketing_url.txt` · `marketingUrl.txt` |
 
-Captures d'écran et vidéos d'aperçu : `andp publish` (voir [Metadata.md](Metadata.md)). L'API 4.5.1 introduit l'App Asset Library et **déprécie** `appScreenshotSets` et `appPreviewSets`, qui restent fonctionnels.
+Captures, vidéos d'aperçu et assets créatifs : `andp publish` et `andp store apply`, par l'App Asset Library (§ 12).
 
 ## 6. Informations pour l'App Review (`appStoreReviewDetails`, par version)
 
@@ -87,7 +87,7 @@ Modifiables à tout moment, y compris sur une version approuvée [H2].
 | Champ | Sens | Limite / règle | Requis | andp |
 |---|---|---|---|---|
 | `contactFirstName`, `contactLastName` | contact Apple pendant la revue | texte | **oui** | `review.contact_first_name`… · `review_information/first_name.txt`… |
-| `contactPhone` | téléphone du contact | **format international avec « + »** [H2] | **oui** | `review.contact_phone[_env]` · `phone_number.txt` |
+| `contactPhone` | téléphone du contact | **format international avec « + »**, obligatoire depuis le 2026-08-19 [H2] | **oui** (andp bloque sans « + ») | `review.contact_phone[_env]` · `phone_number.txt` |
 | `contactEmail` | e-mail du contact | adresse e-mail | **oui** | `review.contact_email[_env]` · `email_address.txt` |
 | `demoAccountRequired` | l'app exige une connexion | booléen | oui si l'app exige une connexion | `review.demo_account_required` · `demo_required.txt` |
 | `demoAccountName`, `demoAccountPassword` | compte démo **sans expiration**. Les comptes supplémentaires vont dans les notes [H2] | texte | si `demoAccountRequired` | `review.demo_account_name_env`, `review.demo_account_password_env` (jamais en clair dans le dépôt) |
@@ -119,10 +119,10 @@ Questionnaire de 2025-2026 :
 | `kidsAgeBand` | tranche « Made for Kids », irréversible une fois approuvée [H7] | `FIVE_AND_UNDER`, `SIX_TO_EIGHT`, `NINE_TO_ELEVEN` | idem |
 | `ageRatingOverrideV2` | relève la note calculée (jamais la baisser). Obligatoire si le CLUF impose un âge supérieur [H7] | `NONE`, `NINE_PLUS`, `THIRTEEN_PLUS`, `SIXTEEN_PLUS`, `EIGHTEEN_PLUS`, `UNRATED` (distribution alternative UE) | idem |
 | `ageRatingOverride` | **déprécié** au profit de V2 | `…SEVENTEEN_PLUS…` | accepté, avec un avertissement |
-| `koreaAgeRatingOverride`, `gracRatingClassificationNumber` | note coréenne alignée sur le numéro GRAC (RCN), verrouillé après approbation [N6] | `NONE`, `ALL`, `TWELVE_PLUS`, `FIFTEEN_PLUS`, `NINETEEN_PLUS` ; texte | idem |
+| `koreaAgeRatingOverride`, `gracRatingClassificationNumber` | note coréenne alignée sur le numéro GRAC (RCN), verrouillé après approbation [N6]. andp refuse une surcharge sans son numéro | `NONE`, `ALL`, `TWELVE_PLUS`, `FIFTEEN_PLUS`, `NINETEEN_PLUS` ; texte | idem |
 | `developerAgeRatingInfoUrl` | « Age Suitability URL » : comment vous déterminez l'âge [N5] | URL | idem |
 | `seventeenPlus`, `gamblingAndContests` | **retirés** dans l'API 4.0 [R] | — | ignorés avec un avertissement, jamais envoyés |
-| notes par territoire (`territoryAgeRatings`) | note calculée par Apple pour chaque pays (Corée, Vietnam, Australie, Brésil…) | **lecture seule** | résumée par `store plan` |
+| notes par territoire (`territoryAgeRatings`) | note calculée par Apple pour chaque pays. L'Australie passe à **16+** (le palier 15+ disparaît le 2026-06-18) ; le Vietnam a **00+ / 12+ / 16+ / 18+** (valeur `ZERO_ZERO`) ; la Corée suit l'override ci-dessus. Rien de modifiable par l'API | **lecture seule** | résumée par `store plan` |
 
 `readiness appstore` bloque tant qu'une question requise est sans réponse et les nomme toutes : les 13 descripteurs, les 10 booléens, et `socialMediaAgeRestricted` quand `socialMedia` est vrai.
 
@@ -136,7 +136,7 @@ Règle commune : une fonction ne se déclare que si **toutes les tâches courant
 |---|---|---|
 | `supportsVoiceover` | tout est faisable avec VoiceOver seul : libellés, traits, ordre, actions | `accessibility.<FAMILLE>.voiceover` |
 | `supportsVoiceControl` | tout activable à la voix ; libellés identiques au texte visible | `voice_control` |
-| `supportsLargerText` | 200 % ou la taille maximale, sans troncature ni chevauchement | `larger_text` |
+| `supportsLargerText` | 200 % ou la taille maximale, sans troncature ni chevauchement. Ouvert à tvOS (`APPLE_TV`) depuis les notes de version d'App Store Connect de 2026 | `larger_text` |
 | `supportsDarkInterface` | sombre par défaut ou suivi du mode sombre | `dark_interface` |
 | `supportsDifferentiateWithoutColorAlone` | aucune information portée par la seule couleur | `differentiate_without_color_alone` |
 | `supportsSufficientContrast` | environ 4,5:1 par défaut, ou « Augmenter le contraste » effectif | `sufficient_contrast` |
@@ -180,7 +180,96 @@ andp : `eula: standard` supprime un CLUF personnalisé. `eula: {file: chemin, te
 | territoires | `appAvailabilities` v2 (remplacement atomique). `contentStatuses` explique un refus (`CANNOT_SELL`, `TRADER_STATUS_*`…) | `availability:` |
 | pré-commande | `territoryAvailabilities` (`preOrderEnabled`, `releaseDate`, `preOrderPublishDate`), `endAppAvailabilityPreOrders`. Date entre 2 et 180 jours pour une première sortie, 365 pour un nouveau territoire. Impossible là où l'app est déjà sortie [H18] | — : sans objet pour une app déjà publiée. À piloter dans App Store Connect |
 
-## 12. Ce que l'API n'expose pas — à faire à la main dans App Store Connect
+## 12. Visuels de la fiche — App Asset Library
+
+Depuis le **2026-10-05**, les visuels passent par l'**App Asset Library** (API 4.5.1). Les captures et vidéos classiques (`appScreenshotSets`, `appPreviewSets`) sont **dépréciées** mais fonctionnent encore. andp s'en sert en repli quand l'Asset Library ne répond pas.
+
+### Le modèle
+
+| Ressource | Sens | API |
+|---|---|---|
+| bibliothèque | les images et vidéos de l'app, envoyées une seule fois | `GET /v1/apps/{id}/assetLibrary`. Le contenu se lit sur `/v1/appAssetLibraries/{id}/images` et `…/videos` : ces chemins sont absents de la spécification, mais donnés par les liens de la réponse (observé le 2026-10-09) |
+| image / vidéo | un fichier, avec sa catégorie (`APP_SCREENSHOTS_AND_PREVIEWS` ou `CREATIVE_ASSETS`) et son état (`AWAITING_UPLOAD` → `UPLOAD_COMPLETE` → `COMPLETE` → … → `APPROVED`, `REJECTED`, `ARCHIVED`) | `POST /v1/appAssetLibraryImages` ou `Videos`, envoi des octets, puis `PATCH uploaded: true` (sans somme de contrôle) |
+| placement | pose un fichier sur une page, pour un **type d'emplacement** et un **groupe** | `POST/GET/DELETE /v1/appAssetLibraryPlacements`, lu par langue sur `/v1/appStoreVersionLocalizations/{id}/placements?sort=placementGroupPosition`. États : `ASSET_PROCESSING`, `FAILED`, `PARENT_*`, et `ACTIVE`, observé sur une version en ligne mais absent de l'énumération |
+| ordre | l'ordre d'affichage d'un groupe | `POST /v1/appAssetLibraryPlacementOrderingRequests` (`placementGroup` + placements ordonnés) |
+| données de référence | spécifications (`specId`), groupes, classes d'affichage, limites | `GET /v1/appAssetLibraryRefData`. andp les lit en direct quand il a des identifiants, sinon il utilise l'instantané du 2026-10-09 (`andp/asc/asset_refdata.py`) |
+
+Un placement se pose sur une langue de **version**, de **page produit personnalisée**, de **traitement d'expérience** ou d'**événement in-app**. andp pilote la langue de version.
+
+### Les types d'emplacement
+
+| Type | Sens | Catégorie | Limite par groupe (version) | andp (dossier) |
+|---|---|---|---|---|
+| `APP_SCREENSHOT` | captures de la fiche | captures et vidéos | **10** | `<langue>/screenshots/<GROUPE>/` |
+| `APP_PREVIEW` | vidéos d'aperçu, 15 à 30 s | captures et vidéos | **3** | `<langue>/previews/<GROUPE>/` |
+| `IMESSAGE_APP_SCREENSHOT` | captures de l'app iMessage | captures et vidéos | 10 | `<langue>/imessage_screenshots/<GROUPE>/` |
+| `PRODUCT_PAGE_HEADER_ASSET` | **en-tête de la fiche** : image PNG 5244×2950 (16:9) ou 3840×1646 (21:9), ou vidéo 3840×1646 de 5 à 30 s | assets créatifs | **1** | `<langue>/product_page_header/` |
+| `APP_STORE_SEARCH_RESULTS_ASSET` | **visuel des résultats de recherche** : PNG 5244×2950, image 3:2 de 1920 à 3840 px de large, ou vidéo 3:2 de 5 à 30 s | assets créatifs | **1** | `<langue>/search_results/` |
+| `SEARCH_RESULTS_ADS_ASSET`, `TODAY_TAB_ADS_ASSET` | publicités Apple Ads | assets créatifs | — | — (relèvent d'Apple Ads) |
+| `EVENT_CARD_ASSET`, `EVENT_DETAILS_PAGE_ASSET` | carte et page d'un événement in-app | assets créatifs | 1 | — (événements in-app non pilotés) |
+| `RETENTION_MESSAGE_ASSET` | messages de rétention (abonnements) | assets créatifs | — | — |
+
+### Les groupes, leurs classes d'affichage et les dimensions acceptées
+
+Le nom du dossier `<GROUPE>` peut s'écrire de trois façons :
+
+- le groupe lui-même (`IPHONE_DUO_PROFILE`) ;
+- sa classe d'affichage (`IPHONE_DUO`, `IPAD_11_DISPLAY`) ;
+- l'ancien type de capture (`APP_IPHONE_67` → `IPHONE_DYNAMIC_ISLAND_LARGE_PROFILE`, `APP_IPAD_PRO_3GEN_129` → `IPAD_13_PROFILE`…). Ces correspondances sont observées sur me.meeshy.app : ses anciens jeux y apparaissent comme placements de ces groupes.
+
+Une dimension de « Captures » se lit largeur × hauteur. Chaque groupe accepte le portrait et le paysage, PNG ou JPEG sans transparence, 500 Mo au plus. Une vidéo `APP_PREVIEW` fait de 15 à 30 s, entre 23 et 30 images par seconde. Relevé de `appAssetLibraryRefData` le 2026-10-09 :
+
+| Groupe (dossier) | Classe d'affichage | Écrans | Captures `APP_SCREENSHOT` | Vidéos `APP_PREVIEW` |
+|---|---|---|---|---|
+| `IPAD_105_PROFILE` | `IPAD_105_DISPLAY` | 2224x1668 | 1668×2224, 2224×1668 | 1200×1600, 1600×1200 |
+| `IPAD_11_PROFILE` | `IPAD_11_DISPLAY` | 2266x1488, 2360x1640, 2388x1668, 2420x1668 | 1488×2266, 1640×2360, 1668×2388, 1668×2420, 2266×1488, 2360×1640, 2388×1668, 2420×1668 | 1200×1600, 1600×1200 |
+| `IPAD_129_PROFILE` | `IPAD_129_DISPLAY` | 2732x2048 | 2048×2732, 2732×2048 | 1200×1600, 1200×900, 1600×1200, 900×1200 |
+| `IPAD_13_PROFILE` | `IPAD_13_DISPLAY` | 2732x2048, 2752x2064 | 2048×2732, 2064×2752, 2732×2048, 2752×2064 | 1200×1600, 1600×1200 |
+| `IPAD_97_PROFILE` | `IPAD_97_DISPLAY` | 1024x768, 2048x1536 | 1024×748, 1024×768, 1536×2008, 1536×2048, 2048×1496, 2048×1536, 768×1004, 768×1024 | 1200×900, 900×1200 |
+| `IPHONE_DUO_PROFILE` | `IPHONE_DUO` | 2853x2007, 2034x1398 | 1398×2034, 2007×2853, 2034×1398, 2853×2007 | 1920×886, 886×1920 |
+| `IPHONE_DYNAMIC_ISLAND_LARGE_PROFILE` | `IPHONE_DYNAMIC_ISLAND_LARGE_DISPLAY` | 2736x1260, 2796x1290, 2868x1320 | 1260×2736, 1290×2796, 1320×2868, 2736×1260, 2796×1290, 2868×1320 | 1920×886, 886×1920 |
+| `IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE` | `IPHONE_DYNAMIC_ISLAND_MEDIUM_DISPLAY` | 2556x1179, 2622x1206 | 1179×2556, 1206×2622, 2556×1179, 2622×1206 | 1920×886, 886×1920 |
+| `IPHONE_FACE_ID_LARGE_PROFILE` | `IPHONE_FACE_ID_LARGE_DISPLAY` | 2688x1242, 2778x1284 | 1242×2688, 1284×2778, 2688×1242, 2778×1284 | 1920×886, 886×1920 |
+| `IPHONE_FACE_ID_MEDIUM_PROFILE` | `IPHONE_FACE_ID_MEDIUM_DISPLAY` | 2340x1080, 2436x1125, 2532x1170 | 1080×2340, 1125×2436, 1170×2532, 2340×1080, 2436×1125, 2532×1170 | 1920×886, 886×1920 |
+| `IPHONE_HOME_BUTTON_35_PROFILE` | `IPHONE_HOME_BUTTON_35_DISPLAY` | 960x640, 960x600, 920x640 | 320×460, 320×480, 480×300, 480×320, 640×920, 640×960, 960×600, 960×640 | — |
+| `IPHONE_HOME_BUTTON_40_PROFILE` | `IPHONE_HOME_BUTTON_40_DISPLAY` | 1136x640, 1136x600, 1096x640 | 1136×600, 1136×640, 640×1096, 640×1136 | 1080×1920, 1920×1080 |
+| `IPHONE_HOME_BUTTON_LARGE_PROFILE` | `IPHONE_HOME_BUTTON_LARGE_DISPLAY` | 2208x1242 | 1242×2208, 2208×1242 | 1080×1920, 1920×1080 |
+| `IPHONE_HOME_BUTTON_MEDIUM_PROFILE` | `IPHONE_HOME_BUTTON_MEDIUM_DISPLAY` | 1334x750 | 1334×750, 750×1334 | 1334×750, 750×1334 |
+| `MAC_PROFILE` | `DEFAULT` | — | 1280×800, 1440×900, 2560×1600, 2880×1800 | 1920×1080 |
+| `TV_PROFILE` | `DEFAULT` | — | 1920×1080, 3840×2160 | 1920×1080 |
+| `VISION_PRO_PROFILE` | `DEFAULT` | — | 3840×2160 | 3840×2160 |
+| `WATCH_SERIES_10_PROFILE` | `WATCH_SERIES_10` | 42, 46 | 416×496 | — |
+| `WATCH_SERIES_3_PROFILE` | `WATCH_SERIES_3` | 38, 42 | 312×390 | — |
+| `WATCH_SERIES_4_PROFILE` | `WATCH_SERIES_4` | 40, 44 | 368×448 | — |
+| `WATCH_SERIES_7_PROFILE` | `WATCH_SERIES_7` | 41, 45 | 396×484 | — |
+| `WATCH_ULTRA_PROFILE` | `WATCH_ULTRA` | 49 | 410×502, 422×514 | — |
+
+Les groupes `IMESSAGE_*` reprennent les mêmes classes pour l'app iMessage. `DEFAULT_PROFILE` porte les assets créatifs.
+
+### iPhone Duo
+
+L'iPhone Duo est l'iPhone à deux écrans géré par iOS 27. Sa classe `IPHONE_DUO` n'a **pas** d'équivalent dans l'ancien `screenshotDisplayType` : ses captures ne passent **que** par l'Asset Library. Ses spécifications ont été publiées le 2026-09-09, et l'App Store accepte les apps optimisées iPhone Duo depuis le 2026-10-05.
+
+| | Portrait | Paysage |
+|---|---|---|
+| écran extérieur | 1398×2034 | 2034×1398 |
+| écran intérieur | 2007×2853 | 2853×2007 |
+| vidéo d'aperçu | 886×1920 | 1920×886 |
+
+- **Exigence** : les captures iPhone Duo sont **obligatoires pour toute soumission à partir d'avril 2027** (App Store Connect, 2026-10-05). Apple les annonce aussi obligatoires pour toute app compilée avec le SDK iOS 27.1 ou plus.
+- **Ce que fait `readiness appstore`** : il avertit aujourd'hui et **bloque à partir du 2027-04-01** pour une version iOS dont une langue n'a pas de capture `IPHONE_DUO_PROFILE`.
+
+Les mêmes notes de version ajoutent des spécifications pour l'iPhone 18 Pro et Pro Max (classe `IPHONE_DYNAMIC_ISLAND_LARGE_DISPLAY`, qui gagne 2736×1260), l'Apple Watch Ultra 4 (422×514) et la Series 12.
+
+### Ce qu'andp vérifie et fait
+
+- **Avant tout envoi**, pour chaque fichier : l'extension, les **dimensions exactes lues dans le fichier** (PNG, JPEG, et les boîtes `tkhd`/`mvhd` des MP4 et MOV), la taille, la durée d'une vidéo et le nombre maximal par groupe. La moindre erreur arrête tout, avant la première requête.
+- **Envoi** : un fichier est envoyé une seule fois dans la bibliothèque. Un fichier de même nom et de même taille déjà présent est réutilisé. Il est ensuite placé dans chaque langue, puis le groupe est ordonné selon l'ordre des noms de fichiers ; les placements absents du dossier passent après.
+- **Placements absents du dossier** : ils sont gardés et signalés, ou retirés avec `store.media.prune: true`.
+- **Plan** : `store plan` liste chaque envoi, placement, remise en ordre ou retrait (famille `media`) sans rien écrire.
+- **Sans Asset Library** : les groupes qui ont un ancien type passent par `appScreenshotSets` / `appPreviewSets`. iPhone Duo et les assets créatifs sont refusés, avec la raison.
+
+## 13. Ce que l'API n'expose pas — à faire à la main dans App Store Connect
 
 Ces ressources sont absentes de la spécification 4.5.1 (vérifié par recherche dans le fichier).
 

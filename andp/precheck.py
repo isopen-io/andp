@@ -6,8 +6,8 @@ everything else is a warning. The listing fields App Review requires (content
 rights, primary category, app name and privacy policy per language, copyright,
 App Review contact and demo account, every age rating answer, Apple's length
 limits) are errors too — `definition_checks`. `ok:true` is still not a
-guarantee: App Privacy, the EU trader status and per-device screenshot sizes
-are not readable through the API, and Apple stays the final authority.
+guarantee: App Privacy and the EU trader status are not readable through the
+API, and Apple stays the final authority.
 """
 import re
 
@@ -41,9 +41,8 @@ def _summary(checks):
         "errors": errors,
         "warnings": warnings,
         "checks": checks,
-        "note": ("ok does not guarantee acceptance: App Privacy answers, the EU trader "
-                 "status and per-device screenshot sizes are not readable through the "
-                 "API and are not checked."),
+        "note": ("ok does not guarantee acceptance: App Privacy answers and the EU "
+                 "trader status are not readable through the API and are not checked."),
     }
 
 

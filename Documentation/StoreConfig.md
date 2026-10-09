@@ -72,7 +72,14 @@ store:
     document: compliance/french-declaration.pdf
 
   eula: standard                      # or {file: legal/eula.txt, territories: all}
+
+  media:
+    prune: false                      # true: remove placements absent from the folder
 ```
+
+Screenshots, previews and creative assets (product page header, search
+results) come from the metadata folder and go through the App Asset Library —
+iPhone Duo included ([Metadata.md](Metadata.md), [AppStoreFields.md § 12](AppStoreFields.md)).
 
 - **Keys**: snake_case, the deliver file names, or the API camelCase names, all
   accepted; two keys disagreeing on one field is an error; an unknown key is an
@@ -116,8 +123,10 @@ refused whole. Without `--version`, the editable version of `platform` is used.
 `andp readiness appstore <bundle> <version>` blocks on what App Review
 requires: content rights, primary category, app name and privacy policy URL in
 every language of the version, copyright, scheduled release without date, App
-Review contact, demo account, every unanswered age rating question (named), and
-Apple's length limits.
+Review contact (phone in international format), demo account, every unanswered
+age rating question (named), Apple's length limits, and screenshots per
+language (legacy sets or Asset Library). Missing iPhone Duo screenshots warn
+today and block from 2027-04-01.
 
 ## Pricing, territories, age rating
 

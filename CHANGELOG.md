@@ -1,3 +1,49 @@
+## 1.17.0 - 2026-10-09
+### Added
+- **Listing visuals go through the App Asset Library** (API 4.5.1, opened
+  2026-10-05; isopen-io/andp#98). The library is the new home of the store
+  visuals. The metadata folder now carries:
+  - `screenshots/<GROUP>/`, `previews/<GROUP>/` and
+    `imessage_screenshots/<GROUP>/`;
+  - the creative assets `product_page_header/` and `search_results/`.
+
+  A group is named by its placement group, its display class (`IPHONE_DUO`)
+  or its legacy type (`APP_IPHONE_67` → `IPHONE_DYNAMIC_ISLAND_LARGE_PROFILE`).
+  A file is uploaded once into the library (reserve, PUT, `uploaded: true`),
+  placed in each version locale, and its group is ordered by file name.
+  `publish`, `store plan` (family `media`: upload / place / reorder / remove)
+  and `store apply` all use it. `store.media.prune` removes placements that
+  are absent from the folder.
+- **iPhone Duo**: exterior 1398×2034 and interior 2007×2853, portrait and
+  landscape, and previews at 886×1920. These are Asset Library only: no legacy
+  display type exists for them.
+- **Every visual is checked before anything is sent.** The check covers the
+  extension, the exact dimensions read from the file (PNG, JPEG, MP4/MOV
+  `tkhd`/`mvhd`), the size, the video duration and the count per group. It
+  uses the live `appAssetLibraryRefData` when credentials exist, and otherwise
+  the 2026-10-09 snapshot (`andp/asc/asset_refdata.py`).
+- **The legacy `appScreenshotSets` / `appPreviewSets` remain the fallback**
+  when the Asset Library does not answer, for the groups they can express.
+- **`readiness appstore` covers the new visuals.**
+  - A locale counts as having screenshots if either the legacy sets or the
+    Asset Library have them.
+  - Missing iPhone Duo screenshots warn today and **block from 2027-04-01**.
+  - A non-international App Review phone now blocks (Apple requires it since
+    2026-08-19).
+- **Korea age rating**: `koreaAgeRatingOverride` is refused without
+  `gracRatingClassificationNumber`.
+
+### Changed
+- `publish` reads and validates the whole folder (texts and media) before its
+  first write. The legacy media path is chosen explicitly, never assumed.
+
+### Observed API contracts
+- The library's files are listed at `/v1/appAssetLibraries/{id}/images` and
+  `…/videos`. These paths come from the response links; the OpenAPI file
+  omits them.
+- A placement on a live version reports the state `ACTIVE`, which is not in
+  the documented enum.
+
 ## 1.16.0 - 2026-10-09
 ### Added
 - **The whole App Store listing is declared, planned and applied** — every

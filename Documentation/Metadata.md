@@ -1,4 +1,4 @@
-# The metadata folder — texts, screenshots & preview videos
+# The metadata folder — texts, screenshots, preview videos & creative assets
 
 ANDP pushes App Store metadata and media from a **folder tree** — release
 notes per language, screenshots per device, and preview *videos* per device.
@@ -30,11 +30,15 @@ camelCase ones — so an existing `fastlane/metadata` works as is.
     promotional_text.txt | promotionalText.txt  → promotional text (≤ 170)
     support_url.txt | supportUrl.txt            → support URL
     marketing_url.txt | marketingUrl.txt        → marketing URL
-    screenshots/
-      APP_IPHONE_67/        01.png  02.png  …   (per Apple display type)
-      APP_IPAD_PRO_3GEN_129/ 01.png …
-    previews/
-      APP_IPHONE_67/        01.mp4  …           (preview videos)
+    screenshots/                   → APP_SCREENSHOT (≤ 10 per group)
+      IPHONE_DUO/           01.png  02.png  …   (1398×2034, 2007×2853, portrait or landscape)
+      APP_IPHONE_67/        01.png  …           (legacy name → IPHONE_DYNAMIC_ISLAND_LARGE_PROFILE)
+      IPAD_13_PROFILE/      01.png  …
+    previews/                      → APP_PREVIEW (≤ 3 per group, 15–30 s)
+      IPHONE_DUO/           01.mp4  …
+    imessage_screenshots/<GROUP>/  → IMESSAGE_APP_SCREENSHOT
+    product_page_header/   header.png          → PRODUCT_PAGE_HEADER_ASSET (1)
+    search_results/        card.png            → APP_STORE_SEARCH_RESULTS_ASSET (1)
   fr-FR/
     …
 ```
@@ -49,12 +53,21 @@ camelCase ones — so an existing `fastlane/metadata` works as is.
 - Every text is checked against Apple's limit before anything is sent; an
   empty file is ignored (it never blanks a field).
 - Locale folders use App Store Connect locale codes (`en-US`, `fr-FR`, `it`, …).
-- Device folders use Apple's raw **display type** (`APP_IPHONE_67`,
-  `APP_IPAD_PRO_3GEN_129`, `APP_APPLE_TV`, `APP_APPLE_VISION_PRO`, …) — no
-  guessing/aliasing, so what you name is what Apple gets.
-- Screenshots: `.png/.jpg/.jpeg`; previews: `.mp4/.mov/.m4v`.
-- **Idempotent:** a screenshot/preview set that already holds assets is skipped
-  (not duplicated), so re-running is safe.
+- Visuals go through the **App Asset Library** (API 4.5.1): a file is uploaded
+  once, placed in each locale, and the group is ordered by file name. A group
+  folder is named by its placement group (`IPHONE_DUO_PROFILE`), its display
+  class (`IPHONE_DUO`, `IPAD_11_DISPLAY`) or its legacy type (`APP_IPHONE_67`,
+  `APP_IPAD_PRO_3GEN_129`, `IPHONE_67` for previews). The groups, the accepted
+  dimensions and the limits: [AppStoreFields.md § 12](AppStoreFields.md).
+- **Checked before anything is sent:** extension, exact dimensions read from
+  the file (PNG, JPEG, MP4/MOV), size, video duration, count per group. One
+  bad file stops the run before the first request.
+- Without an Asset Library, the legacy `appScreenshotSets` / `appPreviewSets`
+  take the groups they can express; iPhone Duo and the creative assets need
+  the Asset Library.
+- **Idempotent per file:** a file already placed is skipped; a file already in
+  the library is placed without being uploaded again. Placements absent from
+  the folder are kept (`store.media.prune: true` removes them).
 
 ## Standalone
 
