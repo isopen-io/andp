@@ -63,6 +63,7 @@ def run_precheck(managers, app_id, version_id):
                        "message": "No build is attached to this version."})
 
     localizations = appstore.list_version_localizations(version_id)
+    visual_locales = []
     if not localizations:
         checks.append({"id": "localizations", "level": "error",
                        "message": "The version has no localizations."})
@@ -85,13 +86,13 @@ def run_precheck(managers, app_id, version_id):
             checks.append({"id": "supportUrl", "level": "warning",
                            "message": f"[{locale}] support URL is empty."})
 
-        # Screenshots: count actual appScreenshots (a set can exist empty).
+        # Screenshots: count actual appScreenshots (a set can exist empty). A
+        # locale with none may still have App Asset Library placements —
+        # decided by visual_checks, which reads them.
         total = 0
         for sset in appstore.localization_screenshot_sets(loc["id"]):
             total += managers.screenshots.count_screenshots(sset["id"])
-        if total == 0:
-            checks.append({"id": "screenshots", "level": "error",
-                           "message": f"[{locale}] has no screenshots."})
+        visual_locales.append((loc["id"], locale, total))
 
         # Content rules on the reviewer-visible text.
         text = " ".join(filter(None, [
@@ -105,6 +106,7 @@ def run_precheck(managers, app_id, version_id):
     checks.extend(definition_checks(
         managers, app_id, version or {"id": version_id},
         [loc.get("attributes", {}) or {} for loc in localizations], declaration))
+    checks.extend(visual_checks(managers, version or {"id": version_id}, visual_locales))
     return _summary(checks)
 
 
@@ -232,8 +234,8 @@ def _review_checks(managers, version_id):
                              f"App Review contact incomplete: {', '.join(missing)}."))
     phone = attrs.get("contactPhone") or ""
     if phone and not phone.startswith("+"):
-        checks.append({"id": "review_phone", "level": "warning",
-                       "message": "App Review phone should be international (+country code)."})
+        checks.append(_error("review_phone", "App Review phone must be in international "
+                             "format (+country code) — required since 2026-08-19."))
     if attrs.get("demoAccountRequired") and not (
             attrs.get("demoAccountName") and attrs.get("demoAccountPassword")):
         checks.append(_error("demo_account", "demoAccountRequired is true but the demo "
@@ -264,4 +266,35 @@ def definition_checks(managers, app_id, version, localizations, declaration):
     _guarded(checks, lambda: _version_checks(version, localizations))
     _guarded(checks, lambda: _review_checks(managers, version["id"]))
     _guarded(checks, lambda: _age_checks(declaration))
+    return checks
+
+
+# App Store Connect, 2026-10-05: iPhone Duo screenshots are required for every
+# submission from April 2027. Before that day a missing set only warns.
+IPHONE_DUO_REQUIRED_FROM = "2027-04-01"
+
+
+def visual_checks(managers, version, locales, today=None):
+    """Screenshots per locale (legacy sets OR Asset Library placements) and the
+    iPhone Duo set. `locales` is [(localization_id, locale, legacy_count)]."""
+    import datetime
+    today = (today or datetime.date.today()).isoformat()
+    platform = ((version or {}).get("attributes") or {}).get("platform") or "IOS"
+    checks = []
+    for loc_id, locale, legacy_total in locales:
+        try:
+            placements = managers.asset_library.placements(loc_id)
+        except Exception:
+            placements = None
+        shots = [p for p in placements or [] if p.get("placementType") == "APP_SCREENSHOT"]
+        if legacy_total == 0 and not shots:
+            checks.append(_error("screenshots", f"[{locale}] has no screenshots."))
+        if placements is None or platform != "IOS":
+            continue
+        if not any(p.get("placementGroup") == "IPHONE_DUO_PROFILE" for p in shots):
+            level = "error" if today >= IPHONE_DUO_REQUIRED_FROM else "warning"
+            checks.append({"id": "iphone_duo_screenshots", "level": level,
+                           "message": f"[{locale}] has no iPhone Duo screenshots "
+                                      f"(IPHONE_DUO, 1398×2034 or 2007×2853) — required "
+                                      f"for every submission from {IPHONE_DUO_REQUIRED_FROM}."})
     return checks

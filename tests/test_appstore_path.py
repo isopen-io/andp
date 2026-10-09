@@ -318,6 +318,9 @@ def _precheck_ok_responses():
         FakeResponse(200, {"data": {"id": "rd", "attributes": {
             "contactFirstName": "A", "contactLastName": "B",
             "contactPhone": "+1 555 0100", "contactEmail": "a@b.c"}}}),       # review detail
+        FakeResponse(200, {"data": [{"id": "pl", "attributes": {
+            "placementType": "APP_SCREENSHOT", "placementGroup": "IPHONE_DUO_PROFILE",
+            "mediaType": "IMAGE"}}]}),                                       # Asset Library placements
     ]
 
 

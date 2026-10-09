@@ -103,11 +103,12 @@ def test_lengths_over_apple_limits_block():
     assert any("subtitle" in m for m in lengths)
 
 
-def test_a_phone_without_country_code_is_a_warning():
+def test_a_phone_without_country_code_blocks():
+    # App Store Connect, 2026-08-19: the App Review phone must be international.
     state = _ready_state()
     state["review"]["attributes"]["contactPhone"] = "0612345678"
-    _, checks = _errors(state)
-    assert any(c["id"] == "review_phone" and c["level"] == "warning" for c in checks)
+    errors, _ = _errors(state)
+    assert "+" in errors["review_phone"]["message"]
 
 
 def test_a_failed_read_skips_only_that_check():
@@ -120,3 +121,62 @@ def test_a_failed_read_skips_only_that_check():
     checks = definition_checks(managers, "APP", version, [], None)
     ids = {c["id"] for c in checks}
     assert "content_rights" not in ids and "copyright" in ids
+
+
+# -- visuals: iPhone Duo (App Asset Library) ----------------------------------
+
+import datetime  # noqa: E402
+
+from andp.precheck import visual_checks  # noqa: E402
+from listing_fakes import media_managers  # noqa: E402
+
+
+def _placement(group, ptype="APP_SCREENSHOT"):
+    return {"id": f"p-{group}", "placementType": ptype, "placementGroup": group,
+            "mediaType": "IMAGE", "mediaId": "i", "fileName": "01.png", "fileSize": 1}
+
+
+def _visual(placements, legacy_total=1, today=datetime.date(2026, 10, 9),
+            platform="IOS"):
+    managers = media_managers(live_state(placements={"vl-fr-FR": placements}))
+    version = {"id": "v1", "attributes": {"platform": platform}}
+    return visual_checks(managers, version, [("vl-fr-FR", "fr-FR", legacy_total)], today=today)
+
+
+def test_missing_iphone_duo_screenshots_warn_before_april_2027():
+    checks = _visual([_placement("IPHONE_DYNAMIC_ISLAND_LARGE_PROFILE")])
+    duo = [c for c in checks if c["id"] == "iphone_duo_screenshots"]
+    assert duo and duo[0]["level"] == "warning" and "2027-04-01" in duo[0]["message"]
+
+
+def test_missing_iphone_duo_screenshots_block_from_april_2027():
+    checks = _visual([_placement("IPHONE_DYNAMIC_ISLAND_LARGE_PROFILE")],
+                     today=datetime.date(2027, 4, 1))
+    assert [c["level"] for c in checks if c["id"] == "iphone_duo_screenshots"] == ["error"]
+
+
+def test_iphone_duo_placements_satisfy_the_check():
+    checks = _visual([_placement("IPHONE_DUO_PROFILE")], today=datetime.date(2027, 5, 1))
+    assert not [c for c in checks if c["id"] == "iphone_duo_screenshots"]
+
+
+def test_a_mac_version_is_not_asked_for_iphone_duo_screenshots():
+    assert _visual([], platform="MAC_OS", legacy_total=1) == []
+
+
+def test_asset_library_screenshots_count_when_the_legacy_sets_are_empty():
+    assert not [c for c in _visual([_placement("IPHONE_DUO_PROFILE")], legacy_total=0)
+                if c["id"] == "screenshots"]
+    checks = _visual([], legacy_total=0)
+    assert [c["level"] for c in checks if c["id"] == "screenshots"] == ["error"]
+
+
+def test_screenshots_error_stands_when_placements_cannot_be_read():
+    managers = media_managers(live_state())
+
+    def boom(*a):
+        raise RuntimeError("500")
+    managers.asset_library.placements = boom
+    checks = visual_checks(managers, {"id": "v1", "attributes": {}},
+                           [("vl-fr-FR", "fr-FR", 0)], today=datetime.date(2026, 10, 9))
+    assert [c["id"] for c in checks] == ["screenshots"]
