@@ -14,7 +14,9 @@ import re
 from .asc.appstore import EDITABLE_VERSION_STATES, version_state
 
 _CROSS_PLATFORM = re.compile(r"\b(android|google play|play store)\b", re.IGNORECASE)
-_PLACEHOLDER = re.compile(r"\b(lorem ipsum|todo|fixme|sample text|placeholder)\b", re.IGNORECASE)
+_PLACEHOLDER = re.compile(r"\b(lorem ipsum|sample text|placeholder)\b", re.IGNORECASE)
+# Upper case only: "todo" is an everyday word in Spanish and Portuguese.
+_MARKER = re.compile(r"\b(TODO|FIXME|TBD|XXX)\b")
 
 
 def _content_warnings(text):
@@ -25,7 +27,7 @@ def _content_warnings(text):
         warnings.append({"id": "cross_platform_mention", "level": "warning",
                          "message": "Text mentions another platform (Android / Play Store) — "
                                     "a common App Review rejection."})
-    if _PLACEHOLDER.search(text):
+    if _PLACEHOLDER.search(text) or _MARKER.search(text):
         warnings.append({"id": "placeholder_text", "level": "warning",
                          "message": "Text looks like a placeholder (lorem ipsum / TODO / …)."})
     return warnings

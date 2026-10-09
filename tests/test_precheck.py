@@ -148,3 +148,11 @@ def test_missing_support_url_and_keywords_warn(tmp_path):
     ids = {c["id"] for c in report["checks"] if c["level"] == "warning"}
     assert "keywords" in ids
     assert "supportUrl" in ids
+
+
+def test_spanish_and_portuguese_todo_is_a_word_not_a_placeholder():
+    # Observed 2026-10-09 on me.meeshy.app: es-ES "todo el mundo" and pt-BR
+    # "todo dia" were flagged as placeholders. Only the upper-case marker is.
+    assert _content_warnings("Habla con todo el mundo. Fale com todo mundo.") == []
+    assert any(w["id"] == "placeholder_text" for w in _content_warnings("TODO: write"))
+    assert any(w["id"] == "placeholder_text" for w in _content_warnings("FIXME later"))
