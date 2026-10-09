@@ -895,9 +895,12 @@ def configure_age_rating(bundle_id, account="primary", declaration=None, project
             "changed": True, "updated_fields": sorted(diff), "warnings": warnings}
 
 
-def configure_store(bundle_id, account="primary", project_root="."):
-    """Apply every configured store block (pricing/availability/age_rating) from
-    andp.yml. Best-effort: independent, idempotent blocks; a re-run heals a
+def configure_store(bundle_id, account="primary", project_root=".", version=None,
+                    metadata_dir=None):
+    """Apply every configured store block from andp.yml: pricing, availability,
+    age rating, then the listing (app, categories, localizations, version,
+    review, accessibility, encryption, licence — see listing_service).
+    Best-effort: independent, idempotent blocks; a re-run heals a
     partially-applied state. ok=false if any configured block failed."""
     try:
         store = _read_store(project_root)
@@ -908,9 +911,15 @@ def configure_store(bundle_id, account="primary", project_root="."):
         ("pricing", lambda: configure_pricing(bundle_id, account, project_root=project_root)),
         ("availability", lambda: configure_availability(bundle_id, account, project_root=project_root)),
         ("age_rating", lambda: configure_age_rating(bundle_id, account, project_root=project_root)),
+        ("listing", lambda: _apply_listing(bundle_id, account, version, metadata_dir, project_root)),
     ]
+    from .listing_service import has_listing
     for name, run in plan:
-        if not store.get(name):
+        configured = (has_listing(store, metadata_dir) if name == "listing"
+                      else store.get(name))
+        if not configured:
+            if name == "listing":
+                continue
             blocks[name] = {"skipped": "not configured"}
             continue
         try:
@@ -925,6 +934,12 @@ def configure_store(bundle_id, account="primary", project_root="."):
             any_fail = True
     return {"command": "configure_store", "ok": not any_fail, "dry_run": bool(dry_run),
             "blocks": blocks}
+
+
+def _apply_listing(bundle_id, account, version, metadata_dir, project_root):
+    from .listing_service import apply_listing
+    return apply_listing(bundle_id, account, version=version, metadata_dir=metadata_dir,
+                         project_root=project_root)
 
 
 def _is_all(territories):

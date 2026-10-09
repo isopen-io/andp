@@ -204,3 +204,17 @@ def live_state(**overrides):
     }
     state.update(overrides)
     return state
+
+
+class FakeApps:
+    def __init__(self, found=True):
+        self.found = found
+
+    def find_app(self, bundle_id):
+        return {"id": "APP", "attributes": {"bundleId": bundle_id}} if self.found else None
+
+
+def fake_managers_with_app(state, found=True):
+    managers = FakeManagers(state)
+    managers.apps = FakeApps(found)
+    return managers
