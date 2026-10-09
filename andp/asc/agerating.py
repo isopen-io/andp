@@ -12,8 +12,8 @@ EDITABLE_APP_INFO_STATES = frozenset({
     "REJECTED", "METADATA_REJECTED", "INVALID_BINARY", "WAITING_FOR_REVIEW",
 })
 
-# Ternary content descriptors. Current values: NONE | INFREQUENT_OR_MILD |
-# FREQUENT_OR_INTENSE; the API still lists the legacy INFREQUENT / FREQUENT.
+# Ternary content descriptors. Current values: NONE | INFREQUENT | FREQUENT.
+# API 4.1 deprecated INFREQUENT_OR_MILD / FREQUENT_OR_INTENSE (still accepted).
 TERNARY_FIELDS = frozenset({
     "alcoholTobaccoOrDrugUseOrReferences", "contests", "gamblingSimulated",
     "gunsOrOtherWeapons", "horrorOrFearThemes", "matureOrSuggestiveThemes",
@@ -22,8 +22,9 @@ TERNARY_FIELDS = frozenset({
     "violenceCartoonOrFantasy", "violenceRealistic",
     "violenceRealisticProlongedGraphicOrSadistic",
 })
-TERNARY_VALUES = frozenset({"NONE", "INFREQUENT_OR_MILD", "FREQUENT_OR_INTENSE"})
-LEGACY_TERNARY_VALUES = frozenset({"INFREQUENT", "FREQUENT"})
+TERNARY_VALUES = frozenset({"NONE", "INFREQUENT", "FREQUENT"})
+DEPRECATED_TERNARY_VALUES = {"INFREQUENT_OR_MILD": "INFREQUENT",
+                             "FREQUENT_OR_INTENSE": "FREQUENT"}
 
 # Boolean questions every app answers (API 4.5.1, 2025-2026 questionnaire).
 REQUIRED_BOOLEAN_FIELDS = frozenset({
@@ -90,9 +91,9 @@ def validate_declaration(config):
             warnings.append(f"{key}: removed from the App Store Connect API "
                             f"({REMOVED_FIELDS[key]}) — ignored")
         elif key in TERNARY_FIELDS:
-            if value in LEGACY_TERNARY_VALUES:
-                warnings.append(f"{key}: legacy value {value!r} — prefer "
-                                "INFREQUENT_OR_MILD / FREQUENT_OR_INTENSE")
+            if value in DEPRECATED_TERNARY_VALUES:
+                warnings.append(f"{key}: {value!r} is deprecated since API 4.1 — use "
+                                f"{DEPRECATED_TERNARY_VALUES[value]!r}")
             elif value not in TERNARY_VALUES:
                 warnings.append(f"{key}: unrecognised value {value!r} (passing through)")
             attributes[key] = value

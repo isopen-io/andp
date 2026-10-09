@@ -11,6 +11,7 @@ from .auth import ASCAuth
 from .availability import AvailabilityManager
 from .builds import BuildsManager
 from .client import ASCClient
+from .listing import ListingManager
 from .pricing import PricingManager
 from .testflight import TestFlightManager
 
@@ -27,6 +28,7 @@ class Managers:
         self.pricing = PricingManager(client)
         self.availability = AvailabilityManager(client)
         self.age_rating = AgeRatingManager(client)
+        self.listing = ListingManager(client)
 
 
 def make_managers(account):

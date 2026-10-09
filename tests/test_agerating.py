@@ -136,10 +136,19 @@ def test_validate_developer_info_url_must_be_an_http_url():
     assert any("developerAgeRatingInfoUrl" in e for e in errors)
 
 
-def test_validate_legacy_frequency_values_pass_with_a_warning():
-    attrs, errors, warnings = validate_declaration({"contests": "FREQUENT"})
-    assert errors == [] and attrs["contests"] == "FREQUENT"
-    assert any("contests" in w for w in warnings)
+def test_validate_current_frequency_values_pass_silently():
+    # API 4.1 release notes: INFREQUENT_OR_MILD / FREQUENT_OR_INTENSE are
+    # deprecated; PATCH with INFREQUENT / FREQUENT.
+    attrs, errors, warnings = validate_declaration({"contests": "FREQUENT",
+                                                    "violenceRealistic": "INFREQUENT"})
+    assert errors == [] and warnings == []
+    assert attrs == {"contests": "FREQUENT", "violenceRealistic": "INFREQUENT"}
+
+
+def test_validate_deprecated_frequency_values_pass_with_a_warning():
+    attrs, errors, warnings = validate_declaration({"contests": "INFREQUENT_OR_MILD"})
+    assert errors == [] and attrs["contests"] == "INFREQUENT_OR_MILD"
+    assert any("contests" in w and "INFREQUENT" in w for w in warnings)
 
 
 def test_missing_answers_lists_every_unanswered_required_question():

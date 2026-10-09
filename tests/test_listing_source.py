@@ -86,7 +86,7 @@ def test_length_violation_in_a_file_names_the_locale(tmp_path):
     md = str(tmp_path / "md")
     _write(md, "de-DE/keywords.txt", "k" * 101)
     d = load_desired({"metadata_dir": "md"}, str(tmp_path), environ={})
-    assert d["errors"] == ["de-DE: keywords: 101 characters, the App Store allows 100"]
+    assert d["errors"] == ["de-DE: keywords: 101 bytes, the App Store allows 100"]
 
 
 def test_secrets_come_from_the_environment_or_an_env_file(tmp_path):

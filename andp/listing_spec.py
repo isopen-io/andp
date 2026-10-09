@@ -19,15 +19,16 @@ TEXT, URL, BOOL, ENUM, DATETIME, LOCALE, CATEGORY = (
 
 
 class Field:
-    __slots__ = ("api", "keys", "kind", "max_len", "values", "required",
+    __slots__ = ("api", "keys", "kind", "max_len", "max_bytes", "values", "required",
                  "deprecated", "secret")
 
     def __init__(self, api, kind, keys=(), max_len=None, values=None,
-                 required=False, deprecated=None, secret=False):
+                 required=False, deprecated=None, secret=False, max_bytes=None):
         self.api = api
         self.kind = kind
         self.keys = tuple(keys) + (api,)
         self.max_len = max_len
+        self.max_bytes = max_bytes
         self.values = frozenset(values) if values else None
         self.required = required
         self.deprecated = deprecated
@@ -86,7 +87,7 @@ VERSION_FIELDS = (
 # appStoreVersionLocalizations — per version and language.
 VERSION_LOCALIZATION_FIELDS = (
     Field("description", TEXT, (), max_len=4000, required=True),
-    Field("keywords", TEXT, (), max_len=100),
+    Field("keywords", TEXT, (), max_bytes=100),
     Field("whatsNew", TEXT, ("whats_new", "release_notes"), max_len=4000),
     Field("promotionalText", TEXT, ("promotional_text",), max_len=170),
     Field("marketingUrl", URL, ("marketing_url",)),
@@ -105,7 +106,7 @@ REVIEW_FIELDS = (
     Field("demoAccountName", TEXT, ("demo_account_name", "demo_user"), secret=True),
     Field("demoAccountPassword", TEXT, ("demo_account_password", "demo_password"),
           secret=True),
-    Field("notes", TEXT, (), max_len=4000),
+    Field("notes", TEXT, (), max_bytes=4000),
 )
 
 # accessibilityDeclarations — per app and device family (Accessibility Nutrition Labels).
@@ -207,6 +208,9 @@ def coerce(field, value):
     if field.max_len is not None and len(text) > field.max_len:
         return None, (f"{field.api}: {len(text)} characters, the App Store "
                       f"allows {field.max_len}")
+    size = len(text.encode("utf-8"))
+    if field.max_bytes is not None and size > field.max_bytes:
+        return None, (f"{field.api}: {size} bytes, the App Store allows {field.max_bytes}")
     return text, None
 
 
@@ -282,6 +286,9 @@ def review_rules(attributes):
         for name in ("demoAccountName", "demoAccountPassword"):
             if not attributes.get(name):
                 errors.append(f"{name} is required when demoAccountRequired is true")
+    phone = attributes.get("contactPhone")
+    if phone and not phone.startswith("+"):
+        errors.append("contactPhone must be in international format, starting with +")
     email = attributes.get("contactEmail")
     if email and "@" not in email:
         errors.append("contactEmail is not an e-mail address")

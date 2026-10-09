@@ -13,7 +13,7 @@ def test_name_and_subtitle_are_capped_at_thirty_characters():
 
 def test_version_text_limits_follow_app_store_connect():
     limits = {f.api: f.max_len for f in spec.VERSION_LOCALIZATION_FIELDS}
-    assert limits["keywords"] == 100 and limits["promotionalText"] == 170
+    assert limits["promotionalText"] == 170
     assert limits["description"] == 4000 and limits["whatsNew"] == 4000
 
 
@@ -96,3 +96,23 @@ def test_categories_are_checked_against_the_known_list_and_their_parent():
                                     "primarySubcategoryOne": "GAMES_PUZZLE"})
     assert warns and "only GAMES and STICKERS" in warns[0]
     assert spec.category_warnings({"primaryCategory": "SOCIAL"})
+
+
+def test_keywords_are_counted_in_utf8_bytes():
+    # App Store Connect Help, platform version information: keywords are
+    # limited to 100 BYTES — an accented letter weighs two.
+    ok, errors, _ = spec.pick(spec.VERSION_LOCALIZATION_FIELDS, {"keywords": "é" * 50})
+    assert errors == [] and ok["keywords"] == "é" * 50
+    _, errors, _ = spec.pick(spec.VERSION_LOCALIZATION_FIELDS, {"keywords": "é" * 51})
+    assert errors == ["keywords: 102 bytes, the App Store allows 100"]
+
+
+def test_review_notes_are_counted_in_bytes_too():
+    _, errors, _ = spec.pick(spec.REVIEW_FIELDS, {"notes": "à" * 2001})
+    assert errors == ["notes: 4002 bytes, the App Store allows 4000"]
+
+
+def test_review_phone_must_be_international():
+    assert spec.review_rules({"contactPhone": "+33 6 12 34 56 78"}) == []
+    assert spec.review_rules({"contactPhone": "06 12 34 56 78"}) == [
+        "contactPhone must be in international format, starting with +"]
