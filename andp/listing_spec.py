@@ -87,7 +87,9 @@ VERSION_FIELDS = (
 # appStoreVersionLocalizations — per version and language.
 VERSION_LOCALIZATION_FIELDS = (
     Field("description", TEXT, (), max_len=4000, required=True),
-    Field("keywords", TEXT, (), max_bytes=100),
+    # The Help page says 100 bytes; the API counts characters (observed
+    # 2026-10-09: 100-character / 101-byte de-DE keywords accepted live).
+    Field("keywords", TEXT, (), max_len=100),
     Field("whatsNew", TEXT, ("whats_new", "release_notes"), max_len=4000),
     Field("promotionalText", TEXT, ("promotional_text",), max_len=170),
     Field("marketingUrl", URL, ("marketing_url",)),

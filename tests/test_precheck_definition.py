@@ -93,7 +93,7 @@ def test_unanswered_age_rating_questions_block_and_are_named():
 
 def test_lengths_over_apple_limits_block():
     state = _ready_state()
-    state["version_localizations"]["fr-FR"]["keywords"] = "é" * 60
+    state["version_localizations"]["fr-FR"]["keywords"] = "é" * 101
     state["version_localizations"]["fr-FR"]["promotionalText"] = "p" * 171
     state["app_info_localizations"]["fr-FR"]["subtitle"] = "s" * 31
     errors, checks = _errors(state)

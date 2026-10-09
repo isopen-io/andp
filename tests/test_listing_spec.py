@@ -98,13 +98,15 @@ def test_categories_are_checked_against_the_known_list_and_their_parent():
     assert spec.category_warnings({"primaryCategory": "SOCIAL"})
 
 
-def test_keywords_are_counted_in_utf8_bytes():
-    # App Store Connect Help, platform version information: keywords are
-    # limited to 100 BYTES — an accented letter weighs two.
-    ok, errors, _ = spec.pick(spec.VERSION_LOCALIZATION_FIELDS, {"keywords": "é" * 50})
-    assert errors == [] and ok["keywords"] == "é" * 50
-    _, errors, _ = spec.pick(spec.VERSION_LOCALIZATION_FIELDS, {"keywords": "é" * 51})
-    assert errors == ["keywords: 102 bytes, the App Store allows 100"]
+def test_keywords_are_counted_in_characters_as_the_api_does():
+    # The Help page says "100 bytes", the API disagrees — observed 2026-10-09 on
+    # me.meeshy.app: live de-DE keywords of 100 characters / 101 UTF-8 bytes and
+    # ar-SA keywords of 70 characters / 129 bytes, both accepted. The observed
+    # contract wins: 100 characters.
+    ok, errors, _ = spec.pick(spec.VERSION_LOCALIZATION_FIELDS, {"keywords": "ü" * 100})
+    assert errors == [] and ok["keywords"] == "ü" * 100
+    _, errors, _ = spec.pick(spec.VERSION_LOCALIZATION_FIELDS, {"keywords": "k" * 101})
+    assert errors == ["keywords: 101 characters, the App Store allows 100"]
 
 
 def test_review_notes_are_counted_in_bytes_too():
