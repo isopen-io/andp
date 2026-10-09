@@ -10,6 +10,7 @@ Secrets (review contact and demo account) are compared but never shown:
 `public_changes` masks them for any output.
 """
 import datetime
+import os
 
 from . import listing_spec as spec
 from .asc.appstore import EDITABLE_VERSION_STATES, version_state
@@ -25,7 +26,7 @@ _ALWAYS_EDITABLE = {("version_localization", "promotionalText")}
 
 FAMILY_ORDER = (
     "app", "categories", "app_info_localization", "age_rating", "version",
-    "phased_release", "version_localization", "review", "review_attachment",
+    "phased_release", "version_localization", "media", "review", "review_attachment",
     "accessibility", "encryption", "eula", "pricing", "availability",
 )
 
@@ -179,6 +180,37 @@ def _plan_version(plan, managers, app_id, desired, version_res):
     return view, (review or {}).get("id")
 
 
+def _plan_visuals(plan, managers, app_id, desired, version_view):
+    """Screenshots, previews and creative assets — through media_sync."""
+    from .media_sync import plan_media
+    media = desired.get("media")
+    if not media:
+        return None
+    result = plan_media(managers, app_id, version_view["id"], media,
+                        locked=not version_view["editable"],
+                        prune=bool(desired.get("media_prune")))
+    upcoming = set(desired.get("version_localizations") or {})
+    for error in result["errors"]:
+        locale = error.split(":")[0].replace("media ", "")
+        if locale in upcoming and "localization yet" in error:
+            plan.notes.append(f"media {locale}: planned after its texts are created by "
+                              "this apply")
+            library = result["ctx"].get("assets") or {}
+            for (placement_type, group), paths in sorted(media[locale].items()):
+                for path in paths:
+                    known = (os.path.basename(path), os.path.getsize(path)) in library
+                    plan.changes.append(_change(
+                        "media", f"{locale} · {placement_type} · {group}",
+                        os.path.basename(path), None, path, "place" if known else "upload",
+                        not version_view["editable"]))
+        else:
+            plan.errors.append(error)
+    plan.changes.extend(result["changes"])
+    plan.unchanged += result["unchanged"]
+    plan.notes.extend(result["notes"])
+    return result["backend"]
+
+
 def _plan_accessibility(plan, managers, app_id, desired, ctx):
     if not desired["accessibility"]:
         return
@@ -294,11 +326,13 @@ def build_plan(managers, app_id, desired, version=None):
     wants_version = (desired["version"] or desired["version_localizations"]
                      or desired["review"] or desired["review_attachments"]
                      or desired["phased_release"] is not None)
-    if wants_version:
+    media_backend = None
+    if wants_version or desired.get("media"):
         version_res = _pick_version(managers, app_id, version, platform, plan.notes)
         if version_res is not None:
             version_view, review_id = _plan_version(plan, managers, app_id, desired,
                                                     version_res)
+            media_backend = _plan_visuals(plan, managers, app_id, desired, version_view)
     _plan_accessibility(plan, managers, app_id, desired, ctx)
     _plan_encryption(plan, managers, app_id, desired)
     _plan_eula(plan, managers, app_id, desired, ctx)
@@ -308,6 +342,7 @@ def build_plan(managers, app_id, desired, version=None):
     plan.changes.sort(key=lambda c: rank.get(c["family"], len(rank)))
     ctx["review_id"] = review_id
     return {"version": version_view, "changes": plan.changes, "unchanged": plan.unchanged,
+            "media_backend": media_backend,
             "errors": plan.errors, "warnings": plan.warnings, "notes": plan.notes,
             "read_only": ctx.pop("read_only"), "_context": {**ctx, "desired": desired}}
 
@@ -400,6 +435,13 @@ def _write_family(name, changes, managers, app_id, plan):
             listing.upload_review_attachment(review_id, change["desired"])
             writes += 1
         return writes
+    if name == "media":
+        from .media_sync import apply_media, plan_media
+        fresh = plan_media(managers, app_id, version_id, desired["media"],
+                           prune=bool(desired.get("media_prune")))
+        if fresh["errors"]:
+            raise RuntimeError("; ".join(fresh["errors"]))
+        return apply_media(managers, fresh)
     if name == "accessibility":
         state = ctx.get("accessibility", {"published": {}, "drafts": {}})
         for family in _scopes(changes):

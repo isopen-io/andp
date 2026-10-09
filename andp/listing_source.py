@@ -18,7 +18,7 @@ from . import listing_spec as spec
 KNOWN_SECTIONS = frozenset({
     "platform", "metadata_dir", "env_file", "pricing", "availability", "age_rating",
     "app", "categories", "localizations", "version", "review", "accessibility",
-    "encryption", "eula",
+    "encryption", "eula", "media",
 })
 
 _ROOT_FILES = {
@@ -262,11 +262,16 @@ def load_desired(store, project_root=".", metadata_dir=None, environ=None):
             warnings.append(f"store.env_file {store['env_file']!r} does not exist")
 
     tree = {"version": {}, "categories": {}, "review": {}, "localizations": {}}
+    media = {}
     metadata_dir = metadata_dir or store.get("metadata_dir")
     if metadata_dir:
         full = _project_path(project_root, metadata_dir)
         if os.path.isdir(full):
+            from .asc.asset_refdata import REF_DATA
+            from .media_spec import read_media_tree
             tree = _tree(full)
+            media, media_errors = read_media_tree(full, REF_DATA)
+            errors.extend(media_errors)
         else:
             errors.append(f"metadata directory {metadata_dir!r} does not exist")
 
@@ -329,6 +334,8 @@ def load_desired(store, project_root=".", metadata_dir=None, environ=None):
         "encryption": encryption,
         "encryption_document": encryption_document,
         "eula": _eula(store.get("eula"), project_root, errors),
+        "media": media,
+        "media_prune": bool((store.get("media") or {}).get("prune")),
         "errors": errors,
         "warnings": warnings,
     }

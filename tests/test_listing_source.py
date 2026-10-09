@@ -54,7 +54,9 @@ def test_reads_andp_camel_case_files_too(tmp_path):
 def test_empty_files_and_media_folders_are_not_fields(tmp_path):
     md = str(tmp_path / "md")
     _write(md, "en-US/keywords.txt", "   \n")
-    _write(md, "en-US/screenshots/APP_IPHONE_67/01.png", "png")
+    from media_files import png
+    os.makedirs(os.path.join(md, "en-US/screenshots/APP_IPHONE_67"))
+    png(os.path.join(md, "en-US/screenshots/APP_IPHONE_67/01.png"), 1290, 2796)
     d = load_desired({"metadata_dir": "md"}, str(tmp_path), environ={})
     assert d["version_localizations"] == {} and d["errors"] == []
 
@@ -166,3 +168,16 @@ def test_cross_field_rules_are_reported(tmp_path):
 def test_missing_metadata_dir_is_an_error(tmp_path):
     d = load_desired({"metadata_dir": "nowhere"}, str(tmp_path), environ={})
     assert d["errors"] and "nowhere" in d["errors"][0]
+
+
+def test_media_of_the_metadata_tree_is_part_of_the_desired_listing(tmp_path):
+    from media_files import png
+    folder = tmp_path / "md" / "fr-FR" / "screenshots" / "IPHONE_DUO"
+    folder.mkdir(parents=True)
+    png(str(folder / "01.png"), 2007, 2853)
+    png(str(folder / "02.png"), 10, 10)
+    d = load_desired({"metadata_dir": "md", "media": {"prune": True}}, str(tmp_path),
+                     environ={})
+    assert list(d["media"]["fr-FR"]) == [("APP_SCREENSHOT", "IPHONE_DUO_PROFILE")]
+    assert d["media_prune"] is True
+    assert any("02.png" in e and "10×10" in e for e in d["errors"])

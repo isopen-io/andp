@@ -57,6 +57,8 @@ def _summary(desired):
         "eula": ("standard" if (desired["eula"] or {}).get("standard")
                  else "custom" if desired["eula"] else None),
         "age_rating": len(desired["age_rating"] or {}),
+        "media_files": sum(len(paths) for groups in (desired.get("media") or {}).values()
+                           for paths in groups.values()),
         "pricing": bool(desired["pricing"]),
         "availability": bool(desired["availability"]),
     }
@@ -107,6 +109,7 @@ def store_plan(bundle_id, account="primary", version=None, metadata_dir=None,
         return {"command": "store_plan", "ok": not plan["errors"], "dry_run": False,
                 "written": False, "bundle_id": bundle_id, "version": plan["version"],
                 "changes": public_changes(plan["changes"]), "unchanged": plan["unchanged"],
+                "media_backend": plan.get("media_backend"),
                 "errors": plan["errors"], "warnings": plan["warnings"],
                 "notes": plan["notes"], "read_only": plan["read_only"]}
     return _wrap("store_plan", run)

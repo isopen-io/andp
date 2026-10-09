@@ -237,3 +237,57 @@ def test_apply_one_failing_family_does_not_stop_the_others():
     assert result["ok"] is False
     assert result["families"]["app"]["ok"] is False
     assert result["families"]["version"]["ok"] is True
+
+
+# -- visuals (App Asset Library) ------------------------------------------------
+
+from listing_fakes import media_managers  # noqa: E402
+from media_files import png  # noqa: E402
+
+
+def _duo_file(tmp_path, name="01.png"):
+    folder = tmp_path / "md" / "fr-FR" / "screenshots" / "IPHONE_DUO"
+    folder.mkdir(parents=True, exist_ok=True)
+    return png(str(folder / name), 1398, 2034)
+
+
+def test_plan_lists_media_and_writes_nothing(tmp_path):
+    path = _duo_file(tmp_path)
+    desired = _desired(media={"fr-FR": {("APP_SCREENSHOT", "IPHONE_DUO_PROFILE"): [path]}})
+    managers = media_managers(live_state())
+    plan = build_plan(managers, "APP", desired, version="1.2.0")
+    assert managers.writes == []
+    change = _fields(plan)[("media", "fr-FR · APP_SCREENSHOT · IPHONE_DUO_PROFILE", "01.png")]
+    assert change["action"] == "upload"
+    assert plan["media_backend"] == "asset_library"
+
+
+def test_apply_writes_media_after_the_texts_then_replan_is_empty(tmp_path):
+    path = _duo_file(tmp_path)
+    desired = _desired(
+        version_localizations={"fr-FR": {"promotionalText": "Nouveau"}},
+        media={"fr-FR": {("APP_SCREENSHOT", "IPHONE_DUO_PROFILE"): [path]}})
+    state = live_state()
+    managers = media_managers(state)
+    plan = build_plan(managers, "APP", desired, version="1.2.0")
+    result = apply_plan(managers, "APP", plan)
+    assert result["ok"] is True and result["families"]["media"]["writes"] == 2
+    kinds = [w[0] for w in managers.writes]
+    assert kinds.index("upsert_version_localization") < kinds.index("upload")
+    replan = build_plan(media_managers(state), "APP", desired, version="1.2.0")
+    assert replan["changes"] == []
+
+
+def test_media_for_a_language_created_by_the_same_apply_is_a_note(tmp_path):
+    folder = tmp_path / "md" / "it" / "screenshots" / "IPHONE_DUO"
+    folder.mkdir(parents=True)
+    path = png(str(folder / "01.png"), 1398, 2034)
+    desired = _desired(version_localizations={"it": {"description": "Un'app."}},
+                       media={"it": {("APP_SCREENSHOT", "IPHONE_DUO_PROFILE"): [path]}})
+    state = live_state()
+    managers = media_managers(state)
+    plan = build_plan(managers, "APP", desired, version="1.2.0")
+    assert plan["errors"] == []
+    assert any("it" in n and "after its texts" in n for n in plan["notes"])
+    apply_plan(managers, "APP", plan)
+    assert ("place", "vl-it", "APP_SCREENSHOT", "IPHONE_DUO_PROFILE", "01.png") in managers.writes
