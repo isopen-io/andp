@@ -12,7 +12,8 @@ EDITABLE_APP_INFO_STATES = frozenset({
     "REJECTED", "METADATA_REJECTED", "INVALID_BINARY", "WAITING_FOR_REVIEW",
 })
 
-# Ternary content descriptors: NONE | INFREQUENT_OR_MILD | FREQUENT_OR_INTENSE.
+# Ternary content descriptors. Current values: NONE | INFREQUENT_OR_MILD |
+# FREQUENT_OR_INTENSE; the API still lists the legacy INFREQUENT / FREQUENT.
 TERNARY_FIELDS = frozenset({
     "alcoholTobaccoOrDrugUseOrReferences", "contests", "gamblingSimulated",
     "gunsOrOtherWeapons", "horrorOrFearThemes", "matureOrSuggestiveThemes",
@@ -22,20 +23,36 @@ TERNARY_FIELDS = frozenset({
     "violenceRealisticProlongedGraphicOrSadistic",
 })
 TERNARY_VALUES = frozenset({"NONE", "INFREQUENT_OR_MILD", "FREQUENT_OR_INTENSE"})
+LEGACY_TERNARY_VALUES = frozenset({"INFREQUENT", "FREQUENT"})
 
-# Boolean fields (incl. 2025 interactivity additions).
-BOOLEAN_FIELDS = frozenset({
-    "gambling", "unrestrictedWebAccess", "seventeenPlus", "lootBox",
-    "advertising", "ageAssurance", "healthOrWellnessTopics", "messagingAndChat",
-    "parentalControls", "userGeneratedContent",
+# Boolean questions every app answers (API 4.5.1, 2025-2026 questionnaire).
+REQUIRED_BOOLEAN_FIELDS = frozenset({
+    "gambling", "unrestrictedWebAccess", "lootBox", "advertising",
+    "ageAssurance", "healthOrWellnessTopics", "messagingAndChat",
+    "parentalControls", "userGeneratedContent", "socialMedia",
 })
+# Asked only when the app has social media features (socialMedia = true).
+CONDITIONAL_BOOLEAN_FIELDS = {"socialMediaAgeRestricted": "socialMedia"}
+BOOLEAN_FIELDS = REQUIRED_BOOLEAN_FIELDS | frozenset(CONDITIONAL_BOOLEAN_FIELDS)
 
 # Enum fields with their own allowed sets (None also allowed to clear).
 ENUM_FIELDS = {
     "kidsAgeBand": frozenset({"FIVE_AND_UNDER", "SIX_TO_EIGHT", "NINE_TO_ELEVEN"}),
-    "ageRatingOverride": frozenset({"NONE", "SEVENTEEN_PLUS", "UNRATED"}),
-    "koreaAgeRatingOverride": frozenset({"NONE", "FIFTEEN_PLUS", "NINETEEN_PLUS"}),
+    "ageRatingOverrideV2": frozenset({
+        "NONE", "NINE_PLUS", "THIRTEEN_PLUS", "SIXTEEN_PLUS", "EIGHTEEN_PLUS", "UNRATED"}),
+    "ageRatingOverride": frozenset({
+        "NONE", "NINE_PLUS", "THIRTEEN_PLUS", "SIXTEEN_PLUS", "SEVENTEEN_PLUS", "UNRATED"}),
+    "koreaAgeRatingOverride": frozenset({
+        "NONE", "ALL", "TWELVE_PLUS", "FIFTEEN_PLUS", "NINETEEN_PLUS"}),
 }
+DEPRECATED_FIELDS = {"ageRatingOverride": "ageRatingOverrideV2"}
+
+# Free-text fields.
+URL_FIELDS = frozenset({"developerAgeRatingInfoUrl"})
+STRING_FIELDS = frozenset({"gracRatingClassificationNumber"}) | URL_FIELDS
+
+# Accepted by older ANDP releases, gone from the API: dropped, never sent.
+REMOVED_FIELDS = {"seventeenPlus": "replaced by the 2025 tiers and ageRatingOverrideV2"}
 
 _TRUE = {"true", "1", "yes"}
 _FALSE = {"false", "0", "no"}
@@ -55,6 +72,11 @@ def _as_bool(value):
     return None, False
 
 
+def _is_http_url(value):
+    return isinstance(value, str) and value.startswith(("https://", "http://")) \
+        and " " not in value.strip() and len(value.strip()) > len("https://")
+
+
 def validate_declaration(config):
     """Pure: (attributes, errors, warnings). No I/O — usable in dry-run.
 
@@ -64,13 +86,21 @@ def validate_declaration(config):
     for key, value in (config or {}).items():
         if key == "config_path":
             continue  # resolved by the caller, not a declaration attribute
-        if key in TERNARY_FIELDS:
-            if value not in TERNARY_VALUES:
+        if key in REMOVED_FIELDS:
+            warnings.append(f"{key}: removed from the App Store Connect API "
+                            f"({REMOVED_FIELDS[key]}) — ignored")
+        elif key in TERNARY_FIELDS:
+            if value in LEGACY_TERNARY_VALUES:
+                warnings.append(f"{key}: legacy value {value!r} — prefer "
+                                "INFREQUENT_OR_MILD / FREQUENT_OR_INTENSE")
+            elif value not in TERNARY_VALUES:
                 warnings.append(f"{key}: unrecognised value {value!r} (passing through)")
             attributes[key] = value
         elif key in ENUM_FIELDS:
             if value is not None and value not in ENUM_FIELDS[key]:
                 warnings.append(f"{key}: unrecognised value {value!r} (passing through)")
+            if key in DEPRECATED_FIELDS:
+                warnings.append(f"{key}: deprecated by Apple — use {DEPRECATED_FIELDS[key]}")
             attributes[key] = value
         elif key in BOOLEAN_FIELDS:
             coerced, ok = _as_bool(value)
@@ -78,9 +108,27 @@ def validate_declaration(config):
                 errors.append(f"{key}: expected a boolean, got {value!r}")
             else:
                 attributes[key] = coerced
+        elif key in STRING_FIELDS:
+            if value is not None and key in URL_FIELDS and not _is_http_url(value):
+                errors.append(f"{key}: expected an http(s) URL, got {value!r}")
+            elif value is not None and not isinstance(value, str):
+                errors.append(f"{key}: expected a string, got {value!r}")
+            else:
+                attributes[key] = value
         else:
             errors.append(f"unknown age rating field {key!r}")
     return attributes, errors, warnings
+
+
+def missing_answers(attributes):
+    """Pure: the required questions still unanswered (None/absent), sorted.
+
+    Apple refuses a submission while any of them is unanswered."""
+    attrs = attributes or {}
+    missing = [f for f in TERNARY_FIELDS | REQUIRED_BOOLEAN_FIELDS if attrs.get(f) is None]
+    missing += [f for f, gate in CONDITIONAL_BOOLEAN_FIELDS.items()
+                if attrs.get(gate) is True and attrs.get(f) is None]
+    return sorted(missing)
 
 
 class AgeRatingManager:

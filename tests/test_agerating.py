@@ -87,3 +87,80 @@ def test_update_declaration_patches_by_id():
     assert req["url"].endswith("/v1/ageRatingDeclarations/decl-9")
     assert req["json"]["data"]["attributes"]["gambling"] is True
     assert req["json"]["data"]["id"] == "decl-9"
+
+
+# -- API 4.5 (2025-2026 questionnaire) ----------------------------------------
+
+from andp.asc.agerating import missing_answers, validate_declaration
+
+
+def test_validate_accepts_social_media_questions():
+    attrs, errors, warnings = validate_declaration(
+        {"socialMedia": True, "socialMediaAgeRestricted": "false"})
+    assert errors == [] and warnings == []
+    assert attrs == {"socialMedia": True, "socialMediaAgeRestricted": False}
+
+
+def test_validate_override_v2_accepts_the_new_tiers_without_warning():
+    attrs, errors, warnings = validate_declaration({"ageRatingOverrideV2": "EIGHTEEN_PLUS"})
+    assert errors == [] and warnings == []
+    assert attrs["ageRatingOverrideV2"] == "EIGHTEEN_PLUS"
+
+
+def test_validate_deprecated_override_warns_towards_v2():
+    _, errors, warnings = validate_declaration({"ageRatingOverride": "THIRTEEN_PLUS"})
+    assert errors == []
+    assert any("ageRatingOverrideV2" in w for w in warnings)
+
+
+def test_validate_korea_override_knows_the_new_values():
+    _, errors, warnings = validate_declaration(
+        {"koreaAgeRatingOverride": "TWELVE_PLUS"})
+    assert errors == [] and warnings == []
+
+
+def test_validate_removed_seventeen_plus_is_dropped_with_a_warning():
+    attrs, errors, warnings = validate_declaration({"seventeenPlus": False})
+    assert errors == []
+    assert "seventeenPlus" not in attrs        # sending it would be refused by the API
+    assert any("seventeenPlus" in w for w in warnings)
+
+
+def test_validate_developer_info_url_must_be_an_http_url():
+    attrs, errors, _ = validate_declaration(
+        {"developerAgeRatingInfoUrl": "https://example.com/age",
+         "gracRatingClassificationNumber": "CC-OB-240101-001"})
+    assert errors == []
+    assert attrs["developerAgeRatingInfoUrl"] == "https://example.com/age"
+    _, errors, _ = validate_declaration({"developerAgeRatingInfoUrl": "not a url"})
+    assert any("developerAgeRatingInfoUrl" in e for e in errors)
+
+
+def test_validate_legacy_frequency_values_pass_with_a_warning():
+    attrs, errors, warnings = validate_declaration({"contests": "FREQUENT"})
+    assert errors == [] and attrs["contests"] == "FREQUENT"
+    assert any("contests" in w for w in warnings)
+
+
+def test_missing_answers_lists_every_unanswered_required_question():
+    answered = {f: "NONE" for f in (
+        "alcoholTobaccoOrDrugUseOrReferences", "contests", "gamblingSimulated",
+        "gunsOrOtherWeapons", "horrorOrFearThemes", "matureOrSuggestiveThemes",
+        "medicalOrTreatmentInformation", "profanityOrCrudeHumor",
+        "sexualContentGraphicAndNudity", "sexualContentOrNudity",
+        "violenceCartoonOrFantasy", "violenceRealistic",
+        "violenceRealisticProlongedGraphicOrSadistic")}
+    answered.update({b: False for b in (
+        "gambling", "unrestrictedWebAccess", "lootBox", "advertising",
+        "ageAssurance", "healthOrWellnessTopics", "messagingAndChat",
+        "parentalControls", "userGeneratedContent", "socialMedia")})
+    assert missing_answers(answered) == []
+    gap = dict(answered, advertising=None)
+    assert missing_answers(gap) == ["advertising"]
+
+
+def test_missing_answers_asks_for_the_age_restriction_only_with_social_media():
+    base = {"socialMedia": True, "socialMediaAgeRestricted": None}
+    assert "socialMediaAgeRestricted" in missing_answers(base)
+    assert "socialMediaAgeRestricted" not in missing_answers(
+        {"socialMedia": False, "socialMediaAgeRestricted": None})
