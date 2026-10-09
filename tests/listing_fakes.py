@@ -218,3 +218,99 @@ def fake_managers_with_app(state, found=True):
     managers = FakeManagers(state)
     managers.apps = FakeApps(found)
     return managers
+
+
+class FakeAssetLibrary:
+    """Asset Library state: library assets and placements per localization id."""
+
+    def __init__(self, state, writes):
+        self.s, self.writes = state, writes
+        self._next = 0
+
+    def library_id(self, app_id):
+        if self.s.get("library_unavailable"):
+            from andp.asc.client import ASCAPIError
+            raise ASCAPIError(404, [{"detail": "The resource does not exist"}])
+        return "LIB"
+
+    def ref_data(self):
+        from andp.asc.asset_refdata import REF_DATA
+        return REF_DATA
+
+    def assets(self, library_id, media_type):
+        return [dict(a) for a in self.s.setdefault("library", []) if a["mediaType"] == media_type]
+
+    def placements(self, loc_id):
+        return [dict(p) for p in self.s.setdefault("placements", {}).get(loc_id, [])]
+
+    def upload(self, library_id, path, category):
+        import os
+        self._next += 1
+        media_type = "VIDEO" if path.endswith((".mp4", ".mov", ".m4v")) else "IMAGE"
+        asset = {"id": f"new{self._next}", "fileName": os.path.basename(path),
+                 "fileSize": os.path.getsize(path), "state": "UPLOAD_COMPLETE",
+                 "mediaType": media_type}
+        self.s.setdefault("library", []).append(asset)
+        self.writes.append(("upload", os.path.basename(path), category))
+        return dict(asset)
+
+    def place(self, loc_id, placement_type, group, media_type, media_id):
+        self._next += 1
+        name = next(a["fileName"] for a in self.s["library"] if a["id"] == media_id)
+        size = next(a["fileSize"] for a in self.s["library"] if a["id"] == media_id)
+        placement = {"id": f"pl{self._next}", "placementType": placement_type,
+                     "placementGroup": group, "state": "ASSET_PROCESSING",
+                     "mediaType": media_type, "mediaId": media_id, "fileName": name,
+                     "fileSize": size}
+        self.s.setdefault("placements", {}).setdefault(loc_id, []).append(placement)
+        self.writes.append(("place", loc_id, placement_type, group, name))
+        return {"id": placement["id"]}
+
+    def unplace(self, placement_id):
+        for loc, items in self.s.get("placements", {}).items():
+            self.s["placements"][loc] = [p for p in items if p["id"] != placement_id]
+        self.writes.append(("unplace", placement_id))
+
+    def order(self, loc_id, group, ids):
+        items = self.s["placements"][loc_id]
+        others = [p for p in items if p["placementGroup"] != group]
+        by_id = {p["id"]: p for p in items}
+        self.s["placements"][loc_id] = others + [by_id[i] for i in ids]
+        self.writes.append(("order", loc_id, group, [by_id[i]["fileName"] for i in ids]))
+
+
+class FakeLegacySets:
+    """appScreenshotSets / appPreviewSets for the fallback path."""
+
+    def __init__(self, state, writes, kind):
+        self.s, self.writes, self.kind = state, writes, kind
+
+    def _sets(self):
+        return self.s.setdefault("legacy", {})
+
+    def ensure_screenshot_set(self, loc_id, display_type):
+        self._sets().setdefault((loc_id, display_type), [])
+        return {"id": f"{loc_id}|{display_type}"}
+
+    ensure_preview_set = ensure_screenshot_set
+
+    def existing_filenames(self, set_id):
+        loc_id, display_type = set_id.split("|")
+        return set(self._sets().get((loc_id, display_type), []))
+
+    def upload_screenshot_to_set(self, set_id, path):
+        import os
+        loc_id, display_type = set_id.split("|")
+        self._sets()[(loc_id, display_type)].append(os.path.basename(path))
+        self.writes.append(("legacy_upload", display_type, os.path.basename(path)))
+
+    upload_preview_to_set = upload_screenshot_to_set
+
+
+def media_managers(state):
+    managers = FakeManagers(state)
+    managers.apps = FakeApps(True)
+    managers.asset_library = FakeAssetLibrary(state, managers.writes)
+    managers.screenshots = FakeLegacySets(state, managers.writes, "screenshots")
+    managers.previews = FakeLegacySets(state, managers.writes, "previews")
+    return managers
