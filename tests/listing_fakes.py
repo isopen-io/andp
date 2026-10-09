@@ -294,6 +294,12 @@ class FakeLegacySets:
 
     ensure_preview_set = ensure_screenshot_set
 
+    def find_screenshot_set(self, loc_id, display_type):
+        key = (loc_id, display_type)
+        return {"id": f"{loc_id}|{display_type}"} if key in self._sets() else None
+
+    find_preview_set = find_screenshot_set
+
     def existing_filenames(self, set_id):
         loc_id, display_type = set_id.split("|")
         return set(self._sets().get((loc_id, display_type), []))

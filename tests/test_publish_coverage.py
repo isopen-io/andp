@@ -10,6 +10,7 @@ from andp.errors import from_unexpected
 from andp.publish import publish_metadata
 from andp.core.release import ReleaseMachine, release_id
 from andp.core.state import StateStore
+from media_files import mp4
 from conftest import FakeResponse, FakeSession, make_test_managers
 
 
@@ -30,8 +31,7 @@ def _shot(root, locale, display, name):
 def _preview(root, locale, display, name):
     d = os.path.join(root, locale, "previews", display)
     os.makedirs(d, exist_ok=True)
-    with open(os.path.join(d, name), "wb") as f:
-        f.write(b"MP4")
+    mp4(os.path.join(d, name), 886, 1920, 20)
 
 
 def _loc(locale, lid):
@@ -111,7 +111,8 @@ def test_existing_preview_is_skipped(tmp_path):
     session = FakeSession()
     session.queue(
         *_loc("en-US", "loc-en"),
-        FakeResponse(200, {"data": [{"id": "pset-1"}]}),                         # ensure preview set
+        FakeResponse(404, {"errors": [{"status": "404"}]}),                      # no Asset Library
+        FakeResponse(200, {"data": [{"id": "pset-1"}]}),                         # find preview set
         FakeResponse(200, {"data": [{"id": "p1", "attributes": {"fileName": "01.mp4"}}]}),  # existing
     )
     managers = make_test_managers(session)

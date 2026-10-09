@@ -84,6 +84,12 @@ def plan_media(managers, app_id, version_id, tree, locked=False, prune=False,
     return result
 
 
+def _count_unchanged(result, scope):
+    result["unchanged"] += 1
+    counts = result["ctx"].setdefault("unchanged", {})
+    counts[scope] = counts.get(scope, 0) + 1
+
+
 def _plan_library_locale(result, managers, locale, loc_id, groups, locked, prune):
     placed = managers.asset_library.placements(loc_id)
     library = result["ctx"]["assets"]
@@ -96,7 +102,7 @@ def _plan_library_locale(result, managers, locale, loc_id, groups, locked, prune
         result["ctx"].setdefault("orders", {})[scope] = wanted
         for path, name in zip(paths, wanted):
             if name in current_names:
-                result["unchanged"] += 1
+                _count_unchanged(result, scope)
                 continue
             known = library.get((name, os.path.getsize(path)))
             result["changes"].append(_change(scope, name, None, path,
@@ -124,13 +130,14 @@ def _plan_legacy_locale(result, managers, locale, loc_id, groups, locked):
                                     "app does not expose — no legacy display type exists")
             continue
         manager = managers.previews if placement_type == "APP_PREVIEW" else managers.screenshots
-        ensure = (manager.ensure_preview_set if placement_type == "APP_PREVIEW"
-                  else manager.ensure_screenshot_set)
-        existing = manager.existing_filenames(ensure(loc_id, legacy)["id"])
+        find = (manager.find_preview_set if placement_type == "APP_PREVIEW"
+                else manager.find_screenshot_set)
+        found = find(loc_id, legacy)
+        existing = manager.existing_filenames(found["id"]) if found else set()
         for path in paths:
             name = os.path.basename(path)
             if name in existing:
-                result["unchanged"] += 1
+                _count_unchanged(result, scope)
             else:
                 change = _change(scope, name, None, path, "upload", locked)
                 change["legacy_type"] = legacy
@@ -213,18 +220,25 @@ def _scope_locale(ctx, loc_id):
     return next(locale for locale, lid in ctx["localizations"].items() if lid == loc_id)
 
 
-def media_summary(plan, writes):
-    """Counters for `publish`: what went where."""
-    summary = {"backend": plan["backend"], "screenshots": 0, "previews": 0,
-               "creative": 0, "media_skipped": plan["unchanged"], "media_writes": writes}
+def _kind(placement_type):
+    if placement_type in _SCREENSHOT_LIKE:
+        return "screenshots"
+    if placement_type == "APP_PREVIEW":
+        return "previews"
+    return "creative"
+
+
+def locale_summary(plan, locale):
+    """What `publish` reports for one locale: sent and skipped, per kind."""
+    summary = {"screenshots": 0, "screenshots_skipped": 0, "previews": 0,
+               "previews_skipped": 0, "creative": 0, "creative_skipped": 0}
     for change in plan["changes"]:
-        if change["action"] not in ("upload", "place"):
-            continue
-        placement_type = change["scope"].split(" · ")[1]
-        if placement_type in _SCREENSHOT_LIKE:
-            summary["screenshots"] += 1
-        elif placement_type == "APP_PREVIEW":
-            summary["previews"] += 1
-        else:
-            summary["creative"] += 1
+        scope_locale, placement_type, _group = change["scope"].split(" · ")
+        if scope_locale == locale and change["action"] in ("upload", "place") \
+                and not change["locked"]:
+            summary[_kind(placement_type)] += 1
+    for scope, count in plan["ctx"].get("unchanged", {}).items():
+        scope_locale, placement_type, _group = scope.split(" · ")
+        if scope_locale == locale:
+            summary[f"{_kind(placement_type)}_skipped"] += count
     return summary

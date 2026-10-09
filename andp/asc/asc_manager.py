@@ -653,9 +653,11 @@ def _cmd_publish(account, managers, dry_run, args, json_mode=False):
         if result.get("dry_run"):
             print(f"[DRY-RUN] Would publish metadata from {args[2]} for {args[0]} {args[1]}.")
         else:
+            print(f"  visuals via {result.get('media_backend') or 'none'}")
             for locale, s in result.get("locales", {}).items():
                 print(f"  {locale}: metadata {s['metadata']}, "
-                      f"{s['screenshots']} screenshots, {s['previews']} previews")
+                      f"{s.get('screenshots', 0)} screenshots, {s.get('previews', 0)} previews, "
+                      f"{s.get('creative', 0)} creative assets")
     else:
         err = result.get("error", {})
         print(f"❌ publish: {err.get('message', 'failed')}")

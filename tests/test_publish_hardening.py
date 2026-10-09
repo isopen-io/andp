@@ -15,13 +15,13 @@ from andp import service
 from andp.publish import publish_metadata
 from andp.asc.client import ASCAPIError
 from conftest import FakeResponse, FakeSession, make_test_managers, write_secrets
+from media_files import png
 
 
-def _shot(root, locale, display, name, data=b"PNG"):
+def _shot(root, locale, display, name):
     d = os.path.join(root, locale, "screenshots", display)
     os.makedirs(d, exist_ok=True)
-    with open(os.path.join(d, name), "wb") as f:
-        f.write(data)
+    png(os.path.join(d, name), 1290, 2796)
 
 
 def _text(root, locale, stem, content):
@@ -43,12 +43,14 @@ def test_only_missing_screenshots_are_uploaded_on_retry(tmp_path):
     session.queue(
         FakeResponse(200, {"data": [{"id": "loc-en", "attributes": {"locale": "en-US"}}]}),
         FakeResponse(200, {"data": {"id": "loc-en"}}),
-        FakeResponse(200, {"data": [{"id": "sset-1", "type": "appScreenshotSets"}]}),  # ensure -> found
+        FakeResponse(404, {"errors": [{"status": "404"}]}),             # no Asset Library
+        FakeResponse(200, {"data": [{"id": "sset-1", "type": "appScreenshotSets"}]}),  # find -> found
         # existing filenames -> 01, 02 already there
         FakeResponse(200, {"data": [
             {"id": "s1", "attributes": {"fileName": "01.png"}},
             {"id": "s2", "attributes": {"fileName": "02.png"}}]}),
-        # only 03 reserved + committed
+        # apply: ensure -> found, then only 03 reserved + committed
+        FakeResponse(200, {"data": [{"id": "sset-1", "type": "appScreenshotSets"}]}),
         FakeResponse(201, {"data": {"id": "s3", "attributes": {"uploadOperations": []}}}),
         FakeResponse(200, {"data": {"id": "s3"}}),
     )

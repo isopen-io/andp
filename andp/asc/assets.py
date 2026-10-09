@@ -45,6 +45,15 @@ class ScreenshotManager:
         self.client = client
         self.upload_transport = upload_transport or _default_upload_transport
 
+    def find_screenshot_set(self, localization_id, display_type):
+        """GET-only: the localization's set for this display type, or None."""
+        response = self.client.get(
+            f"/v1/appStoreVersionLocalizations/{localization_id}/appScreenshotSets",
+            params={"filter[screenshotDisplayType]": display_type},
+        )
+        existing = (response or {}).get("data", [])
+        return existing[0] if existing else None
+
     def ensure_screenshot_set(self, localization_id, display_type):
         response = self.client.get(
             f"/v1/appStoreVersionLocalizations/{localization_id}/appScreenshotSets",
@@ -129,6 +138,15 @@ class PreviewManager:
     def __init__(self, client, upload_transport=None):
         self.client = client
         self.upload_transport = upload_transport or _default_upload_transport
+
+    def find_preview_set(self, localization_id, preview_type):
+        """GET-only: the localization's set for this preview type, or None."""
+        response = self.client.get(
+            f"/v1/appStoreVersionLocalizations/{localization_id}/appPreviewSets",
+            params={"filter[previewType]": preview_type},
+        )
+        existing = (response or {}).get("data", [])
+        return existing[0] if existing else None
 
     def ensure_preview_set(self, localization_id, preview_type):
         response = self.client.get(
