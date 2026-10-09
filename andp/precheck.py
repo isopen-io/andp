@@ -2,9 +2,12 @@
 
 Catches the problems Apple rejects *before* the irreversible submit. It never
 mutates. Errors are strictly the hard, reliably-detectable requirements;
-everything else is a warning. `ok:true` is not a guarantee of acceptance —
-age rating, app name/subtitle, pricing and per-device screenshot sizes are not
-checked, and Apple stays the final authority at submit.
+everything else is a warning. The listing fields App Review requires (content
+rights, primary category, app name and privacy policy per language, copyright,
+App Review contact and demo account, every age rating answer, Apple's length
+limits) are errors too — `definition_checks`. `ok:true` is still not a
+guarantee: App Privacy, the EU trader status and per-device screenshot sizes
+are not readable through the API, and Apple stays the final authority.
 """
 import re
 
@@ -36,8 +39,9 @@ def _summary(checks):
         "errors": errors,
         "warnings": warnings,
         "checks": checks,
-        "note": ("ok does not guarantee acceptance: age rating, app name/subtitle, "
-                 "pricing, and per-device screenshot sizes are not checked."),
+        "note": ("ok does not guarantee acceptance: App Privacy answers, the EU trader "
+                 "status and per-device screenshot sizes are not readable through the "
+                 "API and are not checked."),
     }
 
 
@@ -94,7 +98,11 @@ def run_precheck(managers, app_id, version_id):
         for w in _content_warnings(text):
             checks.append({**w, "message": f"[{locale}] {w['message']}"})
 
-    checks.extend(_store_checks(managers, app_id))
+    store_checks, declaration = _store_checks(managers, app_id)
+    checks.extend(store_checks)
+    checks.extend(definition_checks(
+        managers, app_id, version or {"id": version_id},
+        [loc.get("attributes", {}) or {} for loc in localizations], declaration))
     return _summary(checks)
 
 
@@ -114,7 +122,7 @@ def _store_checks(managers, app_id):
     Each is best-effort: an advisory read must never turn a precheck into a hard
     error, so a failed read simply skips that one check (the hard checks above
     still stand). All warnings — Apple stays the final authority at submit."""
-    checks = []
+    checks, declaration = [], None
     try:
         if managers.pricing.get_schedule(app_id) is None:
             checks.append({"id": "pricing", "level": "warning",
@@ -129,9 +137,129 @@ def _store_checks(managers, app_id):
     except Exception:
         pass
     try:
-        if _age_rating_unset(managers.age_rating.get_declaration(app_id)):
+        declaration = managers.age_rating.get_declaration(app_id)
+        if _age_rating_unset(declaration):
             checks.append({"id": "age_rating", "level": "warning",
                            "message": "Age rating declaration appears unset/incomplete."})
     except Exception:
         pass
+    return checks, declaration
+
+
+def _error(id_, message):
+    return {"id": id_, "level": "error", "message": message}
+
+
+def _guarded(checks, run):
+    """A failed read skips its own check, never the others (advisory read)."""
+    try:
+        checks.extend(run())
+    except Exception:
+        pass
+
+
+def _app_checks(managers, app_id):
+    attrs = (managers.listing.app(app_id) or {}).get("attributes") or {}
+    if not attrs.get("contentRightsDeclaration"):
+        return [_error("content_rights", "Content rights declaration is unanswered "
+                       "(App Information → Content Rights).")]
+    return []
+
+
+def _app_info_checks(managers, app_id, locales):
+    from .listing_spec import APP_INFO_LOCALIZATION_FIELDS, coerce
+    checks = []
+    info, _editable = managers.listing.editable_app_info(app_id)
+    if info is None:
+        return [_error("app_info", "The app has no appInfo record.")]
+    if not managers.listing.categories(info["id"]).get("primaryCategory"):
+        checks.append(_error("primary_category", "No primary category is set."))
+    live = managers.listing.app_info_localizations(info["id"])
+    for locale in locales:
+        attrs = (live.get(locale) or {}).get("attributes") or {}
+        if not (attrs.get("name") or "").strip():
+            checks.append(_error("app_name", f"[{locale}] has no app name "
+                                 "(appInfoLocalization missing or empty)."))
+        if not (attrs.get("privacyPolicyUrl") or "").strip():
+            checks.append(_error("privacy_policy_url",
+                                 f"[{locale}] privacy policy URL is empty."))
+    for locale, record in live.items():
+        attrs = record.get("attributes") or {}
+        for field in APP_INFO_LOCALIZATION_FIELDS:
+            _value, problem = coerce(field, attrs.get(field.api))
+            if problem and field.max_len:
+                checks.append({"id": "field_length", "level": "error",
+                               "message": f"[{locale}] {problem}"})
+    return checks
+
+
+def _version_checks(version, localizations):
+    from .listing_spec import VERSION_LOCALIZATION_FIELDS, coerce
+    checks = []
+    attrs = version.get("attributes") or {}
+    # The live API always returns these keys (null when unset); a key absent
+    # from the response is a field this record does not carry — not a gap.
+    if "copyright" in attrs and not (attrs.get("copyright") or "").strip():
+        checks.append(_error("copyright", "The version has no copyright."))
+    if attrs.get("releaseType") == "SCHEDULED" and not attrs.get("earliestReleaseDate"):
+        checks.append(_error("release_date", "releaseType is SCHEDULED without "
+                             "an earliestReleaseDate."))
+    for loc in localizations:
+        locale = loc.get("locale", "?")
+        for field in VERSION_LOCALIZATION_FIELDS:
+            if not (field.max_len or field.max_bytes):
+                continue
+            _value, problem = coerce(field, loc.get(field.api))
+            if problem:
+                checks.append({"id": "field_length", "level": "error",
+                               "message": f"[{locale}] {problem}"})
+    return checks
+
+
+def _review_checks(managers, version_id):
+    record = managers.listing.review_detail(version_id)
+    if record is None:
+        return [_error("review_contact", "No App Review information: contactFirstName, "
+                       "contactLastName, contactPhone, contactEmail are required.")]
+    attrs = record.get("attributes") or {}
+    checks = []
+    missing = [f for f in ("contactFirstName", "contactLastName", "contactPhone",
+                           "contactEmail") if not (attrs.get(f) or "").strip()]
+    if missing:
+        checks.append(_error("review_contact",
+                             f"App Review contact incomplete: {', '.join(missing)}."))
+    phone = attrs.get("contactPhone") or ""
+    if phone and not phone.startswith("+"):
+        checks.append({"id": "review_phone", "level": "warning",
+                       "message": "App Review phone should be international (+country code)."})
+    if attrs.get("demoAccountRequired") and not (
+            attrs.get("demoAccountName") and attrs.get("demoAccountPassword")):
+        checks.append(_error("demo_account", "demoAccountRequired is true but the demo "
+                             "account name or password is empty."))
+    return checks
+
+
+def _age_checks(declaration):
+    from .asc.agerating import missing_answers
+    if declaration is None:
+        return []
+    attrs = declaration.get("attributes") or {}
+    # Only questions the API returned (always all of them, null when
+    # unanswered) — an absent key is not asked of this app.
+    missing = [f for f in missing_answers(attrs) if f in attrs]
+    if missing:
+        return [_error("age_rating_answers",
+                       f"Age rating questions unanswered: {', '.join(missing)}.")]
+    return []
+
+
+def definition_checks(managers, app_id, version, localizations, declaration):
+    """The listing fields App Review requires — errors, each read best-effort."""
+    checks = []
+    locales = [loc.get("locale") for loc in localizations if loc.get("locale")]
+    _guarded(checks, lambda: _app_checks(managers, app_id))
+    _guarded(checks, lambda: _app_info_checks(managers, app_id, locales))
+    _guarded(checks, lambda: _version_checks(version, localizations))
+    _guarded(checks, lambda: _review_checks(managers, version["id"]))
+    _guarded(checks, lambda: _age_checks(declaration))
     return checks

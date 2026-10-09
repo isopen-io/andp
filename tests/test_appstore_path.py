@@ -305,6 +305,19 @@ def _precheck_ok_responses():
         FakeResponse(200, {"data": None}),                          # get_schedule
         FakeResponse(200, {"data": None}),                          # appAvailabilityV2
         FakeResponse(200, {"data": [], "links": {}}),              # appInfos (no declaration)
+        # listing fields App Review requires (definition_checks)
+        FakeResponse(200, {"data": {"id": "app-9", "attributes": {
+            "contentRightsDeclaration": "DOES_NOT_USE_THIRD_PARTY_CONTENT"}}}),  # app
+        FakeResponse(200, {"data": [{"id": "info", "attributes": {
+            "state": "PREPARE_FOR_SUBMISSION"}}], "links": {}}),              # appInfos
+        FakeResponse(200, {"data": {"id": "info", "relationships": {
+            "primaryCategory": {"data": {"id": "UTILITIES"}}}}}),             # categories
+        FakeResponse(200, {"data": [{"id": "ail", "attributes": {
+            "locale": "en-US", "name": "App",
+            "privacyPolicyUrl": "https://x/p"}}], "links": {}}),             # appInfoLocalizations
+        FakeResponse(200, {"data": {"id": "rd", "attributes": {
+            "contactFirstName": "A", "contactLastName": "B",
+            "contactPhone": "+1 555 0100", "contactEmail": "a@b.c"}}}),       # review detail
     ]
 
 
