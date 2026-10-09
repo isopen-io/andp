@@ -6,6 +6,7 @@ auth -> client -> managers pipeline.
 from .agerating import AgeRatingManager
 from .apps import AppsManager
 from .appstore import AppStoreManager
+from .assetlibrary import AssetLibraryManager
 from .assets import PreviewManager, ScreenshotManager
 from .auth import ASCAuth
 from .availability import AvailabilityManager
@@ -29,6 +30,7 @@ class Managers:
         self.availability = AvailabilityManager(client)
         self.age_rating = AgeRatingManager(client)
         self.listing = ListingManager(client)
+        self.asset_library = AssetLibraryManager(client)
 
 
 def make_managers(account):
