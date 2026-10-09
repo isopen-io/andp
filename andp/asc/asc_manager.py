@@ -44,7 +44,12 @@ Commands (all accept --json for a structured, agent-friendly envelope):
   precheck <bundle_id> <version>                 Read-only App Store pre-submission validation
   readiness testflight <bundle_id>               Can this app go to TestFlight cleanly? (0/1/3)
   readiness appstore <bundle_id> <version>       Can this version go to the App Store cleanly?
-  store <pricing|availability|age-rating|apply>  Configure price, territories, age rating
+  store plan <bundle_id> [--version V] [--metadata DIR]
+                                                 Read-only diff of the App Store listing (app,
+                                                 categories, names, texts, review, age rating,
+                                                 accessibility, encryption, EULA, price, territories)
+  store <pricing|availability|age-rating|apply>  Configure price, territories, age rating; apply
+                                                 [--version V] [--metadata DIR] writes the whole listing
   build-number [bundle] --strategy S             Next build number (max-build|timestamp|commit)
   config [path <secrets|policy>|dir|migrate]     Where ANDP reads its configuration
 
@@ -776,7 +781,7 @@ def _cmd_readiness(account, managers, dry_run, args, json_mode=False):
     return 0 if soft else 1
 
 
-_STORE_USAGE = ("Usage: store <pricing|availability|age-rating|apply> <bundle_id> "
+_STORE_USAGE = ("Usage: store <plan|pricing|availability|age-rating|apply> <bundle_id> "
                 "[--territory USA] [--price 0.00|free] [--territories USA,FRA|--all] "
                 "[--new-territories] [--config <json>]")
 
@@ -820,11 +825,17 @@ def _cmd_store(account, managers, dry_run, args, json_mode=False):
             return 2
         declaration = {"config_path": config} if config else None
         result = service.configure_age_rating(rest[0], account=acct, declaration=declaration)
+    elif sub == "plan":
+        from .store_cli import cmd_store_plan
+        return cmd_store_plan(acct, rest, json_mode, _take_opt)
     elif sub == "apply":
+        version = _take_opt(rest, "--version")
+        metadata_dir = _take_opt(rest, "--metadata")
         if not rest:
-            print("Usage: store apply <bundle_id>")
+            print("Usage: store apply <bundle_id> [--version V] [--metadata DIR]")
             return 2
-        result = service.configure_store(rest[0], account=acct)
+        result = service.configure_store(rest[0], account=acct, version=version,
+                                         metadata_dir=metadata_dir)
     else:
         print(_STORE_USAGE)
         return 2
@@ -850,8 +861,15 @@ def _print_store_human(result):
                 print(f"  {name}: skipped (not configured)")
             elif block.get("ok"):
                 print(f"  {name}: {'changed' if block.get('changed') else 'unchanged'}")
+                for family, outcome in (block.get("families") or {}).items():
+                    print(f"    {family}: {outcome.get('writes', 0)} write(s)")
             else:
                 print(f"  {name}: ❌ {block.get('error', {}).get('message', 'failed')}")
+                for family, outcome in (block.get("families") or {}).items():
+                    if not outcome.get("ok"):
+                        print(f"    {family}: ❌ {outcome.get('error', 'failed')}")
+                for error in block.get("errors", []):
+                    print(f"    ❌ {error}")
         return
     prefix = "[DRY-RUN] " if result.get("dry_run") else ""
     state = "would set" if result.get("dry_run") else (
@@ -1120,6 +1138,10 @@ def main(argv):
         return 2
 
     args = list(argv)
+    if args in (["--version"], ["-V"]):
+        from .. import __version__
+        print(f"andp {__version__}")
+        return 0
     account_id = "primary"
     if "--account" in args:
         idx = args.index("--account")
