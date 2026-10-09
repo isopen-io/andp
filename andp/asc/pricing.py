@@ -48,27 +48,37 @@ class PricingManager:
         base-territory prices the latest-starting one wins (S3). Future-scheduled
         prices are ignored. Returns None with no schedule or no live base price
         (so the caller re-applies — safe)."""
-        if self.get_schedule(app_id) is None:
+        schedule = self.get_schedule(app_id)
+        if schedule is None:
             return None
         if today is None:
             import datetime
             today = datetime.date.today().isoformat()
+        # Observed 2026-10-09: the manual prices hang off the SCHEDULE resource;
+        # `/v1/apps/{id}/appPriceSchedule/manualPrices` answers 404.
         response = self.client.get(
-            f"/v1/apps/{app_id}/appPriceSchedule/manualPrices",
-            params={"include": "appPricePoint"},
+            f"/v1/appPriceSchedules/{schedule['id']}/manualPrices",
+            params={"include": "appPricePoint,territory"},
         ) or {}
         prices = response.get("data", []) or []
         included = {inc["id"]: inc for inc in response.get("included", []) or []}
         best = None  # (effective_start, price_point_id) for the base territory
         for price in prices:
-            start = price.get("attributes", {}).get("startDate")
+            attrs = price.get("attributes", {}) or {}
+            start = attrs.get("startDate")
             effective = start or ""       # null => "" => sorts before any real date
             if effective > today:
                 continue                  # future-scheduled, not live yet
-            pp = ((price.get("relationships") or {}).get("appPricePoint") or {}).get("data") or {}
-            pp_id = pp.get("id")
-            point = included.get(pp_id, {})
-            terr = (((point.get("relationships") or {}).get("territory") or {}).get("data") or {}).get("id")
+            end = attrs.get("endDate")
+            if end and end <= today:
+                continue                  # already ended
+            rels = price.get("relationships") or {}
+            pp_id = ((rels.get("appPricePoint") or {}).get("data") or {}).get("id")
+            terr = ((rels.get("territory") or {}).get("data") or {}).get("id")
+            if terr is None:
+                point = included.get(pp_id, {})
+                terr = (((point.get("relationships") or {}).get("territory") or {})
+                        .get("data") or {}).get("id")
             if terr == base_territory and (best is None or effective >= best[0]):
                 best = (effective, pp_id)
         return best[1] if best else None

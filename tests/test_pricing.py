@@ -121,3 +121,47 @@ def test_current_base_price_point_id_none_without_schedule():
     session = FakeSession()
     session.queue(FakeResponse(200, {"data": None}))
     assert make_test_managers(session).pricing.current_base_price_point_id("APP", "USA") is None
+
+
+def test_current_base_price_point_id_reads_manual_prices_on_the_schedule():
+    """Observed 2026-10-09 on a live app: `/v1/apps/{id}/appPriceSchedule/manualPrices`
+    answers 404 ("is not a valid URL"). The manual prices hang off the SCHEDULE
+    resource — `/v1/appPriceSchedules/{scheduleId}/manualPrices` — and each
+    appPrice carries its own `territory` relationship (include=territory), the
+    price point only an id."""
+    session = FakeSession()
+    session.queue(FakeResponse(200, {"data": {"id": "sched-42"}}))
+    session.queue(FakeResponse(200, {
+        "data": [
+            {"id": "ap1", "type": "appPrices",
+             "attributes": {"manual": True, "startDate": None, "endDate": None},
+             "relationships": {
+                 "appPricePoint": {"data": {"type": "appPricePoints", "id": "pp-free"}},
+                 "territory": {"data": {"type": "territories", "id": "USA"}}}},
+        ],
+        "included": [{"id": "pp-free", "type": "appPricePoints",
+                      "attributes": {"customerPrice": "0.0"}}],
+        "links": {}}))
+    pid = make_test_managers(session).pricing.current_base_price_point_id("APP", "USA")
+    assert pid == "pp-free"
+    url = session.requests[1]["url"]
+    assert url.endswith("/v1/appPriceSchedules/sched-42/manualPrices")
+    assert "territory" in session.requests[1]["params"]["include"]
+
+
+def test_current_base_price_point_id_ignores_an_ended_price():
+    session = FakeSession()
+    session.queue(FakeResponse(200, {"data": {"id": "sched-1"}}))
+    session.queue(FakeResponse(200, {
+        "data": [
+            {"id": "ap1", "attributes": {"startDate": None, "endDate": "2020-01-01"},
+             "relationships": {"appPricePoint": {"data": {"id": "pp-old"}},
+                               "territory": {"data": {"id": "USA"}}}},
+            {"id": "ap2", "attributes": {"startDate": "2020-01-01", "endDate": None},
+             "relationships": {"appPricePoint": {"data": {"id": "pp-now"}},
+                               "territory": {"data": {"id": "USA"}}}},
+        ],
+        "links": {}}))
+    pid = make_test_managers(session).pricing.current_base_price_point_id(
+        "APP", "USA", today="2026-10-09")
+    assert pid == "pp-now"
