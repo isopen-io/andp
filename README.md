@@ -219,7 +219,8 @@ The submit gate is never crossed automatically — see
 
 ```bash
 andp precheck me.your.app 1.2.0      # read-only: will Apple reject this?
-andp store apply me.your.app         # price, territories, age rating from andp.yml
+andp store plan me.your.app          # read-only diff of the whole App Store listing
+andp store apply me.your.app         # listing, price, territories, age rating from andp.yml
 andp build-number me.your.app --strategy max-build --floor 1254
 andp testflight me.your.app "Beta" add tester@example.com
 andp release list --json             # every release and where it is
@@ -335,7 +336,8 @@ The essentials:
 - [`Documentation/Agents.md`](Documentation/Agents.md) — why ANDP is agent-native (the three primitives, guardrails, threat model)
 - [`Documentation/Configuration.md`](Documentation/Configuration.md) — the `.andp/` namespace, the resolution cascade, typed configuration errors
 - [`Documentation/Build.md`](Documentation/Build.md) — targets, destinations, the build envelope
-- [`Documentation/StoreConfig.md`](Documentation/StoreConfig.md) — pricing, territory availability, and age rating via `andp.yml`
+- [`Documentation/StoreConfig.md`](Documentation/StoreConfig.md) — the whole App Store listing (app, categories, names, texts, App Review, age rating, accessibility, encryption, EULA, price, territories) via `andp.yml`, with `store plan`
+- [`Documentation/AppStoreFields.md`](Documentation/AppStoreFields.md) — every App Store Connect field: meaning, limits, scope, required or not, and what the API does not expose
 - [`Documentation/Metadata.md`](Documentation/Metadata.md) — the `deliver`-style metadata/media folder convention
 - [`Documentation/ASC-API.md`](Documentation/ASC-API.md) — the App Store Connect API layer (auth, DRY-RUN convention, API limits)
 - [The Build Upload API contract you'll actually hit](Documentation/articles/build-upload-api-observed-contract.md) — the three undocumented requirements, with verbatim errors

@@ -1,3 +1,78 @@
+## 1.16.0 - 2026-10-09
+### Added
+- **The whole App Store listing is declared, planned and applied** — every
+  field the App Store Connect API 4.5.1 exposes for defining an app and its
+  submission (isopen-io/andp#97). `andp.yml` (`store:`) and the metadata folder
+  now carry:
+  - app attributes: content rights, primary locale, accessibility URL,
+    subscription status URLs, streamlined purchasing;
+  - categories and subcategories;
+  - per language: name, subtitle, privacy policy URL, privacy choices URL,
+    tvOS privacy text;
+  - version attributes: copyright, release type, earliest release date,
+    downloadable, review type, phased release;
+  - App Review details: contact, demo account, notes, attachments;
+  - Accessibility Nutrition Labels per device family, created then published;
+  - the export-compliance declaration and its document;
+  - the custom EULA.
+
+  One registry (`andp/listing_spec.py`) declares each field once: its API
+  attribute, the accepted keys (snake_case, deliver names, API camelCase), its
+  kind, Apple's limit and whether App Review requires it.
+- **`andp store plan <bundle> [--version V] [--metadata DIR]`** (MCP
+  `store_plan`, read-only). It prints the exact diff, one line per field
+  (current → desired, create / update / delete / upload, 🔒 when the record is
+  locked), and Apple's computed age rating per territory. It masks the review
+  contact and the demo account, and ends with "nothing was written". Without
+  credentials it still validates everything offline.
+- **`andp store apply` writes the listing** after price, territories and age
+  rating. It applies the same diff family by family: a failing family does not
+  stop the others, and a listing with validation errors is refused whole. It
+  takes `--version` and `--metadata` (MCP `store_apply` too). A configuration
+  without the new sections behaves exactly as before.
+- **Secrets stay out of the repository.** Any key takes an `_env` suffix (an
+  environment variable, or a line of `store.env_file`) and text keys a `_file`
+  suffix.
+- **`readiness appstore` / `precheck` block on what App Review requires.** The
+  required fields are:
+  - content rights and primary category;
+  - the app name and privacy policy URL in every language of the version;
+  - the copyright, and the date of a scheduled release;
+  - the App Review contact and the demo account;
+  - every unanswered age-rating question, each one named;
+  - Apple's length limits.
+- **Age rating follows the 2025-2026 questionnaire.** New: `socialMedia`,
+  `socialMediaAgeRestricted` (asked only with social media),
+  `ageRatingOverrideV2` (9+/13+/16+/18+), `developerAgeRatingInfoUrl` (URL
+  validated), `gracRatingClassificationNumber`, and the Korean `ALL` /
+  `TWELVE_PLUS`.
+  Warned and still accepted: `ageRatingOverride` (deprecated), and
+  `INFREQUENT_OR_MILD` / `FREQUENT_OR_INTENSE` (deprecated since API 4.1 —
+  use `INFREQUENT` / `FREQUENT`).
+  `seventeenPlus`, removed in API 4.0, is ignored instead of being sent.
+- `Documentation/AppStoreFields.md` is the sourced reference of every field:
+  meaning, values, scope, required or not. It also lists what the API does
+  **not** expose (App Privacy, EU trader status, regulated medical device…).
+- `andp --version`.
+
+### Fixed
+- **The current price was never read.** `/v1/apps/{id}/appPriceSchedule/
+  manualPrices` answers 404 ("is not a valid URL", observed 2026-10-09). Prices
+  are read on `/v1/appPriceSchedules/{id}/manualPrices`, through each price's
+  own `territory`, and an ended price is no longer current.
+- **A deliver-style folder lost its release notes and URLs.** `publish` read
+  only the camelCase names, so `release_notes.txt`, `promotional_text.txt`,
+  `support_url.txt` and `marketing_url.txt` were dropped silently. It now reads
+  both layouts, and refuses a text over Apple's limit before sending it.
+- **Spanish and Portuguese texts were flagged as placeholders.** "todo"
+  ("todo el mundo", "todo dia") matched; only the upper-case markers
+  TODO / FIXME / TBD / XXX count now.
+- Encryption declarations are read through `filter[app]`:
+  `/v1/apps/{id}/appEncryptionDeclarations` answers 404 (observed).
+- Keywords are limited to 100 **characters**. The Help page says bytes, but
+  the API accepts 101-byte German and 129-byte Arabic keywords (observed live);
+  the observed contract wins.
+
 ## 1.15.0 - 2026-07-31
 ### Added
 - **`version set` propagates the marketing version into the repository.** It

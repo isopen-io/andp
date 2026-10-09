@@ -34,7 +34,12 @@ Envoi : `Authorization: Bearer <token>`. ANDP régénère le token à 19 min ave
 | Capabilities | `POST /v1/bundleIdCapabilities` | `provisioning.py` |
 | Certificat (CSR PEM) | `POST /v1/certificates` | `provisioning.py` |
 | Profil de signature | `POST /v1/profiles` (pas de PATCH : delete + recreate) | `provisioning.py` |
-| Fiche app (catégories, localisation, âge) | `PATCH /v1/apps`, `/v1/appInfos`, `/v1/appInfoLocalizations`, `/v1/ageRatingDeclarations` | `apps.py` |
+| Fiche app (attributs, catégories, noms et URL par langue, notes d'âge par territoire en lecture) | `PATCH /v1/apps/{id}`, `PATCH /v1/appInfos/{id}` (relations de catégories, sur l'appInfo modifiable), `POST/PATCH /v1/appInfoLocalizations`, `GET /v1/appInfos/{id}/territoryAgeRatings` | `listing.py` |
+| Attributs de version | `PATCH /v1/appStoreVersions/{id}` (copyright, releaseType, earliestReleaseDate, downloadable, reviewType) | `listing.py` |
+| Informations App Review | `GET /v1/appStoreVersions/{id}/appStoreReviewDetail`, `POST/PATCH /v1/appStoreReviewDetails`, pièces jointes `appStoreReviewAttachments` (réservation → PUT → commit MD5) | `listing.py` |
+| Accessibility Nutrition Labels | `GET /v1/apps/{id}/accessibilityDeclarations`, `POST /v1/accessibilityDeclarations` puis `PATCH publish=true` | `listing.py` |
+| Déclaration de chiffrement | `GET /v1/appEncryptionDeclarations?filter[app]=` (la relation sur l'app répond 404, observé le 2026-10-09), `POST /v1/appEncryptionDeclarations`, document `appEncryptionDeclarationDocuments` | `listing.py` |
+| CLUF personnalisé | `GET /v1/apps/{id}/endUserLicenseAgreement`, `POST/PATCH/DELETE /v1/endUserLicenseAgreements` | `listing.py` |
 | **Upload du build** | **Build Upload API** (ASC 4.1, GA fin 2025) : `POST /v1/buildUploads` → `POST /v1/buildUploadFiles` → PUT des chunks → `PATCH uploaded=true` | `builds.py` |
 | Suivi du traitement | `GET /v1/builds` (`processingState`: PROCESSING/VALID/FAILED/INVALID) | `builds.py` |
 | Export compliance | `PATCH /v1/builds/{id}` `usesNonExemptEncryption` (ou clé Info.plist `ITSAppUsesNonExemptEncryption`) | `builds.py` |
@@ -49,9 +54,9 @@ Envoi : `Authorization: Bearer <token>`. ANDP régénère le token à 19 min ave
 | **Soumission au review** | **Review Submissions** : `POST /v1/reviewSubmissions` → `reviewSubmissionItems` → `submitted=true` (l'ancien `appStoreVersionSubmissions` a été **supprimé** en ASC 4.0) | `appstore.py` |
 | **Retrait d'une soumission** | `PATCH /v1/reviewSubmissions/{id}` `canceled=true` — asynchrone : ASC répond `CANCELING`, la version ne redevient éditable qu'ensuite | `appstore.py` |
 | Release | `POST /v1/appStoreVersionReleaseRequests` ; phased release : `appStoreVersionPhasedReleases` | `appstore.py` |
-| Pricing | `GET /v3/appPricePoints` (filtre territoire) → `POST /v1/appPriceSchedules` (remplace le calendrier ; le système de tiers a disparu) | `pricing.py` |
+| Pricing | `GET /v3/appPricePoints` (filtre territoire) → `POST /v1/appPriceSchedules` (remplace le calendrier ; le système de tiers a disparu). Prix courant : `GET /v1/appPriceSchedules/{id}/manualPrices?include=appPricePoint,territory` (`/v1/apps/{id}/appPriceSchedule/manualPrices` répond 404) | `pricing.py` |
 | Territoires | `POST /v2/appAvailabilities` — remplacement complet du jeu, `availableInNewTerritories` préservé si non spécifié | `availability.py` |
-| Classification d'âge | `PATCH /v1/ageRatingDeclarations/{id}` — modèle 2025 (descripteurs ternaires + booléens) | `agerating.py` |
+| Classification d'âge | `PATCH /v1/ageRatingDeclarations/{id}` — questionnaire 2025-2026 (descripteurs `NONE/INFREQUENT/FREQUENT`, booléens dont `socialMedia`, `ageRatingOverrideV2`) | `agerating.py` |
 | Webhooks (ASC 4.0) | `POST /v1/webhooks` — 12 événements (`BUILD_UPLOAD_STATE_UPDATED`, `APP_STORE_VERSION_APP_VERSION_STATE_UPDATED`…), signature HMAC-SHA256 `X-Apple-Signature` | *(à venir)* |
 
 ## 4. Limites de l'API

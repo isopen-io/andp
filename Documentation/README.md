@@ -35,7 +35,8 @@ are trying to do.
 | [Validation.md](Validation.md) | The four gates — credentials, package, metadata, CI — and what each cannot catch |
 | [PublishReadiness.md](PublishReadiness.md) | The CI entry point: GitHub Actions, reusable workflow, tri-state verdict |
 | [Metadata.md](Metadata.md) | The `deliver`-style folder tree for release notes, screenshots and previews |
-| [StoreConfig.md](StoreConfig.md) | Pricing, territory availability and age rating, declared in `andp.yml` |
+| [StoreConfig.md](StoreConfig.md) | The whole App Store listing declared in `andp.yml`, `store plan` / `store apply` |
+| [AppStoreFields.md](AppStoreFields.md) | Every App Store Connect field of an app and its submission, with sources |
 | [ASC-API.md](ASC-API.md) | The App Store Connect API layer: auth, endpoints, limits, what is impossible by API |
 
 ### Building

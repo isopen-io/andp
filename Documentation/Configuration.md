@@ -81,3 +81,27 @@ $ andp verify --json
 `ANDP_HOME` désigne le checkout du repo ANDP dans les workflows fournis. La
 configuration se pilote avec `ANDP_CONFIG_DIR`, qui prend la tête de la cascade
 et redirige aussi les répertoires runtime (`build/`, `metrics/`, `artifacts/`).
+
+## La fiche App Store dans `andp.yml` (`store:`)
+
+`andp.yml` porte aussi la fiche App Store : attributs de l'app, catégories,
+noms et URL par langue, version, App Review, déclaration d'âge, accessibilité,
+chiffrement, CLUF, prix et territoires. Le détail est dans
+[StoreConfig.md](StoreConfig.md), le sens de chaque champ dans
+[AppStoreFields.md](AppStoreFields.md).
+
+Aucun secret n'y vit. Toute clé accepte le suffixe `_env`, qui lit une variable
+d'environnement ou une ligne de `store.env_file`, un fichier `KEY=VALUE`
+gitignoré. C'est le cas du compte démo et du contact App Review :
+
+```yaml
+store:
+  env_file: fastlane/.env
+  review:
+    demo_account_name_env: DEMO_USER
+    demo_account_password_env: DEMO_PASSWORD
+```
+
+Une variable absente est une erreur nommée, sans sa valeur. Le téléphone,
+l'e-mail et le compte démo sont masqués dans toute sortie (`<set>` /
+`<new value>`).

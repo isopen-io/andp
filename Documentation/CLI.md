@@ -39,6 +39,8 @@ compiler error lines — so a caller can remediate without re-running to explore
 
 ---
 
+`andp --version` prints the installed version.
+
 # App Store Connect commands
 
 These need credentials (see [Configuration.md](Configuration.md)).
@@ -227,20 +229,25 @@ See [Validation.md §4](Validation.md#4-the-ci-gate--readiness) and
 ## `store <subcommand> <bundle_id>`
 
 Declarative store configuration, reconciled to a desired state. Every result
-carries `changed: true|false`.
+reports `changed: true|false` (`false` = already matched, nothing written).
 
 ```bash
+andp store plan         me.your.app [--version V] [--metadata DIR]   # read-only diff
 andp store pricing      me.your.app [--territory USA] [--price 0.99|free]
 andp store availability me.your.app [--territories USA,FRA | --all] [--new-territories]
 andp store age-rating   me.your.app [--config rating.json]
-andp store apply        me.your.app        # every configured block from andp.yml
+andp store apply        me.your.app [--version V] [--metadata DIR]   # everything from andp.yml
 ```
 
-`store apply` is best-effort: independent idempotent blocks, so a re-run heals a
-partially-applied state. `availability` is **destructive** — shrinking the set
-delists the app in removed territories; an empty set is refused outright.
+`store plan` only reads: one line per field that would change (app, categories,
+names, subtitles, privacy URLs, version texts and attributes, App Review
+details, age rating, accessibility labels, encryption declaration, EULA, price,
+territories), secrets masked, exit 1 on a validation error. Without
+credentials it validates offline.
 
-Full reference: [StoreConfig.md](StoreConfig.md).
+`store apply` is best-effort: independent idempotent blocks, so a re-run heals a
+partially-applied state. A listing with validation errors is refused whole.
+See [StoreConfig.md](StoreConfig.md) and [AppStoreFields.md](AppStoreFields.md).
 
 ## `build-number [bundle_id] --strategy <max-build|timestamp|commit>`
 
@@ -327,6 +334,7 @@ python3 -m andp.mcp
 | `version_set` | — | — | ✅ |
 | `build_number` | ✅ | — | ❌ (timestamp varies) |
 | `release_start`, `testflight_add`, `publish`, `build`, `test` | — | — | ✅ |
+| `store_plan` | ✅ | — | ✅ |
 | `store_configure_pricing`, `store_set_age_rating`, `store_apply` | — | — | ✅ |
 | `store_configure_availability` | — | ✅ | ✅ |
 | `unlock`, `release_reset` | — | ✅ | ✅ |
