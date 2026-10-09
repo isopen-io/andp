@@ -115,7 +115,7 @@ def test_validate_deprecated_override_warns_towards_v2():
 
 def test_validate_korea_override_knows_the_new_values():
     _, errors, warnings = validate_declaration(
-        {"koreaAgeRatingOverride": "TWELVE_PLUS"})
+        {"koreaAgeRatingOverride": "TWELVE_PLUS", "gracRatingClassificationNumber": "CC-1"})
     assert errors == [] and warnings == []
 
 
@@ -173,3 +173,15 @@ def test_missing_answers_asks_for_the_age_restriction_only_with_social_media():
     assert "socialMediaAgeRestricted" in missing_answers(base)
     assert "socialMediaAgeRestricted" not in missing_answers(
         {"socialMedia": False, "socialMediaAgeRestricted": None})
+
+
+def test_korea_override_needs_its_grac_classification_number():
+    # API doc: koreaAgeRatingOverride is "the age rating that corresponds to the
+    # rating the gracRatingClassificationNumber represents" (2026-08-12).
+    _, errors, _ = validate_declaration({"koreaAgeRatingOverride": "TWELVE_PLUS"})
+    assert errors == ["koreaAgeRatingOverride TWELVE_PLUS needs gracRatingClassificationNumber"]
+    _, errors, _ = validate_declaration({"koreaAgeRatingOverride": "TWELVE_PLUS",
+                                         "gracRatingClassificationNumber": "CC-OB-1"})
+    assert errors == []
+    _, errors, _ = validate_declaration({"koreaAgeRatingOverride": "NONE"})
+    assert errors == []

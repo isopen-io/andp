@@ -118,6 +118,9 @@ def validate_declaration(config):
                 attributes[key] = value
         else:
             errors.append(f"unknown age rating field {key!r}")
+    korea = attributes.get("koreaAgeRatingOverride")
+    if korea not in (None, "NONE") and not attributes.get("gracRatingClassificationNumber"):
+        errors.append(f"koreaAgeRatingOverride {korea} needs gracRatingClassificationNumber")
     return attributes, errors, warnings
 
 
