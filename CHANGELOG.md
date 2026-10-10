@@ -1,3 +1,45 @@
+## 1.18.0 - 2026-10-10
+### Added
+- **In-app events** (`store.app_events`, family `app_event`). andp now drives
+  the App Store cards that announce a season, a competition or a premiere.
+  - It declares the badge, purpose, priority, purchase requirement, deep link
+    (https or an app scheme), primary locale, territories (`all` = the app's
+    territories) and schedule, plus the localized name, short and long
+    description.
+  - `repeat: {every_days, count, first}` unfolds recurring events (`{n}` is the
+    occurrence number). Occurrences that have ended are left out.
+  - Visuals: `app_events/<key>/<locale>/event_card/` and
+    `event_details_page/`, placed through the App Asset Library on the event
+    localization. A different file replaces the placed one.
+  - `time_zone` makes the repeats keep their local hour across a DST change.
+  - Apple's rules are checked offline before any request:
+    - an event lasts 15 min to 31 days;
+    - it is published at most 14 days before it starts;
+    - per-territory starts fall within 48 h of each other;
+    - at most 10 events overlap (more than 15 upcoming only warns);
+    - texts are limited to 30 / 50 / 120 characters.
+  - Events past their review are frozen: they are left as is with a note and
+    never fail `store apply`. An occurrence that has started but was never
+    created is left out.
+- **`andp store submit-events <bundle> [--event KEY,…]`** and the MCP tool
+  `store_submit_events` send the declared events to App Review without a
+  version. They are gated by `policy.allow_submit` and never send an open
+  draft that holds a version, an item they cannot read, or events not asked
+  for. Submission items are read with an explicit `include` (fail-closed).
+
+### Changed
+- `AssetLibraryManager.placements` / `place` take the localization they act on
+  (`parent`: version or in-app event). The default keeps the version.
+- `AppStoreManager.submission_items` lists every item of a submission (versions,
+  events…). `add_event_submission_item` adds an event.
+
+### Observed API contracts
+- OpenAPI 4.5.1 (2026-10-06):
+  - `GET /v1/appEventLocalizations/{id}/placements` exists, and a placement
+    takes the `appEventLocalization` relationship.
+  - Placement ordering requests do not accept event localizations, which is
+    harmless because an event holds one asset per type.
+
 ## 1.17.0 - 2026-10-09
 ### Added
 - **Listing visuals go through the App Asset Library** (API 4.5.1, opened

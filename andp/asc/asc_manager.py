@@ -783,7 +783,8 @@ def _cmd_readiness(account, managers, dry_run, args, json_mode=False):
     return 0 if soft else 1
 
 
-_STORE_USAGE = ("Usage: store <plan|pricing|availability|age-rating|apply> <bundle_id> "
+_STORE_USAGE = ("Usage: store <plan|pricing|availability|age-rating|apply|submit-events> "
+                "<bundle_id> [--event KEY,KEY] "
                 "[--territory USA] [--price 0.00|free] [--territories USA,FRA|--all] "
                 "[--new-territories] [--config <json>]")
 
@@ -838,6 +839,14 @@ def _cmd_store(account, managers, dry_run, args, json_mode=False):
             return 2
         result = service.configure_store(rest[0], account=acct, version=version,
                                          metadata_dir=metadata_dir)
+    elif sub in ("submit-events", "submit_events"):
+        from ..listing_service import submit_events
+        keys = _take_opt(rest, "--event")
+        if not rest:
+            print("Usage: store submit-events <bundle_id> [--event saison-4,ligue-42]")
+            return 2
+        result = submit_events(rest[0], account=acct,
+                               keys=[k for k in keys.split(",") if k] if keys else None)
     else:
         print(_STORE_USAGE)
         return 2
@@ -856,6 +865,14 @@ def _print_store_human(result):
         print(f"❌ {cmd}: {err.get('message', 'failed')}")
         if err.get("remediation"):
             print(f"   → {err['remediation']}")
+        return
+    if cmd == "submit_events":
+        for key in result.get("submitted", []):
+            print(f"  ✅ {key}: sent to App Review")
+        for line in result.get("skipped", []):
+            print(f"  · {line}")
+        if not result.get("submitted"):
+            print("  no event to submit")
         return
     if cmd == "configure_store":
         for name, block in result.get("blocks", {}).items():

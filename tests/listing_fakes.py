@@ -123,6 +123,28 @@ class FakeAppStore:
         self.s["version_localizations"].setdefault(locale, {}).update(attrs)
         return {"id": f"vl-{locale}"}, False
 
+    # review submissions: state["draft_submission"] = {"id", "items": [(rel, id)]}
+    def find_open_review_submission(self, app_id, platform="IOS"):
+        draft = self.s.get("draft_submission")
+        return {"id": draft["id"]} if draft else None
+
+    def submission_items(self, submission_id):
+        return list(self.s["draft_submission"]["items"])
+
+    def create_review_submission(self, app_id, platform="IOS"):
+        self.s["draft_submission"] = {"id": "sub-new", "items": []}
+        self.writes.append(("create_review_submission", platform))
+        return {"id": "sub-new"}
+
+    def add_event_submission_item(self, submission_id, event_id):
+        self.s["draft_submission"]["items"].append(("appEvent", event_id))
+        self.writes.append(("add_event_item", submission_id, event_id))
+        return {"id": f"item-{event_id}"}
+
+    def mark_submitted(self, submission_id):
+        self.writes.append(("mark_submitted", submission_id))
+        return {"id": submission_id}
+
 
 class FakeAgeRating:
     def __init__(self, state, writes):
@@ -146,6 +168,10 @@ class FakeAvailability:
 
     def availability_snapshot(self, app_id):
         return copy.deepcopy(self.s.get("availability"))
+
+    def list_available_territories(self, app_id):
+        return set((self.s.get("availability") or {}).get("territories")
+                   or self.s.get("available_territories", {"FRA", "BEL"}))
 
 
 class FakePricing:
@@ -240,7 +266,7 @@ class FakeAssetLibrary:
     def assets(self, library_id, media_type):
         return [dict(a) for a in self.s.setdefault("library", []) if a["mediaType"] == media_type]
 
-    def placements(self, loc_id):
+    def placements(self, loc_id, parent="appStoreVersionLocalization"):
         return [dict(p) for p in self.s.setdefault("placements", {}).get(loc_id, [])]
 
     def upload(self, library_id, path, category):
@@ -254,7 +280,8 @@ class FakeAssetLibrary:
         self.writes.append(("upload", os.path.basename(path), category))
         return dict(asset)
 
-    def place(self, loc_id, placement_type, group, media_type, media_id):
+    def place(self, loc_id, placement_type, group, media_type, media_id,
+              parent="appStoreVersionLocalization"):
         self._next += 1
         name = next(a["fileName"] for a in self.s["library"] if a["id"] == media_id)
         size = next(a["fileSize"] for a in self.s["library"] if a["id"] == media_id)
@@ -319,4 +346,51 @@ def media_managers(state):
     managers.asset_library = FakeAssetLibrary(state, managers.writes)
     managers.screenshots = FakeLegacySets(state, managers.writes, "screenshots")
     managers.previews = FakeLegacySets(state, managers.writes, "previews")
+    return managers
+
+
+class FakeAppEvents:
+    """appEvents and their localizations, keyed by event id."""
+
+    def __init__(self, state, writes):
+        self.s, self.writes = state, writes
+
+    def _events(self):
+        return self.s.setdefault("app_events", {})
+
+    def list_events(self, app_id):
+        import copy
+        return [copy.deepcopy(e) for e in self._events().values()]
+
+    def create_event(self, app_id, attributes):
+        event_id = f"ev{len(self._events()) + 1}"
+        self._events()[event_id] = {"id": event_id, "state": "DRAFT",
+                                    "attributes": dict(attributes), "localizations": {}}
+        self.writes.append(("create_event", attributes["referenceName"]))
+        return {"id": event_id}
+
+    def update_event(self, event_id, attributes):
+        self._events()[event_id]["attributes"].update(attributes)
+        self.writes.append(("update_event", event_id, sorted(attributes)))
+        return {"id": event_id}
+
+    def create_localization(self, event_id, locale, attributes):
+        loc_id = f"{event_id}-{locale}"
+        self._events()[event_id]["localizations"][locale] = {"id": loc_id, "locale": locale,
+                                                             **attributes}
+        self.writes.append(("create_event_localization", event_id, locale))
+        return {"id": loc_id}
+
+    def update_localization(self, loc_id, attributes):
+        for event in self._events().values():
+            for loc in event["localizations"].values():
+                if loc["id"] == loc_id:
+                    loc.update(attributes)
+        self.writes.append(("update_event_localization", loc_id, sorted(attributes)))
+        return {"id": loc_id}
+
+
+def event_managers(state):
+    managers = media_managers(state)
+    managers.app_events = FakeAppEvents(state, managers.writes)
     return managers

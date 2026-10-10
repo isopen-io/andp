@@ -264,7 +264,9 @@ TOOLS = [
             "attributes (content rights, accessibility URL…), categories, names, "
             "subtitles, privacy URLs, version texts and attributes, App Review "
             "details, age rating, accessibility labels, encryption declaration, "
-            "EULA, price, territories. One entry per field that would change; "
+            "EULA, in-app events (store.app_events: seasons, competitions — texts, "
+            "schedule, card and details-page visuals), price, territories. One entry "
+            "per field that would change; "
             "secrets are masked. Without credentials it validates offline. Writes "
             "nothing — run it before store_apply."
         ),
@@ -302,6 +304,27 @@ TOOLS = [
             "required": ["bundle_id"],
         },
         "annotations": {"title": "Apply store config", **_ann(idempotent=True)},
+    },
+    {
+        "name": "store_submit_events",
+        "description": (
+            "Send the in-app events declared in store.app_events (already created by "
+            "store_apply) to App Review, without an app version — Apple reviews them "
+            "with the latest approved version. GATED: requires policy.allow_submit: "
+            "true in andp.yml. Refuses an open draft submission that holds a version."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "bundle_id": {"type": "string"},
+                "events": {"type": "array", "items": {"type": "string"},
+                           "description": "Event keys (e.g. saison-4); default: all"},
+                "account": {"type": "string"},
+            },
+            "required": ["bundle_id"],
+        },
+        "annotations": {"title": "Submit in-app events",
+                        **_ann(destructive=True, idempotent=False)},
     },
     {
         "name": "version_list",
@@ -532,6 +555,10 @@ def _call_store_tool(name, args):
         return _release_result(service.configure_store(
             args["bundle_id"], account=acct, version=args.get("version"),
             metadata_dir=args.get("metadata_dir")))
+    if name == "store_submit_events":
+        from . import listing_service
+        return _release_result(listing_service.submit_events(
+            args["bundle_id"], account=acct, keys=args.get("events")))
     return None
 
 

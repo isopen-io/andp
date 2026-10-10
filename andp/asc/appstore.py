@@ -250,6 +250,43 @@ class AppStoreManager:
             },
         )["data"]
 
+    # Every relationship a submission item can carry (OpenAPI 4.5.1). Asked for
+    # explicitly: without `include`, a to-one relationship may come back as
+    # links only, and an unread item would look like no item at all.
+    _ITEM_RELATIONSHIPS = (
+        "appStoreVersion", "appCustomProductPageVersion", "appStoreVersionExperiment",
+        "appStoreVersionExperimentV2", "appEvent", "appAssetLibraryImage",
+        "appAssetLibraryVideo", "backgroundAssetVersion", "gameCenterAchievementVersion",
+        "gameCenterActivityVersion", "gameCenterChallengeVersion",
+        "gameCenterLeaderboardSetVersion", "gameCenterLeaderboardVersion",
+        "inAppPurchaseVersion", "subscriptionVersion", "subscriptionGroupVersion")
+
+    def submission_items(self, submission_id):
+        """[(relationship, id)] of a submission's items — appStoreVersion, appEvent…
+
+        An item whose relationship cannot be read comes back as ("unknown",
+        item id): callers that must not send something along treat it as
+        foreign (fail-closed)."""
+        out = []
+        items = self.client.get_all(f"/v1/reviewSubmissions/{submission_id}/items",
+                                    params={"include": ",".join(self._ITEM_RELATIONSHIPS)})
+        for item in items:
+            found = [(name, rel["data"]["id"])
+                     for name, rel in (item.get("relationships") or {}).items()
+                     if name in self._ITEM_RELATIONSHIPS
+                     and isinstance((rel or {}).get("data"), dict)]
+            out.extend(found or [("unknown", item.get("id"))])
+        return out
+
+    def add_event_submission_item(self, submission_id, event_id):
+        """Add an in-app event to a review submission (reviewSubmissionItems.appEvent)."""
+        return self.client.post("/v1/reviewSubmissionItems", {"data": {
+            "type": "reviewSubmissionItems",
+            "relationships": {
+                "reviewSubmission": {"data": {"type": "reviewSubmissions",
+                                              "id": submission_id}},
+                "appEvent": {"data": {"type": "appEvents", "id": event_id}}}}})["data"]
+
     def mark_submitted(self, submission_id):
         return self.client.patch(
             f"/v1/reviewSubmissions/{submission_id}",

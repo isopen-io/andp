@@ -128,6 +128,78 @@ age rating question (named), Apple's length limits, and screenshots per
 language (legacy sets or Asset Library). Missing iPhone Duo screenshots warn
 today and block from 2027-04-01.
 
+## In-app events — seasons, competitions, premieres
+
+An in-app event is a card on the App Store (product page, search, Today, Apple
+Games) announcing a time-limited moment of the app. `store.app_events` declares
+them; `store plan` / `store apply` reconcile them (family `app_event`), and
+`store submit-events` sends them to App Review.
+
+```yaml
+store:
+  app_events:
+    - key: saison                       # stable id, also the visuals folder name
+      reference_name: "Saison {n}"      # unique per app, 64 characters
+      badge: NEW_SEASON                 # LIVE_EVENT PREMIERE CHALLENGE COMPETITION
+                                        # NEW_SEASON MAJOR_UPDATE SPECIAL_EVENT
+      purpose: KEEP_ACTIVE_USERS_INFORMED   # APPROPRIATE_FOR_ALL_USERS ATTRACT_NEW_USERS
+                                            # KEEP_ACTIVE_USERS_INFORMED BRING_BACK_LAPSED_USERS
+      priority: HIGH                    # HIGH | NORMAL
+      purchase_requirement: NO_COST_ASSOCIATED   # or IN_APP_PURCHASE
+      deep_link: https://meeshy.me/me/progression/saison/{n}   # or an app scheme
+      primary_locale: fr-FR
+      territories: all                  # the app's territories, or [FRA, BEL, …]
+      publish_start: 2026-10-05T00:00:00+02:00
+      event_start:   2026-10-12T00:00:00+02:00
+      event_end:     2026-11-09T20:00:00+01:00
+      repeat: {every_days: 56, count: 3, first: 1}   # Saison 1, 2, 3, 56 days apart
+      time_zone: Europe/Paris           # repeats keep the local hour across DST
+      submit: true                      # store submit-events sends it (default)
+      localizations:
+        fr-FR:
+          name: "Saison {n}"                              # 30 characters
+          short_description: "Huit semaines, 40 étapes"   # 50
+          long_description: "Une étoile par jour…"        # 120
+```
+
+- **`repeat`** unfolds one entry into `count` events `every_days` apart; `{n}`
+  is the occurrence number in the reference name, the deep link and the texts.
+  An occurrence that has already ended — or already started without having
+  been created — is left out (a note says so). With `time_zone`, occurrences
+  keep their local hour across a daylight-saving change.
+- **`schedules:`** — a list of `{territories, publish_start, event_start,
+  event_end}` — replaces the three dates when the event starts on different
+  days in different places.
+- **Visuals**, one per placement, in the metadata folder:
+  `app_events/<key>/<locale>/event_card/` (16:9, 1920×1080 to 3840×2160, image or
+  15–30 s video) and `…/event_details_page/` (9:16, 1080×1920 to 2160×3840). A
+  repeated event may override the shared folder with `app_events/<key>-<n>/`.
+  They are placed through the App Asset Library on the event localization.
+- **Apple's rules are checked offline**: 15 minutes to 31 days; published at
+  most 14 days before the start; per-territory starts within 48 hours; at most
+  10 overlapping (more than 15 upcoming only warns: Apple caps the approved
+  ones); text limits 30 / 50 / 120; a
+  localization for the primary locale. A season longer than 31 days is
+  announced by its opening event.
+- **Matching** is by `reference_name`. An event already accepted, approved or
+  published is frozen by App Store Connect: it is left as is with a note, and
+  never fails `store apply` — declare a new event to change it. Live events absent from the config
+  are kept and reported.
+
+```bash
+andp store plan me.app.bundle             # app_event [saison-4] … + create / ~ update / ↑ upload
+andp store apply me.app.bundle            # creates events, texts, visuals
+andp store submit-events me.app.bundle [--event saison-4,saison-5]
+```
+
+`store submit-events` (MCP `store_submit_events`) is gated by
+`policy.allow_submit`. It submits the declared events that are created and not
+yet reviewed, **without a version**: Apple reviews them with the latest
+approved version. It refuses an open draft submission that already holds a
+version (or an item it cannot read), or events not asked for this time —
+that draft is never sent along. An app that was never approved must
+submit its first event with its first version (App Store Connect).
+
 ## Pricing, territories, age rating
 
 These use the **current** App Store Connect API models: pricing is
@@ -183,6 +255,7 @@ andp store availability me.app.bundle --territories USA,FRA   # or --all [--new-
 andp store age-rating me.app.bundle --config rating.json
 andp store plan me.app.bundle                        # read-only diff of everything
 andp store apply me.app.bundle                       # everything from andp.yml
+andp store submit-events me.app.bundle               # in-app events to App Review
 ```
 
 All accept `--json` for a structured envelope and run in DRY-RUN without
@@ -194,7 +267,8 @@ state already matched (idempotent skip).
 `store_plan` (read-only), `store_configure_pricing`,
 `store_configure_availability` (annotated **destructive** — shrinking the set
 delists territories), `store_set_age_rating`, `store_apply` (`version`,
-`metadata_dir`). All library-first (they drive the service layer directly, not a
+`metadata_dir`), `store_submit_events` (`events`; gated by
+`policy.allow_submit`). All library-first (they drive the service layer directly, not a
 captured CLI stdout) and return `structuredContent`.
 
 ## Safety & semantics

@@ -269,7 +269,39 @@ Les mêmes notes de version ajoutent des spécifications pour l'iPhone 18 Pro et
 - **Plan** : `store plan` liste chaque envoi, placement, remise en ordre ou retrait (famille `media`) sans rien écrire.
 - **Sans Asset Library** : les groupes qui ont un ancien type passent par `appScreenshotSets` / `appPreviewSets`. iPhone Duo et les assets créatifs sont refusés, avec la raison.
 
-## 13. Ce que l'API n'expose pas — à faire à la main dans App Store Connect
+## 13. Événements in-app (`appEvents`, `appEventLocalizations`)
+
+Un événement in-app est une carte de l'App Store (fiche, recherche, Aujourd'hui, Apple Games) qui annonce un moment limité dans le temps : saison, compétition, première. andp le déclare dans `store.app_events` (voir [StoreConfig.md](StoreConfig.md)), le réconcilie par `store plan` / `store apply` (famille `app_event`) et le soumet par `store submit-events`.
+
+| Champ | API | Limite / valeurs | andp |
+|---|---|---|---|
+| nom de référence | `referenceName` | 64 caractères, unique par app [H20] | `reference_name` — clé de rapprochement |
+| badge | `badge` | `LIVE_EVENT`, `PREMIERE`, `CHALLENGE`, `COMPETITION`, `NEW_SEASON`, `MAJOR_UPDATE`, `SPECIAL_EVENT` | `badge` (requis) |
+| objectif | `purpose` | `APPROPRIATE_FOR_ALL_USERS`, `ATTRACT_NEW_USERS`, `KEEP_ACTIVE_USERS_INFORMED`, `BRING_BACK_LAPSED_USERS` | `purpose` (requis) |
+| priorité | `priority` | `HIGH`, `NORMAL` | `priority` |
+| achat requis | `purchaseRequirement` | `NO_COST_ASSOCIATED`, `IN_APP_PURCHASE` | `purchase_requirement` |
+| lien profond | `deepLink` | URI ; Apple recommande un lien universel | `deep_link` (https ou schéma de l'app) |
+| langue principale | `primaryLocale` | code de langue | `primary_locale` |
+| calendrier | `territorySchedules[]` | `territories`, `publishStart`, `eventStart`, `eventEnd` | `territories` + trois dates, ou `schedules:` |
+| nom | `appEventLocalizations.name` | 30 caractères [H20] | par langue |
+| description courte | `shortDescription` | 50 caractères, affichée sur la carte [H20] | par langue |
+| description longue | `longDescription` | 120 caractères, affichée sur la page de détail [H20] | par langue |
+| état | `eventState` (lecture seule) | `DRAFT` → `READY_FOR_REVIEW` → `WAITING_FOR_REVIEW` → `IN_REVIEW` → `ACCEPTED`/`APPROVED` → `PUBLISHED` → `PAST` → `ARCHIVED` ; `REJECTED` | modifiable en `DRAFT`, `READY_FOR_REVIEW`, `REJECTED` ; figé ensuite (🔒) |
+
+**Règles d'Apple** [H20], contrôlées hors ligne : un événement dure de 15 minutes à 31 jours ; sa publication précède son début de 14 jours au plus ; les débuts par territoire tiennent dans 48 heures ; 10 événements publiés et 15 approuvés au plus en même temps, 10 qui se chevauchent au plus.
+
+**Visuels** — placements de l'App Asset Library sur la langue de l'événement (`POST /v1/appAssetLibraryPlacements` avec la relation `appEventLocalization`, lus par `GET /v1/appEventLocalizations/{id}/placements`, OpenAPI 4.5.1 du 2026-10-06). Un seul visuel par type (limite `IN_APP_EVENTS` des données de référence) ; un fichier différent remplace le précédent :
+
+| Type | Dossier | Image | Vidéo |
+|---|---|---|---|
+| `EVENT_CARD_ASSET` | `app_events/<clé>/<langue>/event_card/` | 16:9, 1920×1080 à 3840×2160, PNG/JPEG sans transparence | 16:9, 15 à 30 s, 30 ou 60 i/s |
+| `EVENT_DETAILS_PAGE_ASSET` | `app_events/<clé>/<langue>/event_details_page/` | 9:16, 1080×1920 à 2160×3840 | 9:16, 15 à 30 s, 30 ou 60 i/s |
+
+Les anciennes ressources `appEventScreenshots` / `appEventVideoClips` existent encore dans l'API ; andp ne s'en sert pas.
+
+**Soumission** [H21] — une app déjà approuvée peut soumettre un événement seul : il est examiné avec la dernière version de la plateforme choisie. Une app jamais approuvée soumet son premier événement avec sa première version. `store submit-events` crée une soumission (ou reprend un brouillon qui ne contient que des événements), y ajoute chaque événement (`reviewSubmissionItems.appEvent`) et la soumet ; il refuse un brouillon qui contient une version.
+
+## 14. Ce que l'API n'expose pas — à faire à la main dans App Store Connect
 
 Ces ressources sont absentes de la spécification 4.5.1 (vérifié par recherche dans le fichier).
 
@@ -280,7 +312,7 @@ Ces ressources sont absentes de la spécification 4.5.1 (vérifié par recherche
 | **Dispositif médical réglementé** | App Information → App Store Regulations & Permits [H11] | oui pour les catégories Santé et forme ou Médecine, ou si le contenu médical est déclaré fréquent. Requis pour les nouvelles apps depuis le 2026-03-26, pour les existantes « début 2027 » |
 | catégorie fiscale | Pricing and Availability [H12] | non (défaut « App Store software ») |
 | contrats, banque, fiscalité | Business | contrat Apps payantes seulement si l'app est payante |
-| App Clip, In-App Events, Game Center, Custom Product Pages | ressources dédiées de l'API (`appClips`, `appEvents`, `gameCenter*`, `appCustomProductPages`) | non. Elles existent dans l'API mais andp ne les pilote pas |
+| App Clip, Game Center, Custom Product Pages | ressources dédiées de l'API (`appClips`, `gameCenter*`, `appCustomProductPages`) | non. Elles existent dans l'API mais andp ne les pilote pas (les événements in-app, eux, sont pilotés : § 13) |
 
 ## Sources
 
@@ -303,6 +335,8 @@ Aide App Store Connect (préfixe `https://developer.apple.com/help/app-store-con
 - [H17] `manage-your-apps-availability/select-an-app-store-version-release-option`
 - [H18] `manage-your-apps-availability/publish-for-pre-order`
 - [H19] `manage-app-information/provide-a-custom-license-agreement`
+- [H20] `offer-in-app-events/offer-in-app-events` (lu le 2026-10-10)
+- [H21] `manage-submissions-to-app-review/submit-an-in-app-event` (lu le 2026-10-10)
 - [C] `manage-app-accessibility/<fonction>-evaluation-criteria`
 
 Documentation de l'API (préfixe `https://developer.apple.com/documentation/appstoreconnectapi/`) :

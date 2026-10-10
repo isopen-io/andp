@@ -18,7 +18,7 @@ from . import listing_spec as spec
 KNOWN_SECTIONS = frozenset({
     "platform", "metadata_dir", "env_file", "pricing", "availability", "age_rating",
     "app", "categories", "localizations", "version", "review", "accessibility",
-    "encryption", "eula", "media",
+    "encryption", "eula", "media", "app_events",
 })
 
 _ROOT_FILES = {
@@ -245,6 +245,16 @@ def _eula(raw, project_root, errors):
     return {"text": spec.normalize_text(_read(path)), "territories": territories}
 
 
+def _app_events(raw, metadata_dir, errors, warnings):
+    """{events, notes} — past occurrences are notes, not errors."""
+    from .event_spec import read_events
+    events, errs, warns, notes = read_events(
+        raw, metadata_dir if metadata_dir and os.path.isdir(metadata_dir) else None)
+    errors.extend(errs)
+    warnings.extend(warns)
+    return {"events": events, "notes": notes}
+
+
 def load_desired(store, project_root=".", metadata_dir=None, environ=None):
     """Pure-ish (reads local files only): the desired listing + its findings."""
     store = store or {}
@@ -336,6 +346,9 @@ def load_desired(store, project_root=".", metadata_dir=None, environ=None):
         "eula": _eula(store.get("eula"), project_root, errors),
         "media": media,
         "media_prune": bool((store.get("media") or {}).get("prune")),
+        "app_events": _app_events(store.get("app_events"), metadata_dir and
+                                  _project_path(project_root, metadata_dir),
+                                  errors, warnings),
         "errors": errors,
         "warnings": warnings,
     }

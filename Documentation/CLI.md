@@ -237,16 +237,20 @@ andp store pricing      me.your.app [--territory USA] [--price 0.99|free]
 andp store availability me.your.app [--territories USA,FRA | --all] [--new-territories]
 andp store age-rating   me.your.app [--config rating.json]
 andp store apply        me.your.app [--version V] [--metadata DIR]   # everything from andp.yml
+andp store submit-events me.your.app [--event saison-4,saison-5]    # in-app events → App Review
 ```
 
 `store plan` only reads: one line per field that would change (app, categories,
 names, subtitles, privacy URLs, version texts and attributes, App Review
-details, age rating, accessibility labels, encryption declaration, EULA, price,
-territories), secrets masked, exit 1 on a validation error. Without
+details, age rating, accessibility labels, encryption declaration, EULA, in-app
+events, price, territories), secrets masked, exit 1 on a validation error. Without
 credentials it validates offline.
 
 `store apply` is best-effort: independent idempotent blocks, so a re-run heals a
 partially-applied state. A listing with validation errors is refused whole.
+`store submit-events` sends the declared in-app events to App Review without a
+version; it is gated by `policy.allow_submit` and never sends an open draft that
+holds a version.
 See [StoreConfig.md](StoreConfig.md) and [AppStoreFields.md](AppStoreFields.md).
 
 ## `build-number [bundle_id] --strategy <max-build|timestamp|commit>`
@@ -339,13 +343,13 @@ python3 -m andp.mcp
 | `store_configure_availability` | — | ✅ | ✅ |
 | `unlock`, `release_reset` | — | ✅ | ✅ |
 | `release_poll`, `upload`, `run` | — | — | ❌ |
-| `submit` | — | ✅ | ❌ |
+| `submit`, `store_submit_events` | — | ✅ | ❌ |
 
 The surface defines every operation of the end-to-end pipeline — targets →
 build → test → run → build_number → verify → upload → status → publish →
 precheck → readiness → submit/release → unlock → store — so an agent can drive
 it without a shell. Consent stays durable and auditable in `andp.yml`:
-`submit` is refused unless `policy.allow_submit: true`, and `unlock` refuses a
+`submit` and `store_submit_events` are refused unless `policy.allow_submit: true`, and `unlock` refuses a
 >1 h submission (`stale_submission_unconfirmed`) unless
 `policy.allow_stale_unlock: true` — over MCP there is no per-call `-y`.
 

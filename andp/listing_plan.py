@@ -27,7 +27,7 @@ _ALWAYS_EDITABLE = {("version_localization", "promotionalText")}
 FAMILY_ORDER = (
     "app", "categories", "app_info_localization", "age_rating", "version",
     "phased_release", "version_localization", "media", "review", "review_attachment",
-    "accessibility", "encryption", "eula", "pricing", "availability",
+    "accessibility", "encryption", "eula", "app_event", "pricing", "availability",
 )
 
 
@@ -307,6 +307,19 @@ def _plan_store(plan, managers, app_id, desired, ctx):
                           snapshot["available_in_new_territories"]})
 
 
+def _plan_app_events(plan, managers, app_id, desired):
+    wanted = desired.get("app_events") or {}
+    plan.notes.extend(wanted.get("notes") or [])
+    if not wanted.get("events"):
+        return
+    from .event_sync import plan_events
+    planned = plan_events(managers, app_id, wanted["events"])
+    plan.changes.extend(planned["changes"])
+    plan.unchanged += planned["unchanged"]
+    plan.errors.extend(planned["errors"])
+    plan.notes.extend(planned["notes"])
+
+
 def build_plan(managers, app_id, desired, version=None):
     """Read-only. Returns the plan; nothing is written."""
     plan = _Plan()
@@ -336,6 +349,7 @@ def build_plan(managers, app_id, desired, version=None):
     _plan_accessibility(plan, managers, app_id, desired, ctx)
     _plan_encryption(plan, managers, app_id, desired)
     _plan_eula(plan, managers, app_id, desired, ctx)
+    _plan_app_events(plan, managers, app_id, desired)
     _plan_store(plan, managers, app_id, desired, ctx)
 
     rank = {name: i for i, name in enumerate(FAMILY_ORDER)}
@@ -442,6 +456,10 @@ def _write_family(name, changes, managers, app_id, plan):
         if fresh["errors"]:
             raise RuntimeError("; ".join(fresh["errors"]))
         return apply_media(managers, fresh)
+    if name == "app_event":
+        from .event_sync import apply_events, plan_events
+        return apply_events(managers, app_id,
+                            plan_events(managers, app_id, desired["app_events"]["events"]))
     if name == "accessibility":
         state = ctx.get("accessibility", {"published": {}, "drafts": {}})
         for family in _scopes(changes):
