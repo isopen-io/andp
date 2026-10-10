@@ -16,6 +16,11 @@ from .assets import _default_upload_transport, _transfer_bytes
 _VIDEO_EXT = (".mp4", ".mov", ".m4v")
 _RESOURCE = {"IMAGE": "appAssetLibraryImages", "VIDEO": "appAssetLibraryVideos"}
 _RELATION = {"IMAGE": "image", "VIDEO": "video"}
+# What a placement sits on: the relationship name -> its resource type.
+VERSION_LOCALIZATION = "appStoreVersionLocalization"
+EVENT_LOCALIZATION = "appEventLocalization"
+_PARENT_TYPES = {VERSION_LOCALIZATION: "appStoreVersionLocalizations",
+                 EVENT_LOCALIZATION: "appEventLocalizations"}
 
 
 def media_type_of(path):
@@ -93,10 +98,12 @@ class AssetLibraryManager:
                                     params={"limit": 200})
         return [_asset_view(i, media_type) for i in items]
 
-    def placements(self, localization_id):
-        """The localization's placements in display order, with their file names."""
+    def placements(self, localization_id, parent=VERSION_LOCALIZATION):
+        """The localization's placements in display order, with their file names.
+        `parent` is the relationship the localization fills (version or in-app
+        event — /v1/appEventLocalizations/{id}/placements, OpenAPI 4.5.1)."""
         response = self.client.get(
-            f"/v1/appStoreVersionLocalizations/{localization_id}/placements",
+            f"/v1/{_PARENT_TYPES[parent]}/{localization_id}/placements",
             params={"include": "image,video", "sort": "placementGroupPosition",
                     "limit": 200}) or {}
         included = {(i.get("type"), i.get("id")): i.get("attributes") or {}
@@ -134,16 +141,16 @@ class AssetLibraryManager:
                      "attributes": {"uploaded": True}}}) or {}).get("data") or reserved
         return _asset_view(committed, media_type)
 
-    def place(self, localization_id, placement_type, group, media_type, media_id):
+    def place(self, localization_id, placement_type, group, media_type, media_id,
+              parent=VERSION_LOCALIZATION):
         return (self.client.post("/v1/appAssetLibraryPlacements", {
             "data": {"type": "appAssetLibraryPlacements",
                      "attributes": {"placementType": placement_type, "placementGroup": group},
                      "relationships": {
                          _RELATION[media_type]: {"data": {"type": _RESOURCE[media_type],
                                                           "id": media_id}},
-                         "appStoreVersionLocalization": {"data": {
-                             "type": "appStoreVersionLocalizations",
-                             "id": localization_id}}}}}) or {}).get("data")
+                         parent: {"data": {"type": _PARENT_TYPES[parent],
+                                           "id": localization_id}}}}}) or {}).get("data")
 
     def unplace(self, placement_id):
         self.client.delete(f"/v1/appAssetLibraryPlacements/{placement_id}")

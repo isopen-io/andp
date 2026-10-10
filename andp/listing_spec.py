@@ -14,8 +14,8 @@ import re
 
 # -- field kinds ---------------------------------------------------------------
 
-TEXT, URL, BOOL, ENUM, DATETIME, LOCALE, CATEGORY = (
-    "text", "url", "bool", "enum", "datetime", "locale", "category")
+TEXT, URL, BOOL, ENUM, DATETIME, LOCALE, CATEGORY, URI = (
+    "text", "url", "bool", "enum", "datetime", "locale", "category", "uri")
 
 
 class Field:
@@ -136,6 +136,31 @@ ENCRYPTION_FIELDS = (
     Field("availableOnFrenchStore", BOOL, ("available_on_french_store",), required=True),
 )
 
+# appEvents — an in-app event (badge, purpose, deep link). Its schedule is read
+# by andp/event_spec.py: territorySchedules is a list, not a scalar field.
+APP_EVENT_FIELDS = (
+    Field("referenceName", TEXT, ("reference_name",), max_len=64, required=True),
+    Field("badge", ENUM, (), values={"LIVE_EVENT", "PREMIERE", "CHALLENGE", "COMPETITION",
+                                     "NEW_SEASON", "MAJOR_UPDATE", "SPECIAL_EVENT"},
+          required=True),
+    Field("purpose", ENUM, (), values={"APPROPRIATE_FOR_ALL_USERS", "ATTRACT_NEW_USERS",
+                                       "KEEP_ACTIVE_USERS_INFORMED",
+                                       "BRING_BACK_LAPSED_USERS"}, required=True),
+    Field("priority", ENUM, (), values={"HIGH", "NORMAL"}),
+    Field("purchaseRequirement", ENUM, ("purchase_requirement",),
+          values={"NO_COST_ASSOCIATED", "IN_APP_PURCHASE"}),
+    Field("deepLink", URI, ("deep_link",)),
+    Field("primaryLocale", LOCALE, ("primary_locale",)),
+)
+
+# appEventLocalizations — per event and language (App Store Connect Help,
+# « Offer In-App Events »: name 30, short description 50, long description 120).
+APP_EVENT_LOCALIZATION_FIELDS = (
+    Field("name", TEXT, (), max_len=30, required=True),
+    Field("shortDescription", TEXT, ("short_description",), max_len=50, required=True),
+    Field("longDescription", TEXT, ("long_description",), max_len=120, required=True),
+)
+
 # Top-level iOS categories (GET /v1/appCategories?filter[platforms]=IOS, 2026-10-09).
 # Only GAMES and STICKERS have subcategories, all prefixed by their parent.
 KNOWN_CATEGORIES = frozenset({
@@ -148,6 +173,7 @@ KNOWN_CATEGORIES = frozenset({
 CATEGORIES_WITH_SUBCATEGORIES = frozenset({"GAMES", "STICKERS"})
 
 _LOCALE = re.compile(r"^[a-z]{2,3}(-[A-Za-z0-9]{2,4})?$")
+_URI = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://\S+$")
 
 
 # -- pure helpers --------------------------------------------------------------
@@ -195,6 +221,8 @@ def coerce(field, value):
     text = normalize_text(value)
     if kind == URL and not is_http_url(text):
         return None, f"{field.api}: expected an http(s) URL, got {value!r}"
+    if kind == URI and not _URI.match(text):
+        return None, f"{field.api}: expected a URL (https:// or an app scheme), got {value!r}"
     if kind == ENUM and text not in field.values:
         return None, (f"{field.api}: {text!r} is not one of "
                       f"{', '.join(sorted(field.values))}")

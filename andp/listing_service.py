@@ -10,7 +10,7 @@ from .listing_plan import apply_plan, build_plan, public_changes
 from .listing_source import load_desired
 
 LISTING_SECTIONS = ("app", "categories", "localizations", "version", "review",
-                    "accessibility", "encryption", "eula", "metadata_dir")
+                    "accessibility", "encryption", "eula", "metadata_dir", "app_events")
 # Reconciled by their own service functions inside `store apply`.
 _SEPARATELY_APPLIED = ("age_rating", "pricing", "availability")
 
@@ -59,6 +59,7 @@ def _summary(desired):
         "age_rating": len(desired["age_rating"] or {}),
         "media_files": sum(len(paths) for groups in (desired.get("media") or {}).values()
                            for paths in groups.values()),
+        "app_events": [e["key"] for e in (desired.get("app_events") or {}).get("events", [])],
         "pricing": bool(desired["pricing"]),
         "availability": bool(desired["availability"]),
     }
@@ -141,3 +142,84 @@ def apply_listing(bundle_id, account="primary", version=None, metadata_dir=None,
                                  "remediation": "Run `andp store plan` and fix the errors."}
         return envelope
     return _wrap("apply_listing", run)
+
+
+# Events App Review can take: never reviewed, sent back, or already in a draft.
+_SUBMITTABLE_EVENT_STATES = ("DRAFT", "REJECTED", "READY_FOR_REVIEW")
+
+
+def submit_events(bundle_id, account="primary", keys=None, platform="IOS",
+                  project_root="."):
+    """Send the in-app events of store.app_events to App Review, without a version.
+
+    Apple reviews an event alone once the app is approved (with the latest
+    version of `platform`); a first event goes with the first version instead.
+    Gated like `submit`: policy.allow_submit in andp.yml must be true. An open
+    draft submission carrying anything else (a version) is never sent along."""
+    command = "submit_events"
+
+    def run():
+        if not service._load_policy(project_root)["allow_submit"]:
+            raise AndpError(code="submit_not_allowed",
+                            message="policy.allow_submit is false in andp.yml",
+                            retryable=False,
+                            remediation="Set policy.allow_submit: true to let andp submit.")
+        prepared = _prepare(command, bundle_id, account, None, project_root)
+        if isinstance(prepared, dict):
+            return prepared
+        _store, desired, managers, app_id, dry_run = prepared
+        events = [e for e in (desired.get("app_events") or {}).get("events", [])
+                  if e["submit"] and (not keys or e["key"] in keys)]
+        if desired["errors"] or dry_run:
+            return {"command": command, "ok": not desired["errors"], "dry_run": dry_run,
+                    "submitted": [], "events": [e["key"] for e in events],
+                    "errors": desired["errors"], "warnings": desired["warnings"]}
+        from .asc.appevents import ENDED_EVENT_STATES
+        live = {e["attributes"].get("referenceName"): e
+                for e in managers.app_events.list_events(app_id)
+                if e["state"] not in ENDED_EVENT_STATES}
+        ready, skipped = [], []
+        for event in events:
+            found = live.get(event["attributes"]["referenceName"])
+            if found is None:
+                skipped.append(f"{event['key']}: not created yet — run `andp store apply`")
+            elif found["state"] not in _SUBMITTABLE_EVENT_STATES:
+                skipped.append(f"{event['key']}: {found['state']}")
+            else:
+                ready.append((event["key"], found["id"]))
+        if not ready:
+            return {"command": command, "ok": True, "dry_run": False, "submitted": [],
+                    "skipped": skipped, "errors": [], "warnings": desired["warnings"]}
+        appstore = managers.appstore
+        draft = appstore.find_open_review_submission(app_id, platform)
+        if draft is not None:
+            items = appstore.submission_items(draft["id"])
+            others = [name for name, _id in items if name != "appEvent"]
+            if others:
+                raise AndpError(
+                    code="review_submission_conflict",
+                    message=f"The open review submission also holds: {', '.join(others)}.",
+                    retryable=False,
+                    remediation="Submit or remove that draft in App Store Connect, then "
+                                "retry.")
+            present = {i for name, i in items if name == "appEvent"}
+            unasked = present - {event_id for _key, event_id in ready}
+            if unasked:
+                raise AndpError(
+                    code="review_submission_conflict",
+                    message=(f"The open review submission already holds {len(unasked)} "
+                             "event(s) not asked for this time."),
+                    retryable=False,
+                    remediation="Submit those events too (no --event), or remove them from "
+                                "the draft in App Store Connect, then retry.")
+            sub_id = draft["id"]
+        else:
+            sub_id, present = appstore.create_review_submission(app_id, platform)["id"], set()
+        for _key, event_id in ready:
+            if event_id not in present:
+                appstore.add_event_submission_item(sub_id, event_id)
+        appstore.mark_submitted(sub_id)
+        return {"command": command, "ok": True, "dry_run": False, "submission_id": sub_id,
+                "submitted": [key for key, _ in ready], "skipped": skipped, "errors": [],
+                "warnings": desired["warnings"]}
+    return _wrap(command, run)
