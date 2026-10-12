@@ -260,6 +260,10 @@ class AppStoreManager:
         "gameCenterActivityVersion", "gameCenterChallengeVersion",
         "gameCenterLeaderboardSetVersion", "gameCenterLeaderboardVersion",
         "inAppPurchaseVersion", "subscriptionVersion", "subscriptionGroupVersion")
+    # App Store Connect refuses (400) an `include` naming both experiment
+    # relationships. The legacy one is left out of the request: an item that
+    # only carries it is read as "unknown", so callers still fail closed.
+    _ITEM_INCLUDE = tuple(r for r in _ITEM_RELATIONSHIPS if r != "appStoreVersionExperiment")
 
     def submission_items(self, submission_id):
         """[(relationship, id)] of a submission's items — appStoreVersion, appEvent…
@@ -269,7 +273,7 @@ class AppStoreManager:
         foreign (fail-closed)."""
         out = []
         items = self.client.get_all(f"/v1/reviewSubmissions/{submission_id}/items",
-                                    params={"include": ",".join(self._ITEM_RELATIONSHIPS)})
+                                    params={"include": ",".join(self._ITEM_INCLUDE)})
         for item in items:
             found = [(name, rel["data"]["id"])
                      for name, rel in (item.get("relationships") or {}).items()

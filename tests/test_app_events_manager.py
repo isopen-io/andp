@@ -80,5 +80,8 @@ def test_submission_items_reads_every_relationship_and_fails_closed():
         {"id": "i3", "relationships": {
             "appStoreVersion": {"links": {"related": "https://…"}}}}]))
     items = managers.appstore.submission_items("s")
-    assert "appEvent" in session.requests[0]["params"]["include"]
+    include = session.requests[0]["params"]["include"].split(",")
+    assert "appEvent" in include and "appStoreVersionExperimentV2" in include
+    # Both experiment relationships in one include is a 400 from App Store Connect.
+    assert "appStoreVersionExperiment" not in include
     assert items == [("appEvent", "ev1"), ("appStoreVersion", "v1"), ("unknown", "i3")]
