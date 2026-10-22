@@ -101,15 +101,19 @@ def rewrite_info_plist(text, version):
     quel : c'est le montage correct, la valeur venant du build setting.
     """
     version = _validate(version)
+    # Bolt Optimization: Track actual replacements in a single regex pass via
+    # `nonlocal count`. Eliminates redundant `_PLIST_RE.findall(text)` regex scans.
+    count = 0
 
     def replace(match):
+        nonlocal count
         if "$(" in match.group("val"):
             return match.group(0)
+        count += 1
         return f'{match.group("head")}{version}{match.group("tail")}'
 
     out, _ = _PLIST_RE.subn(replace, text)
-    # subn compte les correspondances, pas les modifications : on recompte.
-    return out, (0 if out == text else len(_PLIST_RE.findall(text)))
+    return out, count
 
 
 # Chaque entrée : (nom de fichier ou suffixe, fonction de réécriture).
