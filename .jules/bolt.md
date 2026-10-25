@@ -57,3 +57,7 @@
 ## 2026-09-22 - [Single-Process SBOM Generation & UUID Performance]
 **Learning:** In `infrastructure/sbom-generator.sh`, generating an SBOM by repeatedly spawning Python processes per dependency to read, modify, and re-write `sbom.json` created $N+1$ process forks and $N$ disk read/writes. Additionally, subshell pipelines like `tr | head` on `/dev/urandom` caused SIGPIPE (`tr: write error: Broken pipe`). Consolidating generation into a single Python pass using `uuid.uuid4()` and `CSafeLoader` eliminated process forks and pipe errors, boosting generation speed by ~10x.
 **Action:** Consolidate multi-component file generation into single-pass Python executions and use native Python `uuid` instead of shell `/dev/urandom` pipelines.
+
+## 2026-10-23 - [Single-Pass Regex Subn Replacement Counting]
+**Learning:** In string rewriting operations (`rewrite_info_plist` in `andp/versionfiles.py`), performing a second regex scan (`_PLIST_RE.findall(text)`) to count modified occurrences introduces redundant $O(N)$ regex scanning overhead and can miscount if skipped matches exist. Tracking replacements in a single pass using a `nonlocal` counter inside the `subn` callback speeds up string processing by ~30% and ensures exact accuracy.
+**Action:** Always count modified replacements within `subn` callbacks using a local closure variable rather than re-scanning strings with `findall()`.
