@@ -6,6 +6,12 @@ APP_DIR="${ANDP_APP_DIR:-examples/meeshy}"
 
 set -e
 
+if command -v poetry >/dev/null 2>&1 && poetry run python3 -c "import yaml" >/dev/null 2>&1; then
+    PYTHON_CMD="poetry run python3"
+else
+    PYTHON_CMD="python3"
+fi
+
 PROJECT_FILE="$APP_DIR/project.yml"
 
 echo "Validating project configuration..."
@@ -27,9 +33,7 @@ done
 # 2. Dependency Analysis (Modular Governance)
 echo "Running dependency analysis..."
 if [ -f "infrastructure/dependency-analyzer.py" ]; then
-    # We ignore failures here to allow the script to continue if yaml is missing in some environments,
-    # but ideally it should be installed.
-    python3 infrastructure/dependency-analyzer.py || echo "⚠️ Warning: dependency-analyzer.py failed."
+    $PYTHON_CMD infrastructure/dependency-analyzer.py || echo "⚠️ Warning: dependency-analyzer.py failed."
 else
     echo "⚠️ Warning: dependency-analyzer.py not found."
 fi

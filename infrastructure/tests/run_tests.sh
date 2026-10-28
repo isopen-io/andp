@@ -6,11 +6,17 @@ APP_DIR="${ANDP_APP_DIR:-examples/meeshy}"
 
 set -e
 
+if command -v poetry >/dev/null 2>&1 && poetry run python3 -c "import yaml, pytest" >/dev/null 2>&1; then
+    PYTHON_CMD="poetry run python3"
+else
+    PYTHON_CMD="python3"
+fi
+
 echo "Running Infrastructure Tests..."
 
 # Test App Store Connect API modules (pytest)
 echo "Testing App Store Connect API modules..."
-if python3 -m pytest tests/ -q; then
+if $PYTHON_CMD -m pytest tests/ -q; then
     echo "✅ ASC API pytest suite PASSED"
 else
     echo "❌ ASC API pytest suite FAILED"
@@ -63,7 +69,7 @@ echo "Testing localization-validator.py..."
 mkdir -p test_lproj/en.lproj test_lproj/fr.lproj
 echo "\"key1\" = \"val1\";" > test_lproj/en.lproj/Localizable.strings
 echo "\"key1\" = \"val1\";" > test_lproj/fr.lproj/Localizable.strings
-if python3 infrastructure/localization-validator.py test_lproj > /dev/null; then
+if $PYTHON_CMD infrastructure/localization-validator.py test_lproj > /dev/null; then
     echo "✅ localization-validator.py success case PASSED"
 else
     echo "❌ localization-validator.py success case FAILED"
@@ -71,7 +77,7 @@ else
 fi
 
 echo "" > test_lproj/fr.lproj/Localizable.strings
-if python3 infrastructure/localization-validator.py test_lproj > /dev/null; then
+if $PYTHON_CMD infrastructure/localization-validator.py test_lproj > /dev/null; then
     echo "❌ localization-validator.py failure case FAILED (it should have failed)"
     exit 1
 else
@@ -93,7 +99,7 @@ fi
 echo "Testing performance-monitor.py..."
 mkdir -p mock.xcresult
 touch mock.xcresult/Info.plist
-if python3 infrastructure/performance-monitor.py mock.xcresult > /dev/null; then
+if $PYTHON_CMD infrastructure/performance-monitor.py mock.xcresult > /dev/null; then
     echo "✅ performance-monitor.py PASSED"
 else
     echo "❌ performance-monitor.py FAILED"
@@ -113,7 +119,7 @@ struct TestIssue: View {
     }
 }
 AI_EOF
-AI_OUTPUT=$(python3 infrastructure/ai-analyzer.py "$APP_DIR/Apps")
+AI_OUTPUT=$($PYTHON_CMD infrastructure/ai-analyzer.py "$APP_DIR/Apps")
 rm "$APP_DIR/Apps/TestIssue.swift"
 if [[ "$AI_OUTPUT" == *"Bolt Optimized"* ]] && [[ "$AI_OUTPUT" == *"TestIssue.swift:5 - Risk:"* ]]; then
     echo "✅ ai-analyzer.py PASSED"
@@ -155,7 +161,7 @@ rm -f "$METRICS_DIR"/telemetry_*.json
 if ./infrastructure/telemetry-collector.sh > /dev/null; then
     if ls "$METRICS_DIR"/telemetry_*.json >/dev/null 2>&1; then
         # Verify JSON validity and structure
-        if ANDP_METRICS_DIR="$METRICS_DIR" python3 -c "import json, glob, os; d = json.load(open(glob.glob(os.path.join(os.environ['ANDP_METRICS_DIR'], 'telemetry_*.json'))[0])); assert 'event_id' in d; assert 'environment' in d; assert 'metrics' in d; assert 'supply_chain' in d" 2>/dev/null; then
+        if ANDP_METRICS_DIR="$METRICS_DIR" $PYTHON_CMD -c "import json, glob, os; d = json.load(open(glob.glob(os.path.join(os.environ['ANDP_METRICS_DIR'], 'telemetry_*.json'))[0])); assert 'event_id' in d; assert 'environment' in d; assert 'metrics' in d; assert 'supply_chain' in d" 2>/dev/null; then
             echo "✅ telemetry-collector.sh PASSED"
         else
             echo "❌ telemetry-collector.sh FAILED: telemetry structure or format invalid"
