@@ -10,9 +10,15 @@ OUTPUT_DIR="${ANDP_CONFIG_DIR:-.andp}/metrics"
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_FILE="${OUTPUT_DIR}/sbom.json"
 
+if command -v poetry >/dev/null 2>&1 && poetry run python3 -c "import yaml" >/dev/null 2>&1; then
+    PYTHON_CMD="poetry run python3"
+else
+    PYTHON_CMD="python3"
+fi
+
 # Bolt Optimization: Single-process Python execution eliminates process forks,
 # tr/urandom broken pipes, and repeated disk re-reads per component.
-ANDP_APP_DIR="$APP_DIR" ANDP_OUTPUT_FILE="$OUTPUT_FILE" python3 - << 'EOF_PY'
+ANDP_APP_DIR="$APP_DIR" ANDP_OUTPUT_FILE="$OUTPUT_FILE" $PYTHON_CMD - << 'EOF_PY'
 import os
 import sys
 import json
