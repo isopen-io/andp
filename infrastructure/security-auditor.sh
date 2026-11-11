@@ -7,6 +7,12 @@ APP_DIR="${ANDP_APP_DIR:-examples/meeshy}"
 
 set -e
 
+if command -v poetry >/dev/null 2>&1 && poetry run python3 -c "import yaml" >/dev/null 2>&1; then
+    PYTHON_CMD="poetry run python3"
+else
+    PYTHON_CMD="python3"
+fi
+
 echo "Starting security audit..."
 
 # 1. Secret Scanning (Consolidated Single-Pass)
@@ -33,7 +39,7 @@ else
     fi
 fi
 
-if SECRETS_PATH=$(python3 -m andp config path secrets 2>/dev/null) && [ -n "$SECRETS_PATH" ]; then
+if SECRETS_PATH=$($PYTHON_CMD -m andp config path secrets 2>/dev/null) && [ -n "$SECRETS_PATH" ]; then
     echo "✅ credentials found at $SECRETS_PATH (local only)."
 else
     echo "⚠️ No credentials. Create .andp/secrets.yml from secrets.example.yml."
@@ -55,7 +61,7 @@ echo "Scanning dependencies for vulnerabilities..."
 if [ -f "${ANDP_CONFIG_DIR:-.andp}/metrics/sbom.json" ]; then
     # In a real enterprise environment, this would call an API like Snyk, GitHub Advisory Database, or OSV
     # Here we implement a mock scanner that checks against a local vulnerability database
-    ANDP_SBOM="${ANDP_CONFIG_DIR:-.andp}/metrics/sbom.json" python3 - << 'END'
+    ANDP_SBOM="${ANDP_CONFIG_DIR:-.andp}/metrics/sbom.json" $PYTHON_CMD - << 'END'
 import json
 import os
 import sys

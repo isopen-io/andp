@@ -5,6 +5,12 @@
 
 set -e
 
+if command -v poetry >/dev/null 2>&1 && poetry run python3 -c "import yaml" >/dev/null 2>&1; then
+    PYTHON_CMD="poetry run python3"
+else
+    PYTHON_CMD="python3"
+fi
+
 REPORT_FILE="${ANDP_CONFIG_DIR:-.andp}/governance_report.md"
 METRICS_DIR="${ANDP_CONFIG_DIR:-.andp}/metrics"
 
@@ -59,7 +65,7 @@ EOF
 
 # Extract security status from security-auditor output or log
 # For simplicity, a resolvable credentials file is the proxy for the audit running
-if python3 -m andp config path secrets >/dev/null 2>&1; then
+if $PYTHON_CMD -m andp config path secrets >/dev/null 2>&1; then
     echo "- **Secret Scanning:** Completed (See security logs)" >> "$REPORT_FILE"
     echo "- **Vulnerability Scan:** Integrated via SBOM" >> "$REPORT_FILE"
 else
